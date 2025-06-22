@@ -1,0 +1,13 @@
+/target
+**/localnote.txt
+/test/
+**/logs.txt
+**/log.txt
+**/log
+**/log2
+**/logs
+**/logs2
+**/test*
+**/aa
+**/bb
+**/cc
