@@ -1,4 +1,4 @@
-use crate::utils::hash_vec;
+use crate::utils::{self, hash_vec};
 use bio_types::strand::ReqStrand;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -82,14 +82,13 @@ pub struct Segment {
 } // using segment instead of single SJ is more informative and save memory(only one chrom and strand for all SJ)
 
 impl Segment {
-    pub fn new(chrom: String, start: u64, end: u64, strand: &ReqStrand, is_supp: bool) -> Self {
-        let strand = match strand {
-            ReqStrand::Forward => Strand::Plus,
-            ReqStrand::Reverse => Strand::Minus,
-        };
+    pub fn new(chrom: String, start: u64, end: u64, strand: Strand, is_supp: bool) -> Self {
+
+
+        let chrom2 = utils::trim_chr_prefix_to_upper(&chrom);
 
         Self {
-            chrom,
+            chrom: chrom2,
             start,
             end,
             strand,
@@ -211,6 +210,12 @@ impl SingleRead {
         strand: &ReqStrand,
         is_supp: bool,
     ) {
+
+        let strand = match strand {
+            ReqStrand::Forward => Strand::Plus,
+            ReqStrand::Reverse => Strand::Minus,
+        };
+
         self.segment_list
             .push(Segment::new(chrom, start, end, strand, is_supp));
         self.seg_size += 1;
@@ -235,13 +240,13 @@ impl SingleRead {
     ) {
         let strand = Strand::from_string(strand);
 
-        self.segment_list.push(Segment {
+        self.segment_list.push(Segment::new (
             chrom,
             start,
             end,
-            strand: strand,
+            strand,
             is_supp,
-        });
+        ));
         self.seg_size += 1
     }
 

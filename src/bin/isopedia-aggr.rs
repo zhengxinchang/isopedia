@@ -2,7 +2,13 @@ use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, p
 
 use clap::Parser;
 use isopedia::{
-    chromosome::ChromMapping, constants::{CHROM_FILE_NAME, MAX_SAMPLE_SIZE, MERGED_FILE_NAME, TMPIDX_FILE_NAME}, isoformarchive::IsoformArchive, isoform::MergedIsoform, meta::Meta, reads::{AggrRead, SingleSampleReader}, tmpidx::{MergedIsoformOffset, MergedIsoformOffsetPlusGenomeLoc, Tmpindex}
+    chromosome::ChromMapping,
+    constants::*,
+    isoform::MergedIsoform,
+    isoformarchive::IsoformArchive,
+    meta::Meta,
+    reads::{AggrRead, SingleSampleReader},
+    tmpidx::{MergedIsoformOffset, MergedIsoformOffsetPlusGenomeLoc, Tmpindex},
 };
 use log::{error, info};
 use rustc_hash::FxHashMap;
@@ -227,10 +233,7 @@ fn main() {
     //       .expect("Can not create merged records file...exit")  ,
     // );
 
-    let mut isoform_archive = IsoformArchive::create(
-        &cli.outdir.join(MERGED_FILE_NAME),
-    );
-
+    let mut isoform_archive = IsoformArchive::create(&cli.outdir.join(MERGED_FILE_NAME));
 
     // let mut out_intrim_path = ag_args.outdir.clone();
     // out_intrim_path.push("interim.idx");
@@ -300,8 +303,10 @@ fn main() {
 
                 let sjs = merged_isoform_rec.get_common_splice_sites();
                 sjs.iter().for_each(|sj| {
-                    let interim_record = MergedIsoformOffsetPlusGenomeLoc {
-                        chrom_id: chroms.get_chrom_idx(merged_isoform_rec.chrom.as_str()).unwrap(),
+                    let offset_plus_genomeloc = MergedIsoformOffsetPlusGenomeLoc {
+                        chrom_id: chroms
+                            .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+                            .unwrap(),
                         pos: *sj,
                         record_ptr: MergedIsoformOffset {
                             offset: merged_offset,
@@ -310,8 +315,27 @@ fn main() {
                         },
                     };
 
-                    tmpidx.add_one(interim_record);
+                    tmpidx.add_one(offset_plus_genomeloc);
                 });
+
+                // add the left and right position of a single read
+                let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+                read_ref_spans.iter().for_each(|position| {
+                    let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
+                        MergedIsoformOffsetPlusGenomeLoc {
+                            chrom_id: chroms
+                                .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+                                .unwrap(),
+                            pos: *position,
+                            record_ptr: MergedIsoformOffset {
+                                offset: merged_offset,
+                                length: bytes_len,
+                                n_splice_sites: 0,
+                            },
+                        };
+                    tmpidx.add_one(offset_plus_genomeloc);
+                });
+
                 merged_offset += bytes_len as u64;
             }
 
@@ -334,7 +358,9 @@ fn main() {
         let sjs = merged_isoform_rec.get_common_splice_sites();
         sjs.iter().for_each(|sj| {
             let interim_record = MergedIsoformOffsetPlusGenomeLoc {
-                chrom_id: chroms.get_chrom_idx(merged_isoform_rec.chrom.as_str()).unwrap(),
+                chrom_id: chroms
+                    .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+                    .unwrap(),
                 pos: *sj,
                 record_ptr: MergedIsoformOffset {
                     offset: merged_offset,
@@ -343,6 +369,25 @@ fn main() {
                 },
             };
             tmpidx.add_one(interim_record);
+        });
+
+
+        // add the left and right position of a single read
+        let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+        read_ref_spans.iter().for_each(|position| {
+            let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
+                MergedIsoformOffsetPlusGenomeLoc {
+                    chrom_id: chroms
+                        .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+                        .unwrap(),
+                    pos: *position,
+                    record_ptr: MergedIsoformOffset {
+                        offset: merged_offset,
+                        length: bytes_len,
+                        n_splice_sites: 0,
+                    },
+                };
+            tmpidx.add_one(offset_plus_genomeloc);
         });
 
         merged_offset += bytes_len as u64;
@@ -377,7 +422,7 @@ fn main() {
     // let mut out_sample_meta_path = ag_args.outdir.clone();
     // out_sample_meta_path.push("sample.meta");
     let mut out_sample_meta_writer = std::io::BufWriter::new(
-        std::fs::File::create(&cli.outdir.join("sample.meta"))
+        std::fs::File::create(&cli.outdir.join(META_FILE_NAME))
             .expect("Can not create sample meta file...exit"),
     );
     out_sample_meta_writer
@@ -386,7 +431,3 @@ fn main() {
 
     info!("Fnished");
 }
-
-
-
-

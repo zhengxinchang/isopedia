@@ -19,7 +19,7 @@ type ChromIdxLength = u64;
 type ChromId = u16;
 
 #[derive(Debug, Serialize, Deserialize)] 
-pub struct InterimIndexMeta {
+pub struct TmpindexMeta {
     pub magic: u64,
     pub chrom_offsets: FxHashMap<ChromId, (ChromIdxStartart, ChromIdxLength)>,
     pub data_size: u64,
@@ -31,7 +31,7 @@ pub struct InterimIndexMeta {
 #[derive(Debug)]
 pub struct Tmpindex {
     pub meta_start: u64,
-    pub meta: InterimIndexMeta,
+    pub meta: TmpindexMeta,
     pub offsets: Vec<MergedIsoformOffsetPlusGenomeLoc>,
     pub file: File,
 }
@@ -41,7 +41,7 @@ impl Tmpindex {
         let file = fs::File::create(file_name).expect("Can not create file");
         let interim_index = Tmpindex {
             meta_start: 0,
-            meta: InterimIndexMeta {
+            meta: TmpindexMeta {
                 magic: MAGIC,
                 chrom_offsets: FxHashMap::default(),
                 data_size: 0,
@@ -120,7 +120,7 @@ impl Tmpindex {
         let mut reader = BufReader::new(fs::File::open(file_name).expect("Can not open file"));
         let mut interim_index = Tmpindex {
             meta_start: 0,
-            meta: InterimIndexMeta {
+            meta: TmpindexMeta {
                 magic: 0,
                 chrom_offsets: FxHashMap::default(),
                 data_size: 0,

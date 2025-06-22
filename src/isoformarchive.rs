@@ -30,7 +30,7 @@ impl IsoformArchive {
     }
 }
 
-pub fn read_record_from_aggr_file(
+pub fn read_record_from_archive(
     reader: &mut BufReader<File>,
     record_ptr: &MergedIsoformOffset,
 ) -> MergedIsoform {

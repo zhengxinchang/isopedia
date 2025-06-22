@@ -48,7 +48,10 @@ impl Meta {
 
     /// load sample meta from index
     pub fn load(path: &PathBuf) -> Meta {
-        let content = std::fs::read_to_string(path).unwrap();
+        let content = std::fs::read_to_string(path).expect(&format!(
+            "Cannot read sample meta file {}",
+            path.display()
+        ));
         let mut samples = Meta::new();
         let header = content.lines().next().unwrap();
         let meta_keys = header

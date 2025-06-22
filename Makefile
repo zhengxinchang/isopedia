@@ -5,13 +5,21 @@ build:
 
 t1:build
 
-	/ssd1/stix-iso-devspace/isopedia-dev/target/release/isopedia-extr -b /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  -o test/flnc.isoform.out
+	target/release/isopedia-extr -b /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  -o test/flnc.isoform.out
 
 t2:build
 	target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
 
 t3:build
 	target/release/isopedia-idx  -i test/HG002_idx/
+
+
+t4:build
+	target/release/isopedia-anno -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
+
+t41:build
+	target/release/isopedia-anno -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gtf -o test/test.output2.txt
+
 
 t8:build # for flnc reads
 	target/release/stix-isoform  extract -b test/bams/hg002.flnc.minimap2.sorted.bam -o test/flnc.isoform.out

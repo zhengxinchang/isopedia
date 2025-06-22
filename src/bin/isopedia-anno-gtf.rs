@@ -7,7 +7,7 @@ use std::{
 use clap::{command, Parser};
 use isopedia::{
     bptree::BPForest, constants::*, gtf::TranscriptChunker, isoform::MergedIsoform,
-    isoformarchive::read_record_from_aggr_file, meta::Meta, tmpidx::MergedIsoformOffset,
+    isoformarchive::read_record_from_archive, meta::Meta, tmpidx::MergedIsoformOffset,
 };
 use log::{error, info};
 use serde::Serialize;
@@ -119,7 +119,6 @@ fn main() {
     greetings(&cli);
 
     let mut forest = BPForest::init(&cli.idxdir);
-
     let meta = Meta::load(&cli.idxdir.join(META_FILE_NAME));
 
     if cli.pos.len() > 0 {
@@ -132,8 +131,8 @@ fn main() {
 
         let gtf = TranscriptChunker::new(gtfreader);
 
-        let mut aggr_file = cli.idxdir.clone();
-        aggr_file.push(MERGED_FILE_NAME);
+        // let mut aggr_file = cli.idxdir.clone();
+        // aggr_file.push(MERGED_FILE_NAME);
 
         let mut hit_count = 0u32;
         let mut miss_count = 0u32;
@@ -158,10 +157,8 @@ fn main() {
             writer.write(format!("\t{}", x).as_bytes()).unwrap();
         });
         writer.write("\n".as_bytes()).unwrap();
-        // load the aggregated records file
-        // let agg_record_path =
-        // agg_record_path.push(MERGED_FILE_NAME);
-        let mut aggr_reader = std::io::BufReader::new(
+
+        let mut isofrom_archive = std::io::BufReader::new(
             std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
                 .expect("Can not open aggregated records file...exit"),
         );
@@ -175,11 +172,11 @@ fn main() {
 
             if iter_count == 100000 {
                 batch += 1;
-                info!("Processed {} transcripts", iter_count * batch);
+                info!("Processed {} transcripts", iter_count * batch );
                 iter_count = 0;
             }
 
-            let mut queries = trans.get_quieries();
+            let mut queries: Vec<(String, u64)> = trans.get_quieries();
             queries.sort_by_key(|x| x.1);
             let res = forest.search_multi(&queries, cli.flank);
 
@@ -202,7 +199,7 @@ fn main() {
 
                 for i in 0..target.len() {
                     let record: MergedIsoform =
-                        read_record_from_aggr_file(&mut aggr_reader, &target[i]);
+                        read_record_from_archive(&mut isofrom_archive, &target[i]);
                     acc_pos_count += record.get_positive_count(&cli.min_read);
                     acc_sample_evidence_arr = acc_sample_evidence_arr
                         .iter()
@@ -270,9 +267,9 @@ fn main() {
             }
         }
         let total = hit_count + miss_count;
-        info!("Processed {} transcripts", iter_count * batch + iter_count);
+        info!("Processed {} transcripts", 100000 * batch + iter_count);
         info!("Sample-wide stats: ");
-        info!("Sample\thit\tmiss\tpct");
+        info!("> Sample\thit\tmiss\tpct");
         for i in 0..meta.get_size() {
             info!(
                 "> {:}\t{}\t{}\t {:.2}%",

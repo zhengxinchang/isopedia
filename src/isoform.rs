@@ -13,7 +13,7 @@ use serde_with::serde_as;
 use crate::{
     constants::MAX_SAMPLE_SIZE,
     reads::{AggrRead, Segment, Strand},
-    utils::hash_vec,
+    utils::{self, hash_vec},
 };
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReadDiffSlim {
@@ -34,17 +34,19 @@ pub enum RecordType {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MergedIsoform {
     pub signature: u64,
-    pub total_evidence: u32, // update required by new sample
+    pub total_evidence: u32,
     pub sample_size: u32,
     #[serde_as(as = "[_; 64]")]
-    pub sample_evidence_arr: [u32; MAX_SAMPLE_SIZE], // update required by new sample
+    //Records the number of reads (evidence) from each sample that support the merged isoform.
+    pub sample_evidence_arr: [u32; MAX_SAMPLE_SIZE],
     #[serde_as(as = "[_; 64]")]
-    pub sample_offset_arr: [u32; MAX_SAMPLE_SIZE], // update required by new sample
+    // Stores the starting index of each sample’s read-level differences (ReadDiffSlim) within the shared isoform_diffs_slim_vec array.
+    pub sample_offset_arr: [u32; MAX_SAMPLE_SIZE],
     pub chrom: String,
     pub rec_type: RecordType, // indicate the status of the aggr isoform, also reserved for SV.
     pub splice_junctions_vec: Vec<(u64, u64)>,
-    pub isoform_diffs_slim_vec: Vec<ReadDiffSlim>, // update required by new sample
-    pub supp_segs_vec: Vec<Segment>,               // update required by new sample
+    pub isoform_diffs_slim_vec: Vec<ReadDiffSlim>,
+    pub supp_segs_vec: Vec<Segment>,
 }
 
 impl PartialEq for MergedIsoform {
@@ -269,6 +271,14 @@ impl MergedIsoform {
             .collect()
     }
 
+    // return the left and right positions of each isoform diff
+    pub fn get_read_ref_span_vec(&self) -> Vec<u64> {
+        self.isoform_diffs_slim_vec
+            .iter()
+            .flat_map(|d| [d.left, d.right])
+            .collect()
+    }
+
     pub fn get_positive_count(&self, min_evidence: &u32) -> u32 {
         let mut c = 0;
         for i in 0..self.sample_size as usize {
@@ -284,21 +294,7 @@ impl MergedIsoform {
         arr[0..self.sample_size as usize].to_vec()
     }
 
-    fn update_splice_juncs(&mut self, new_sjs: Vec<(u64, u64)>) {
-        // let mut new_record = self.clone();
-        self.splice_junctions_vec = new_sjs;
-        // new_record
-    }
-
-    /// update the record with the reference transcript
-    /// the splice junctions will be placed with the reference transcript splice jucntions
-    /// the signature will be updated
-    pub fn align_to_ref_transcript(&mut self, new_sjs: &Vec<(u64, u64)>) {
-        self.update_splice_juncs(new_sjs.clone());
-        self.rec_type = RecordType::RefGuided;
-        self.signature = hash_vec(&self.get_common_splice_sites());
-    }
-
+    // return the inner exon positions, start from exon2 to exon(n-1)
     pub fn get_inner_exon_positions(&self) -> Vec<(u64, u64)> {
         if self.splice_junctions_vec.len() == 1 {
             return self.splice_junctions_vec.clone();
@@ -309,5 +305,42 @@ impl MergedIsoform {
                 .collect()
         }
     }
-}
 
+    
+    pub fn find_fusion(&self, chrom: &str, pos: u64, flank: u64) -> Vec<u32> {
+        let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
+
+        // for each sampple
+        for (idx, (offset, size)) in self
+            .sample_offset_arr
+            .iter()
+            .zip(self.sample_evidence_arr.iter())
+            .enumerate()
+        {
+            // collect the suppvec of each read
+            if *size > 0 {
+                // dbg!(idx, offset, size);
+                let start = *offset as usize;
+                let end = start + *size as usize;
+                let diffs = &self.isoform_diffs_slim_vec[start..end];
+                for diff in diffs {
+                    
+                    let supp_vec = &self.supp_segs_vec[diff.supp_seg_vec_offset as usize
+                        ..(diff.supp_seg_vec_offset + diff.supp_seg_vec_length) as usize];
+                    for seg in supp_vec {
+                        // dbg!(seg);
+                        // let chrom = utils::pad_chrom_prefix(chrom);
+                        if seg.chrom == chrom
+                            && (seg.start <= pos + flank && seg.end >= pos.saturating_sub(flank))
+                        {
+                            fusion_evidence_vec[idx] += 1;
+                            // dbg!(self.signature);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        fusion_evidence_vec
+    }
+}

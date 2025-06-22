@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
-use isopedia::isoformarchive::read_record_from_aggr_file;
+use isopedia::isoformarchive::read_record_from_archive;
 use log::error;
+use serde::Serialize;
+use std::os::unix::process;
 use std::path::PathBuf;
 use std::io::Write;
 use isopedia::tmpidx::Tmpindex;
@@ -33,7 +35,7 @@ pub struct InspectArgs {
     #[arg(short, long)]
     pub idx: PathBuf,
 
-    /// type of file to be inspect
+    /// type of file to be inspect can be either 'tmpidx' or 'archive'
     #[arg(short, long, name = "type")]
     pub type_f: String,
 
@@ -51,8 +53,8 @@ impl Validate for InspectArgs {
             is_ok = false;
         }
 
-        if self.type_f != "tmpidx" && self.type_f != "chrom" && self.type_f != "aggrdat" {
-            error!("--type: type must be either 'tmpidx' or 'chrom'");
+        if self.type_f != "tmpidx" && self.type_f != "archive" {
+            error!("--type: type must be either 'tmpidx' or 'archive'");
             is_ok = false;
         }
 
@@ -96,6 +98,9 @@ pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
 }
 
 pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
+
+    let mut processed_signautres = std::collections::HashSet::new();
+
     let mut interim = Tmpindex::load(&idx.join("interim.idx"));
     let chrom_bytes = std::fs::read(&idx.join("chrom.map")).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
@@ -117,7 +122,11 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
         for block in blocks {
             for record_grp in block {
                 for record_ptr in record_grp.record_ptr_vec {
-                    let rec  = read_record_from_aggr_file(&mut aggr_reader, &record_ptr);
+                    let rec  = read_record_from_archive(&mut aggr_reader, &record_ptr);
+                    if processed_signautres.contains(&rec.signature) {
+                        continue;
+                    }
+                    processed_signautres.insert(rec.signature);
                     writeln!(writer, "{}", rec.get_string()).unwrap();
                 }
             }
@@ -150,7 +159,7 @@ fn main() {
 
             if inspec_args.type_f == "tmpidx" {
                 inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
-            } else if inspec_args.type_f == "aggrdat" {
+            } else if inspec_args.type_f == "archive" {
                 inspect_aggr_dat(&inspec_args.idx, &inspec_args.output);
             }
         }

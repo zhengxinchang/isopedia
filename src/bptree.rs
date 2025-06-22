@@ -929,7 +929,8 @@ impl BPForest {
 //     result.into_iter().collect()
 // }
 
-fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
+
+pub fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
     if vecs.is_empty() {
         return vec![];
     }
