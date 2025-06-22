@@ -1,6 +1,8 @@
 pub const MERGED_FILE_NAME: &str = "merged_isoform.dat";
 pub const CHROM_FILE_NAME: &str = "chrom.map";
 pub const TMPIDX_FILE_NAME: &str = "tmp.idx";
+pub const META_FILE_NAME: &str = "meta.dat";
+
 pub const ORDER: u64 = 250;
 pub type KeyType = u64;
 pub type ValueType = u64;

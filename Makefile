@@ -10,6 +10,9 @@ t1:build
 t2:build
 	target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
 
+t3:build
+	target/release/isopedia-idx  -i test/HG002_idx/
+
 t8:build # for flnc reads
 	target/release/stix-isoform  extract -b test/bams/hg002.flnc.minimap2.sorted.bam -o test/flnc.isoform.out
 	target/release/stix-isoform  extract -b test/bams/hg002.pbcluster.bam -o test/clustered.mapped.isoform.out

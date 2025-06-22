@@ -6,12 +6,6 @@ use std::{
 use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffset};
 
 /// extract the code about the data storage and place in this file.
-///
-///
-///
-///
-///
-///
 
 pub struct IsoformArchive {
     writer: BufWriter<File>,

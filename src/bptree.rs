@@ -4,7 +4,6 @@
 ///  Node - represents a node in the B+ tree
 ///  Cache - represent a tree in the disk cache, query a node from the cache
 ///  BPTree - represent a B+ tree, which is a collection of nodes
-
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
@@ -12,18 +11,16 @@ pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
 use crate::tmpidx::MergedIsoformOffset;
 use crate::tmpidx::MergedIsoformOffsetGroup;
 
-
 use crate::tmpidx::Tmpindex;
-use crate::{utils::u64to2u32};
-use std::fmt::Debug;
+use crate::utils::u64to2u32;
 use ahash::HashSet;
 use rustc_hash::FxHashMap;
+use std::fmt::Debug;
 use zerocopy::FromBytes;
 use zerocopy::IntoBytes;
 use zerocopy_derive::FromBytes;
 use zerocopy_derive::Immutable;
 use zerocopy_derive::IntoBytes;
-
 
 use lru::LruCache;
 use std;
@@ -36,22 +33,18 @@ use std::{
     io::{self, Read, Seek},
 };
 
-
-/// within the node header, used to store the offset and length of the isoform offsets in 
+/// within the node header, used to store the offset and length of the isoform offsets in
 /// node payload. the reason why use it beacuse node header is fixed size.
 #[derive(Debug, Clone)]
-pub struct LeafNodeUtils {
-}
+pub struct LeafNodeUtils {}
 
 impl LeafNodeUtils {
-
     pub fn to_combined(offset_in_payload: u32, size: u32) -> u64 {
         ((offset_in_payload as u64) << 32) | (size as u64)
     }
 
-    pub fn from_combined(&mut self, combined: u64) ->(u32,u32) {
-        ((combined >> 32) as u32,combined as u32)
-        
+    pub fn from_combined(combined: u64) -> (u32, u32) {
+        ((combined >> 32) as u32, combined as u32)
     }
 }
 
@@ -61,13 +54,13 @@ impl LeafNodeUtils {
 pub struct NodeHeader {
     pub node_id: NodeIDType, //start with 1
     pub tree_level: u64,     // leaf is 0, increase by 1 for each level
-    pub num_keys: u64,      // size of the node
-    pub key_positions: [KeyType; ORDER as usize],
-    pub child_refs: [ValueType; ORDER as usize],
+    pub num_keys: u64,       // size of the node
+    pub keys: [KeyType; ORDER as usize],
+    pub childs: [ValueType; ORDER as usize],
     // pub record_data_offset: NodeHeaderPayloadOffset, // for dump to file
-    pub payload_offset: u64, // offset of the payload 
-    pub payload_size:u64, // size of the payload 
-    pub is_leaf_flag: u8,                     // 1 for leaf, 0 for internal
+    pub payload_offset: u64, // offset of the payload
+    pub payload_size: u64,   // size of the payload
+    pub is_leaf_flag: u8,    // 1 for leaf, 0 for internal
     // for leaf node, it is the address of the record.
     // the length of record_addr_list is not always the same as size
     _padding: [u8; 4096
@@ -77,7 +70,8 @@ pub struct NodeHeader {
             + std::mem::size_of::<[KeyType; ORDER as usize]>()
             + std::mem::size_of::<[ValueType; ORDER as usize]>()
             + std::mem::size_of::<u8>()
-            + std::mem::size_of::<u64>() + std::mem::size_of::<u64>())],
+            + std::mem::size_of::<u64>()
+            + std::mem::size_of::<u64>())],
 }
 
 impl NodeHeader {
@@ -85,14 +79,14 @@ impl NodeHeader {
         assert!(std::mem::size_of::<NodeHeader>() == 4096);
         Self {
             node_id: id,
-            key_positions: [0; ORDER as usize],
-            child_refs: [0; ORDER as usize],
+            keys: [0; ORDER as usize],
+            childs: [0; ORDER as usize],
             is_leaf_flag: is_leaf as u8,
             tree_level: level,
             num_keys: 0,
             // record_data_offset: NodeHeaderPayloadOffset::new(0, 0),
             payload_offset: 0, // offset of the payload
-            payload_size: 0, // size of the payload
+            payload_size: 0,   // size of the payload
             _padding: [0u8; 4096
                 - (std::mem::size_of::<NodeIDType>()
                     + std::mem::size_of::<[KeyType; ORDER as usize]>()
@@ -118,21 +112,18 @@ impl NodeHeader {
         if len as u64 > ORDER {
             panic!("keys length is larger than ORDER");
         }
-        self.key_positions[..len].copy_from_slice(&keys);
+        self.keys[..len].copy_from_slice(&keys);
         return len;
     }
-    pub fn set_internal_childrens(&mut self, node_ids: &[KeyType]) -> usize {
+    pub fn set_non_leaf_node_childrens(&mut self, node_ids: &[KeyType]) -> usize {
         let len = node_ids.len();
         if len as u64 > ORDER {
             panic!("keys length is larger than ORDER");
         }
-        self.child_refs[..len].copy_from_slice(&node_ids);
+        self.childs[..len].copy_from_slice(&node_ids);
         return len;
     }
-
 }
-
-
 
 #[derive(Debug, Clone)]
 pub struct NodeData {
@@ -193,8 +184,8 @@ impl Node {
         // add RecordPtrs and update keys and childrens
         let mut curr_idx: u32 = 0;
         for (idx, interim_record) in block.into_iter().enumerate() {
-            node.header.key_positions[idx] = interim_record.pos;
-            node.header.child_refs[idx] =
+            node.header.keys[idx] = interim_record.pos;
+            node.header.childs[idx] =
                 LeafNodeUtils::to_combined(curr_idx, interim_record.record_ptr_vec.len() as u32);
             node.add_header_size(1u64);
             node.data
@@ -219,7 +210,8 @@ impl Node {
         }
     }
 
-    pub fn serialize_record_pointers(&self) -> Vec<u8> {
+    // serialize the record pointers in the node to bytes
+    pub fn serialize_payload2bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
         for record in &self.data.merge_isoform_offset_vec {
             bytes.extend(record.to_bytes());
@@ -229,12 +221,12 @@ impl Node {
 
     /// get max_key of the node
     pub fn get_max_key(&self) -> KeyType {
-        let max_key = self.header.key_positions[(self.header.num_keys - 1) as usize];
+        let max_key = self.header.keys[(self.header.num_keys - 1) as usize];
         max_key
     }
 
     pub fn get_min_key(&self) -> KeyType {
-        self.header.key_positions[0]
+        self.header.keys[0]
     }
 
     pub fn set_inner_data_range(&mut self, offset: &u64, length: &u64) {
@@ -263,22 +255,22 @@ impl Node {
     pub fn search(&self, key: KeyType) -> Option<ValueType> {
         let mut i = 0;
 
-        while self.header.key_positions[i as usize] < key && i < self.header.num_keys {
+        while i < self.header.num_keys && self.header.keys[i as usize] < key {
             i += 1;
         }
-        // dbg!(i);
+
         if i == self.header.num_keys {
             return None;
         }
-        return Some(self.header.child_refs[i as usize]);
+        return Some(self.header.childs[i as usize]);
     }
 
     /// search one key in the node
     pub fn exact_search(&self, key: KeyType) -> Option<ValueType> {
         let mut i = 0;
         while i < self.header.num_keys {
-            if self.header.key_positions[i as usize] == key {
-                return Some(self.header.child_refs[i as usize]);
+            if self.header.keys[i as usize] == key {
+                return Some(self.header.childs[i as usize]);
             }
             i += 1;
         }
@@ -298,17 +290,17 @@ impl Node {
 
         */
 
-        if self.header.key_positions[(self.header.num_keys - 1) as usize] < end {
+        if self.header.keys[(self.header.num_keys - 1) as usize] < end {
             ret.0 = Some((
                 self.header.node_id + 1,
-                self.header.key_positions[self.header.num_keys as usize - 1],
+                self.header.keys[self.header.num_keys as usize - 1],
                 end,
             ));
         }
         let mut i = 0;
         while i < self.header.num_keys {
-            if self.header.key_positions[i as usize] >= start && self.header.key_positions[i as usize] <= end {
-                ret.1.push(self.header.child_refs[i as usize]);
+            if self.header.keys[i as usize] >= start && self.header.keys[i as usize] <= end {
+                ret.1.push(self.header.childs[i as usize]);
             }
             i += 1;
         }
@@ -319,14 +311,10 @@ impl Node {
         if !self.is_leaf() {
             panic!("get_addresses_by_children_value is only for leaf node");
         }
-        let (offset, length) = u64to2u32(*value);
-        // dbg!(offset);
-        // dbg!(length);
-        self.data.get_records(offset as usize, length as usize)
+        let (offset, size) = LeafNodeUtils::from_combined(*value);
+        self.data.get_records(offset as usize, size as usize)
     }
 }
-
-
 
 #[derive(Debug, Clone, Copy, IntoBytes, FromBytes, Immutable)]
 // The IntoBytes trait is affected by the rank of the fields in the struct. Large files should be placed at the start of the struct.
@@ -337,12 +325,12 @@ pub struct CacheHeader {
     pub first_data_offset: u64, // 8*u8
     pub root_node_id: u64,      // 8*u8
     pub curr_max_offset: u64,   // 8*u8
-    pub total_nodes: u64,         // 8*u8
-    pub leaf_node_count: u64,    // 8*u8
-    pub total_keys: u64,          // 8*u8
-    pub bptree_order: u64,             // 8*u8
+    pub total_nodes: u64,       // 8*u8
+    pub leaf_node_count: u64,   // 8*u8
+    pub total_keys: u64,        // 8*u8
+    pub bptree_order: u64,      // 8*u8
     pub height: u64,            // 8*u8
-    pub chromosome_id: u16,          // 2*u8
+    pub chromosome_id: u16,     // 2*u8
     _padding: [u8; 4096 - (std::mem::size_of::<u64>() * 10 + std::mem::size_of::<u16>())],
 }
 
@@ -431,7 +419,7 @@ impl Cache {
         // dump the data first if the node is leaf
         assert!(std::mem::size_of_val(&node.header) == 4096); // the size of the node should be 4096
         if node.is_leaf() {
-            let node_data_bytes: Vec<u8> = node.serialize_record_pointers();
+            let node_data_bytes: Vec<u8> = node.serialize_payload2bytes();
             let node_data_bytes: &[u8] = node_data_bytes.as_slice();
             let node_data_bytes_len: usize = node_data_bytes.len();
             self.file
@@ -526,12 +514,6 @@ impl Cache {
     }
 }
 
-
-
-
-/// B+ tree
-///
-
 pub struct BPTree {
     pub root: KeyType,
     pub idxdir: PathBuf,
@@ -606,7 +588,6 @@ impl BPTree {
     ///  one bptree for one chromosome
     ///  The last key of the nodes is set as the key of the higher level node
     pub fn build_tree(
-        // &mut self,
         aggr_intrim_rec_vec: Vec<Vec<MergedIsoformOffsetGroup>>,
         idx_path: &PathBuf,
         chrom_id: u16,
@@ -647,7 +628,7 @@ impl BPTree {
                         .map(|leaf_node| {
                             leaf_node
                                 .header
-                                .key_positions
+                                .keys
                                 .to_owned()
                                 .iter()
                                 .filter_map(|x| match *x != 0u64 {
@@ -667,7 +648,7 @@ impl BPTree {
                     let key_arr = keys.as_slice();
                     node.header.set_keys(key_arr);
                     let childerns_arr = childerns.as_slice();
-                    node.header.set_internal_childrens(childerns_arr);
+                    node.header.set_non_leaf_node_childrens(childerns_arr);
                     node.header.num_keys = key_arr.len() as u64;
                     node
                 })
@@ -752,7 +733,11 @@ impl BPTree {
         }
     }
 
-    pub fn range_search(&mut self, pos: KeyType, flank: KeyType) -> Option<Vec<MergedIsoformOffset>> {
+    pub fn range_search(
+        &mut self,
+        pos: KeyType,
+        flank: KeyType,
+    ) -> Option<Vec<MergedIsoformOffset>> {
         let start = pos - flank;
         let end = pos + flank;
 
@@ -798,7 +783,6 @@ impl BPTree {
     }
 }
 
-
 pub struct BPForest {
     pub index_dir: PathBuf,
     pub chrom_mapping: ChromMapping,
@@ -839,7 +823,11 @@ impl BPForest {
         println!("Build {} trees", count);
     }
 
-    pub fn search_one_pos(&mut self, chrom_name: &str, pos: u64) -> Option<Vec<MergedIsoformOffset>> {
+    pub fn search_one_pos(
+        &mut self,
+        chrom_name: &str,
+        pos: u64,
+    ) -> Option<Vec<MergedIsoformOffset>> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
             None => {
@@ -893,7 +881,11 @@ impl BPForest {
         find_common(&res_vec)
     }
 
-    fn search_multi_range(&mut self, positions: &Vec<(String, u64)>, flank: u64) -> Vec<MergedIsoformOffset> {
+    fn search_multi_range(
+        &mut self,
+        positions: &Vec<(String, u64)>,
+        flank: u64,
+    ) -> Vec<MergedIsoformOffset> {
         let res_vec: Vec<Vec<MergedIsoformOffset>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -905,7 +897,11 @@ impl BPForest {
         find_common(&res_vec)
     }
 
-    pub fn search_multi(&mut self, positions: &Vec<(String, u64)>, flank: u64) -> Vec<MergedIsoformOffset> {
+    pub fn search_multi(
+        &mut self,
+        positions: &Vec<(String, u64)>,
+        flank: u64,
+    ) -> Vec<MergedIsoformOffset> {
         if flank == 0 {
             self.search_multi_pos(positions)
         } else {
@@ -989,5 +985,3 @@ fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
 //     // dbg!("findcommon end");
 //     result
 //  }
-
-

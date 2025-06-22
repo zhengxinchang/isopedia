@@ -10,6 +10,10 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+
+use std::hash::Hash;
+use std::hash::Hasher;
+
 type ChromIdxStartart = u64;
 type ChromIdxLength = u64;
 type ChromId = u16;
@@ -28,7 +32,7 @@ pub struct InterimIndexMeta {
 pub struct Tmpindex {
     pub meta_start: u64,
     pub meta: InterimIndexMeta,
-    pub interim_records: Vec<MergedIsoformOffsetPlusGenomeLoc>,
+    pub offsets: Vec<MergedIsoformOffsetPlusGenomeLoc>,
     pub file: File,
 }
 
@@ -42,7 +46,7 @@ impl Tmpindex {
                 chrom_offsets: FxHashMap::default(),
                 data_size: 0,
             },
-            interim_records: Vec::new(),
+            offsets: Vec::new(),
             file: file,
         };
 
@@ -51,11 +55,11 @@ impl Tmpindex {
 
     pub fn add_one(&mut self, interim_record: MergedIsoformOffsetPlusGenomeLoc) {
         self.meta.data_size += 0;
-        self.interim_records.push(interim_record);
+        self.offsets.push(interim_record);
     }
 
     pub fn sort_interim_rec(&mut self) {
-        self.interim_records
+        self.offsets
             .sort_by_key(|x: &MergedIsoformOffsetPlusGenomeLoc| (x.chrom_id, x.pos));
     }
 
@@ -64,7 +68,7 @@ impl Tmpindex {
 
         // create the chrom offset map
         // chrom_counts: IndexMap<ChromId, u64>
-        let chrom_counts = self.interim_records.iter().fold(
+        let chrom_counts = self.offsets.iter().fold(
             IndexMap::new(),
             |mut map, pos_rec_ptr: &MergedIsoformOffsetPlusGenomeLoc| {
                 *map.entry(pos_rec_ptr.chrom_id).or_insert(0) += 1;
@@ -81,7 +85,7 @@ impl Tmpindex {
             _curr_offset += *count;
         }
 
-        self.meta.data_size = self.interim_records.len() as u64;
+        self.meta.data_size = self.offsets.len() as u64;
 
         // dbg!(&self.meta.chrom_offsets, &self.meta.data_size);
 
@@ -92,7 +96,7 @@ impl Tmpindex {
         let mut buffer: [u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
         self.meta_start = 8; // 8 bytes for the meta offset
 
-        for interim_rec in self.interim_records.iter() {
+        for interim_rec in self.offsets.iter() {
             buffer = interim_rec.to_bytes();
             writer.write_all(&buffer).expect("Can not write to file");
             self.meta_start += MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
@@ -121,7 +125,7 @@ impl Tmpindex {
                 chrom_offsets: FxHashMap::default(),
                 data_size: 0,
             },
-            interim_records: Vec::new(),
+            offsets: Vec::new(),
             file: file,
         };
         let mut buffer = [0u8; 8];
@@ -194,8 +198,7 @@ impl Tmpindex {
 
 
 
-use std::hash::Hash;
-use std::hash::Hasher;
+
 
 
 /// this struct is used to write the interim index file

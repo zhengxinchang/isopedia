@@ -7,3 +7,4 @@ pub mod isoform;
 pub mod tmpidx;
 pub mod isoformarchive;
 pub mod bptree;
+pub mod gtf;

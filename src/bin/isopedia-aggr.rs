@@ -228,7 +228,7 @@ fn main() {
     // );
 
     let mut isoform_archive = IsoformArchive::create(
-        &cli.outdir.join("MERGED_FILE_NAME"),
+        &cli.outdir.join(MERGED_FILE_NAME),
     );
 
 
