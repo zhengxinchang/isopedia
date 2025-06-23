@@ -37,11 +37,11 @@ pub fn read_record_from_archive(
     let mut buf = Vec::new();
     reader
         .seek(std::io::SeekFrom::Start(record_ptr.offset))
-        .unwrap();
+        .expect("Failed to seek in archive file");
     reader
         .take(record_ptr.length as u64)
         .read_to_end(&mut buf)
-        .unwrap();
+        .expect("Failed to read record from archive file");
 
-    MergedIsoform::gz_decode(&buf).unwrap()
+    MergedIsoform::gz_decode(&buf).expect("Failed to decode gzipped record")
 }

@@ -2,6 +2,8 @@ use crate::utils::{self, hash_vec};
 use bio_types::strand::ReqStrand;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Strand {
@@ -45,25 +47,6 @@ impl Strand {
             other => panic!("Invalid strand {:?}", other),
         }
     }
-
-    #[allow(unused)]
-    pub fn from_num_string(s: &str) -> Self {
-        match s {
-            "0" => Strand::Plus,
-            "1" => Strand::Minus,
-            other => panic!("Invalid strand {:?}", other),
-        }
-    }
-
-    #[allow(unused)]
-    pub fn from_u8(n: u8) -> Self {
-        match n {
-            0 => Strand::Plus,
-            1 => Strand::Minus,
-            other => panic!("Invalid strand {:?}", other),
-        }
-    }
-
     pub fn to_string(&self) -> String {
         match self {
             Strand::Plus => "+".to_string(),
@@ -83,8 +66,6 @@ pub struct Segment {
 
 impl Segment {
     pub fn new(chrom: String, start: u64, end: u64, strand: Strand, is_supp: bool) -> Self {
-
-
         let chrom2 = utils::trim_chr_prefix_to_upper(&chrom);
 
         Self {
@@ -210,7 +191,6 @@ impl SingleRead {
         strand: &ReqStrand,
         is_supp: bool,
     ) {
-
         let strand = match strand {
             ReqStrand::Forward => Strand::Plus,
             ReqStrand::Reverse => Strand::Minus,
@@ -240,13 +220,8 @@ impl SingleRead {
     ) {
         let strand = Strand::from_string(strand);
 
-        self.segment_list.push(Segment::new (
-            chrom,
-            start,
-            end,
-            strand,
-            is_supp,
-        ));
+        self.segment_list
+            .push(Segment::new(chrom, start, end, strand, is_supp));
         self.seg_size += 1
     }
 
@@ -471,8 +446,6 @@ impl AggrRead {
     }
 }
 
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 
 /// todo: read binary file
 pub struct SingleSampleReader {

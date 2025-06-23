@@ -24,7 +24,6 @@ impl fmt::Display for MyError {
 
 impl std::error::Error for MyError {}
 
-/// 让 ? 自动支持 std::io::Error → MyError::Io
 impl From<io::Error> for MyError {
     fn from(err: io::Error) -> MyError {
         MyError::Io(err)

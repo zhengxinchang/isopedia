@@ -13,7 +13,7 @@ use serde_with::serde_as;
 use crate::{
     constants::MAX_SAMPLE_SIZE,
     reads::{AggrRead, Segment, Strand},
-    utils::{self, hash_vec},
+    // utils::{self, hash_vec},
 };
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReadDiffSlim {
