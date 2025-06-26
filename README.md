@@ -1,14 +1,31 @@
 <img src="./img/logo2.png" alt="isopedia" width="200"/>
 
 
-# isopedia
+# About the Isopedia
 
-isopedia is a tool that extends the concept of [STIX](https://github.com/ryanlayer/stix) to isoform analysis. It can extract isoform raw signal from long-read full-length transcriptome datasets and build index on it. isopedia provides a fast approach to annotate the population frequency of isoforms in the population.
+Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
+
+# Quick Q&A:
+
+**Q1: What gap does Isopedia aim to fill?**
+A: Long-read RNA sequencing often reveals a large number of novel isoforms. However, evaluating whether these novel isoforms are biologically meaningful—or simply artifacts caused by RNA degradation or sequencing errors—is challenging. Understanding both the existence and population frequency of a novel isoform is essential for downstream analyses, yet current approaches are limited in scalability and robustness.
+
+**Q2: How does Isopedia address this problem?**
+A: Rather than relying on model-based classification or paired sequencing datasets from the same sample, Isopedia takes a different approach. It searches for supporting evidence of novel isoforms across large-scale long-read transcriptome datasets, leveraging population-level data to distinguish true biological isoforms from noise.
+
+**Q3: How does Isopedia manage large datasets and provide a practical solution for isoform assessment?**
+A: Isopedia introduces several innovations for scalable and efficient isoform evaluation. It uses a B+ tree–based data structure to rapidly index and compare isoform-related genomic positions. In addition, it employs a read-level signal extraction algorithm to build a compact yet informative index of transcriptome data. When assessing a query isoform, Isopedia integrates evidence from splicing junctions and alignment quality to ensure a robust evaluation. The entire tool is implemented in Rust, offering high performance and a user-friendly interface.
+
+**Q4: What is the best use case for Isopedia?**
+A: Isopedia is designed to be integrated into standard long-read transcriptome analysis pipelines. After isoforms are identified using tools like IsoQuant, FLAMES, TALON, or others, their output GTF files can be passed to Isopedia. It then evaluates the isoforms against a background index constructed from hundreds of publicly available long-read transcriptome datasets, providing a scalable and population-aware assessment.
 
 
 # Quick Start
 
+```
 
+
+```
 
 
 # How it works
