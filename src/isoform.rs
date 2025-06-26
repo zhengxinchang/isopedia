@@ -259,7 +259,7 @@ impl MergedIsoform {
         let mut bytes = Vec::new();
         decoder
             .read_to_end(&mut bytes)
-            .expect("Can not decompress the AggRecord");
+            .expect("Can not decompress the AggRecord, consider the index is corrupted?");
 
         bincode::deserialize(&bytes[..])
     }

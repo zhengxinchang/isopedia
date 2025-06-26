@@ -11,7 +11,10 @@ use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 use std::{env, io::Write};
 
-use isopedia::reads::{AggrRead, SingleRead};
+use isopedia::{
+    reads::{AggrRead, SingleRead},
+    writer::MyGzWriter,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -99,24 +102,44 @@ struct Cli {
 }
 
 impl Cli {
-    fn validate(&self)  {
-
-    let mut is_ok = true;
+    fn validate(&self) {
+        let mut is_ok = true;
         if !self.bam.exists() {
             error!("--bam: input file {} does not exist", self.bam.display());
             is_ok = false;
         }
 
+        // let output_dir = self
+        //     .output
+        //     .parent()
+        //     .unwrap_or_else(|| std::path::Path::new("."));
 
-        let output_dir = self.output.parent().unwrap();
+        // if !output_dir.is_dir() {
+        //     error!(
+        //         "--output: parent dir {} does not exist",
+        //         output_dir.display()
+        //     );
+        //     is_ok = false;
+        // }
 
-        if !output_dir.exists() {
+        // check output is not a directory
+        if self.output.is_dir() {
             error!(
-                "--output: parent dir {} does not exist",
-                output_dir.display()
+                "--output: {} is a directory, not a file",
+                self.output.display()
             );
             is_ok = false;
         }
+
+        // optional: prevent silent overwrite unless forced
+        // if self.output.exists() {
+        //     error!(
+        //         "--output: file {} already exists. Consider removing it or adding --force",
+        //         self.output.display()
+        //     );
+        //     is_ok = false;
+        // }
+
         if is_ok != true {
             panic!("Invalid arguments, please check the error messages above.");
         }
@@ -154,11 +177,13 @@ fn main() {
     }
 
     let mut record = Record::new();
-    let outfile = std::fs::File::create(cli.output).expect("Can't create output file");
-    let mut writer = std::io::BufWriter::new(outfile);
+    // let outfile = std::fs::File::create(&cli.output).expect("Can't create output file");
+    // let mut writer = std::io::BufWriter::new(outfile);
     let header = bam_reader.header().to_owned();
     let mut chrom_set: IndexSet<String> = IndexSet::new();
     let mut agg_isoform_map: FxHashMap<u64, AggrRead> = FxHashMap::default();
+
+    let mut mywriter = MyGzWriter::new(&cli.output).expect(&format!("Can not create output file {} .",&cli.output.display()));
 
     while let Some(result) = bam_reader.read(&mut record) {
         match result {
@@ -290,22 +315,35 @@ fn main() {
 
     // write the chrom_set
     info!("Process chromsomes");
+    let mut chrom_str = Vec::new();
     chrom_set.into_iter().for_each(|x| {
-        writer.write_all(x.as_bytes()).unwrap();
-        writer.write_all(b"\t").unwrap();
+        chrom_str.extend_from_slice(x.as_bytes());
+        chrom_str.push(b'\t');
+        // writer.write_all(x.as_bytes()).unwrap();
+        // writer.write_all(b"\t").unwrap();
     });
-    writer.write_all(b"\n").unwrap();
+    chrom_str.push(b'\n');
+    // writer.write_all(b"\n").unwrap();
 
     info!("Write to output file");
-    writer
-        .write(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n")
-        .unwrap();
+    // writer
+    //     .write(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n")
+    //     .unwrap();
+
+    chrom_str.extend_from_slice(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n");
+    mywriter
+        .write_all_bytes(&chrom_str)
+        .expect("can not write headers..");
+
     let mut sorted_agg_isoform_map = agg_isoform_map
         .into_iter()
         .collect::<Vec<(u64, AggrRead)>>();
     sorted_agg_isoform_map.sort_by_key(|x| x.0);
     for (_, agg_isoform) in sorted_agg_isoform_map.iter() {
-        writer.write(agg_isoform.to_record().as_bytes()).unwrap();
+        // writer.write(agg_isoform.to_record().as_bytes()).unwrap();
+        mywriter
+            .write_all_bytes(agg_isoform.to_record().as_bytes())
+            .expect("can not write record...");
     }
     info!("Finished");
 }

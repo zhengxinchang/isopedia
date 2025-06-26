@@ -1,5 +1,6 @@
 use crate::utils::{self, hash_vec};
 use bio_types::strand::ReqStrand;
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::fs::File;
@@ -451,15 +452,16 @@ impl AggrRead {
 pub struct SingleSampleReader {
     pub file_name: String,
     pub offset: u64,
-    pub reader: BufReader<File>,
+    pub reader: BufReader<GzDecoder<File>>,
     pub curr_rec_string: String,
 }
 
 impl SingleSampleReader {
     // TODO: add a function to read a binary file
     pub fn new(file_path: &str) -> SingleSampleReader {
-        let file = File::open(file_path).unwrap();
-        let reader = BufReader::new(file);
+        let file = File::open(file_path).expect("Can not read file...");
+    let decoder = GzDecoder::new(file);
+    let reader = BufReader::new(decoder);
         let mut agg_file_reader = SingleSampleReader {
             file_name: file_path.to_string(),
             offset: 0,

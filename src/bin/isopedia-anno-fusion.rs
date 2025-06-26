@@ -1,20 +1,29 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
+    fs::File,
     hash::Hash,
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Write},
     path::PathBuf,
     vec,
 };
 
 use clap::{command, Parser};
-use isopedia::{bptree::{self, BPForest}, constants::*, error::MyError, isoformarchive, meta::Meta, utils};
+use isopedia::{
+    bptree::{self, BPForest},
+    constants::*,
+    error::MyError,
+    isoformarchive,
+    meta::Meta,
+    utils,
+};
 use itertools::Unique;
 use log::{error, info};
+use rust_htslib::bcf::record::Buffer;
 use serde::{de::value, Serialize};
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-fusion")]
+#[command(name = "isopedia-anno-fusion")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
@@ -41,7 +50,7 @@ struct Cli {
 
     /// output file for search results
     #[arg(short, long)]
-    pub output: Option<PathBuf>,
+    pub output: PathBuf,
 }
 
 impl Cli {
@@ -81,16 +90,26 @@ impl Cli {
             }
         }
 
-        if let Some(ref output) = self.output {
-            let output_dir = output.parent().unwrap();
+        // if let Some(ref output) = self.output {
+        //     let output_dir = output.parent().unwrap();
 
-            if !output_dir.exists() {
-                error!(
-                    "--output: parent dir {} does not exist",
-                    output_dir.display()
-                );
-                is_ok = false;
-            }
+        //     if !output_dir.exists() {
+        //         error!(
+        //             "--output: parent dir {} does not exist",
+        //             output_dir.display()
+        //         );
+        //         is_ok = false;
+        //     }
+        // }
+
+        let output_dir = self.output.parent().unwrap();
+
+        if !output_dir.exists() {
+            error!(
+                "--output: parent dir {} does not exist",
+                output_dir.display()
+            );
+            is_ok = false;
         }
 
         if is_ok != true {
@@ -170,6 +189,27 @@ fn main() {
             .expect("Can not open aggregated records file...exit"),
     );
 
+    let mut writer = File::create(cli.output)
+        .and_then(|file| {
+            let mut writer = BufWriter::new(file);
+
+            Ok(writer)
+        })
+        .unwrap_or_else(|e| {
+            error!("Failed to create output file: {}", e);
+            std::process::exit(1);
+        });
+
+    writer
+        .write_all(b"chr1\tpos1\tchr2\tpos2\tmin_read\tsample_size\tpositive_sample_count")
+        .expect("Failed to write header");
+    meta.get_sample_names().iter().for_each(|x| {
+        writer
+            .write_all(format!("\t{}", x).as_bytes())
+            .expect("Failed to write sample name");
+    });
+    writer.write_all(b"\n").expect("Failed to write newline");
+
     let left_target = forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
     let right_target = forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
 
@@ -182,60 +222,86 @@ fn main() {
         left_target.clone().unwrap().len() + right_target.clone().unwrap().len()
     );
 
-    // 267,18366-18912     14362-20886:+:0:0,14401-212
-
-    // find common reads
-
-    // let mut address_vec = left_target.unwrap();
-    // address_vec.extend(right_target.unwrap());
-
-    // let merged_targets = vec![left_target.unwrap(), right_target.unwrap()];
-
-    // let common_targets = bptree::find_common(&merged_targets);
-
-
-    // info!("Found {} unique candidates", common_targets.len());
-
-
-    // let mut unique_target = HashSet::new();
-
-    // for target in left_target.unwrap() {
-    //     unique_target.insert(target);
-    // }
-    // for target in right_target.unwrap() {
-    //     unique_target.insert(target);
-    // }
-
-
-    let mut fusion_evidence_vec = vec![0u32;MAX_SAMPLE_SIZE];
-
+    let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
 
     // process the left targets
-    let unique_left = left_target.clone().unwrap().into_iter().collect::<HashSet<_>>();
+    let unique_left = left_target
+        .clone()
+        .unwrap()
+        .into_iter()
+        .collect::<HashSet<_>>();
     for target in unique_left {
-
-        let merged_isoform = isoformarchive::read_record_from_archive(&mut isofrom_archive, &target);
-        let evidence_vec =  merged_isoform.find_fusion(&breakpoints.1.0, breakpoints.1.1, cli.flank);
+        let merged_isoform =
+            isoformarchive::read_record_from_archive(&mut isofrom_archive, &target);
+        let evidence_vec =
+            merged_isoform.find_fusion(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
         // dbg!(&evidence_vec);
 
-        fusion_evidence_vec = fusion_evidence_vec.iter().zip(evidence_vec.iter()).map(|(a,b)| a + b).collect();
-
+        fusion_evidence_vec = fusion_evidence_vec
+            .iter()
+            .zip(evidence_vec.iter())
+            .map(|(a, b)| a + b)
+            .collect();
     }
 
     // process the right targets
-    let unique_right = right_target.clone().unwrap().into_iter().collect::<HashSet<_>>();
-    for target in unique_right{
-  
-        let merged_isoform = isoformarchive::read_record_from_archive(&mut isofrom_archive, &target);
-        let evidence_vec =  merged_isoform.find_fusion(&breakpoints.0.0, breakpoints.0.1, cli.flank);
+    let unique_right = right_target
+        .clone()
+        .unwrap()
+        .into_iter()
+        .collect::<HashSet<_>>();
+    for target in unique_right {
+        let merged_isoform =
+            isoformarchive::read_record_from_archive(&mut isofrom_archive, &target);
+        let evidence_vec =
+            merged_isoform.find_fusion(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
 
-        fusion_evidence_vec = fusion_evidence_vec.iter().zip(evidence_vec.iter()).map(|(a,b)| a + b).collect();
+        fusion_evidence_vec = fusion_evidence_vec
+            .iter()
+            .zip(evidence_vec.iter())
+            .map(|(a, b)| a + b)
+            .collect();
     }
 
+    info!(
+        "Fusion evidence found in {} samples with minimal read support {}",
+        fusion_evidence_vec
+            .iter()
+            .filter(|&&x| x >= cli.min_read)
+            .count(),
+        cli.min_read
+    );
 
-    // println!("{:?}",&fusion_evidence_vec);
-    info!("Fusion evidence found in {} samples with minimal read support {}", fusion_evidence_vec.iter().filter(|&&x| x >= cli.min_read).count(), cli.min_read);
+    // writer.write_all(b"\n").expect("Failed to write newline");
 
+    writer
+        .write_all(
+            format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                breakpoints.0 .0,
+                breakpoints.0 .1,
+                breakpoints.1 .0,
+                breakpoints.1 .1,
+                cli.min_read,
+                meta.get_size(),
+                fusion_evidence_vec
+                    .iter()
+                    .filter(|&&x| x >= cli.min_read)
+                    .count(),
+            )
+            .as_bytes(),
+        )
+        .expect("Failed to write fusion evidence");
 
+    for idx in 0..meta.get_size() {
+        if fusion_evidence_vec[idx] >= cli.min_read {
+            writer
+                .write_all(format!("\t{}", fusion_evidence_vec[idx]).as_bytes())
+                .expect("Failed to write sample evidence");
+        } else {
+            writer.write_all(b"\t0").expect("Failed to write sample evidence");
+        }
+    }
+    writer.write_all(b"\n").expect("Failed to write newline");
 
 }

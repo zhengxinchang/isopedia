@@ -5,7 +5,22 @@ build:
 
 t1:build
 
-	target/release/isopedia-extr -b /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  -o test/flnc.isoform.out
+	target/release/isopedia-extr \
+	-b /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
+	-o flnc.isoform.out
+
+t11:build
+	target/release/isopedia-extr \
+	-b test/bams/hg002.directrna.B-Lymphocyte.bam  \
+	-o test/ont.isoform.out
+
+	target/release/isopedia-extr \
+	-b test/bams/hg002.pbcluster.bam \
+	-o test/clustered.mapped.isoform.out
+
+	target/release/isopedia-extr \
+	-b test/bams/hg002.flnc.minimap2.sorted.bam \
+	-o test/flnc.isoform.out
 
 t2:build
 	target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
@@ -19,6 +34,10 @@ t4:build
 
 t41:build
 	target/release/isopedia-anno -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gtf -o test/test.output2.txt
+
+tfusion:build
+	target/release/isopedia-anno-fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.txt
+
 
 
 t8:build # for flnc reads

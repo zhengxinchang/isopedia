@@ -291,11 +291,7 @@ fn main() {
                 if merged_isoform_rec.signature == signature {
                     continue;
                 }
-
                 // calculate the bytes length of the merged_isoform record
-                // let bytes_len = merged_isoform_rec.gz_encode(&mut buf);
-                // merged_isoform_writer.write_all(&buf).unwrap();
-
                 let bytes_len = isoform_archive.dump_to_disk(&merged_isoform_rec);
 
                 need_deleted.push(merged_isoform_rec.signature);
@@ -404,7 +400,7 @@ fn main() {
 
     info!(
         "Dump interim index to disk: {}",
-        &cli.outdir.join("interim.idx").display()
+        &cli.outdir.join(TMPIDX_FILE_NAME).display()
     );
 
     tmpidx.dump_to_disk();
@@ -427,7 +423,7 @@ fn main() {
     );
     out_sample_meta_writer
         .write_all(sample_meta.get_string().as_bytes())
-        .unwrap();
+        .expect("can not write meta data");
 
     info!("Fnished");
 }
