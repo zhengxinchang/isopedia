@@ -1,2 +1,6 @@
 1. fuison gene search
 2. search funciton 优化
+3. external sort of tmp idex
+    currently took 32G for 172 sample merging task(18min)
+4. add metadata looking up funciton
+make sure 

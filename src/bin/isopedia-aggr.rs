@@ -119,15 +119,15 @@ impl Cli {
             }
         }
 
-        let output_dir = self.outdir.parent().unwrap();
+        // let output_dir = self.outdir.parent().unwrap();
 
-        if !output_dir.exists() {
-            error!(
-                "--output: parent dir {} does not exist",
-                output_dir.display()
-            );
-            is_ok = false;
-        }
+        // if !output_dir.exists() {
+        //     error!(
+        //         "--output: parent dir {} does not exist",
+        //         output_dir.display()
+        //     );
+        //     is_ok = false;
+        // }
 
         if !self.outdir.exists() {
             // create the directory
@@ -342,6 +342,11 @@ fn main() {
                 merged_map.remove(sig);
             }
 
+            if batches / 10 == 0 {
+                // info!("Processed {} batches", batches);
+                merged_map.shrink_to_fit();
+            }
+
             need_deleted.clear();
         }
     }
@@ -414,9 +419,7 @@ fn main() {
     );
     out_chrom_map_writer.write_all(&chroms.encode()).unwrap();
 
-    // write the sample_meta file
-    // let mut out_sample_meta_path = ag_args.outdir.clone();
-    // out_sample_meta_path.push("sample.meta");
+
     let mut out_sample_meta_writer = std::io::BufWriter::new(
         std::fs::File::create(&cli.outdir.join(META_FILE_NAME))
             .expect("Can not create sample meta file...exit"),

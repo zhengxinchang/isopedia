@@ -36,10 +36,10 @@ pub struct MergedIsoform {
     pub signature: u64,
     pub total_evidence: u32,
     pub sample_size: u32,
-    #[serde_as(as = "[_; 64]")]
+    #[serde_as(as = "[_; 256]")]
     //Records the number of reads (evidence) from each sample that support the merged isoform.
     pub sample_evidence_arr: [u32; MAX_SAMPLE_SIZE],
-    #[serde_as(as = "[_; 64]")]
+    #[serde_as(as = "[_; 256]")]
     // Stores the starting index of each sample’s read-level differences (ReadDiffSlim) within the shared isoform_diffs_slim_vec array.
     pub sample_offset_arr: [u32; MAX_SAMPLE_SIZE],
     pub chrom: String,

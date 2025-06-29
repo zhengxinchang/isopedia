@@ -58,13 +58,13 @@ impl Tmpindex {
         self.offsets.push(interim_record);
     }
 
-    pub fn sort_interim_rec(&mut self) {
+    pub fn sort_records(&mut self) {
         self.offsets
             .sort_by_key(|x: &MergedIsoformOffsetPlusGenomeLoc| (x.chrom_id, x.pos));
     }
 
     pub fn dump_to_disk(&mut self) {
-        self.sort_interim_rec(); // must sort before dump, it is mutable but below is immutable
+        self.sort_records(); // must sort before dump, it is mutable but below is immutable
 
         // create the chrom offset map
         // chrom_counts: IndexMap<ChromId, u64>
