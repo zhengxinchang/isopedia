@@ -24,9 +24,40 @@ A: Isopedia is designed to be integrated into standard long-read transcriptome a
 
 isopeida consists of multiple binaries that have prefix isopedia-*. This naming strategy help isopedia update each command individually and easily to expand.
 
+
+**Download prebuild index and run**
+```
+# download index and uncompress it
+wget xxx -O index.tar.gz
+tar xzvf index.tar.gz
+
+sopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
+
+isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 ```
 
+**build your own index**
 
+```
+# extract isoform signals on each bam individually
+isopedia-extr -b in.bam -o out.isoform.gz
+
+# make a manifest of isoform.gz files such as 
+path                               sample
+test/pb.isoform.gz                pb_bam
+test/ont.isoform.gz               ont-bam
+
+# aggregate
+isopedia-aggr  -i manifest.txt -o lr_idx/
+
+# build index
+isopedia-idx  -i lr_idx/
+
+# annoate isoform by provide a GTF file
+isopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
+
+# annotate fusion by provide breapoint string
+isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 ```
 
 
