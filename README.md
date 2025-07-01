@@ -36,16 +36,16 @@ sopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
 isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 ```
 
-**build your own index**
+**Build your own index**
 
 ```
 # extract isoform signals on each bam individually
 isopedia-extr -b in.bam -o out.isoform.gz
 
-# make a manifest of isoform.gz files such as 
-path                               sample
-test/pb.isoform.gz                pb_bam
-test/ont.isoform.gz               ont-bam
+# make a manifest.txt(tab-seprated) of isoform.gz files such as:
+# path                               sample
+# path/to/pb.isoform.gz              pb-bam
+# path/to/ont.isoform.gz             ont-bam
 
 # aggregate
 isopedia-aggr  -i manifest.txt -o lr_idx/
