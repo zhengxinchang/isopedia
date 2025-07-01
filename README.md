@@ -22,6 +22,8 @@ A: Isopedia is designed to be integrated into standard long-read transcriptome a
 
 # Quick Start
 
+isopeida consists of multiple binaries that have prefix isopedia-*. This naming strategy help isopedia update each command individually and easily to expand.
+
 ```
 
 
