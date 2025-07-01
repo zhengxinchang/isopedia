@@ -22,6 +22,13 @@ t11:build
 	-b test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out
 
+t1111:build 
+	target/release/isopedia-extr \
+	-b test/bams/hg002.flnc.minimap2.sorted.bam \
+	-o test/flnc.isoform.out -d 
+
+
+
 t2:build
 	target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
 
@@ -30,10 +37,10 @@ t3:build
 
 
 t4:build
-	target/release/isopedia-anno -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
+	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
 
 t41:build
-	target/release/isopedia-anno -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gtf -o test/test.output2.txt
+	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gtf -o test/test.output2.txt
 
 tfusion:build
 	target/release/isopedia-anno-fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.txt

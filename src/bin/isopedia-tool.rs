@@ -1,8 +1,6 @@
 use clap::{Parser, Subcommand};
 use isopedia::isoformarchive::read_record_from_archive;
 use log::error;
-use serde::Serialize;
-use std::os::unix::process;
 use std::path::PathBuf;
 use std::io::Write;
 use isopedia::tmpidx::Tmpindex;
@@ -58,13 +56,6 @@ impl Validate for InspectArgs {
             is_ok = false;
         }
 
-        if !self.output.parent().unwrap().exists() {
-            error!(
-                "--output: output dir {} does not exist",
-                self.output.parent().unwrap().display()
-            );
-            is_ok = false;
-        }
         is_ok
     }
 }
@@ -101,8 +92,8 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
 
     let mut processed_signautres = std::collections::HashSet::new();
 
-    let mut interim = Tmpindex::load(&idx.join("interim.idx"));
-    let chrom_bytes = std::fs::read(&idx.join("chrom.map")).unwrap();
+    let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
+    let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
     // let blocks = idx.get_blocks(chrom_id);
     let writer = std::fs::File::create(output).unwrap();

@@ -185,6 +185,11 @@ fn main() {
 
     let mut mywriter = MyGzWriter::new(&cli.output).expect(&format!("Can not create output file {} .",&cli.output.display()));
 
+    let mut batches = 0;
+    let curr_count = 0;
+    let batch_size = 1000000; // 1 million records per batch
+    let mut skipped_records = 0;
+
     while let Some(result) = bam_reader.read(&mut record) {
         match result {
             Err(_) => {
@@ -193,17 +198,26 @@ fn main() {
             } //exit if the last one was processed.
             Ok(()) => {}
         }
+
+        if curr_count % batch_size == 0 {
+            info!("Processing {} records", batches * batch_size);
+            batches += 1;
+        }
+
         if record.is_unmapped() {
+            skipped_records += 1;
             continue;
         }
 
         if record.is_secondary() {
             if !cli.use_secondary {
+                skipped_records += 1;
                 continue;
             }
         }
 
         if record.mapq() < cli.mapq {
+            skipped_records += 1;
             continue;
         }
 
@@ -296,6 +310,8 @@ fn main() {
                             });
                             isoform.add_supp_segment(chrom2.clone(), left, right, &strand, true);
                         });
+                }else {
+                    error!("SA tag is not a string: {:?}", sa);
                 }
             }
         }
@@ -335,6 +351,11 @@ fn main() {
         .write_all_bytes(&chrom_str)
         .expect("can not write headers..");
 
+    if cli.debug {
+        // aggr isoform size 
+        info!("Number of aggr isoforms: {}", agg_isoform_map.len());
+    }
+
     let mut sorted_agg_isoform_map = agg_isoform_map
         .into_iter()
         .collect::<Vec<(u64, AggrRead)>>();
@@ -345,5 +366,7 @@ fn main() {
             .write_all_bytes(agg_isoform.to_record().as_bytes())
             .expect("can not write record...");
     }
+    info!("Total records processed: {}", batches * batch_size + curr_count);
+    info!("Total records skipped: {}", skipped_records);
     info!("Finished");
 }

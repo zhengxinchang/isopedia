@@ -86,6 +86,14 @@ impl Transcript {
             .join(";");
         s
     }
+
+    pub fn get_exon_count(&self) -> usize {
+        self.exons.len()
+    }
+
+    pub fn get_transcript_length(&self) -> u64 {
+        self.end - self.start
+    }
 }
 
 pub struct TranscriptChunker<R: BufRead> {

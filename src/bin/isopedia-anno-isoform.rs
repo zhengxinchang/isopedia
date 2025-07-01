@@ -1,7 +1,7 @@
 use std::{
     env,
     io::{BufReader, BufWriter},
-    path::PathBuf,
+    path::PathBuf, vec,
 };
 
 use clap::{command, Parser};
@@ -35,7 +35,7 @@ struct Cli {
     pub gtf: Option<PathBuf>,
 
     /// flank size for search, before and after the position
-    #[arg(short, long, default_value_t = 2)]
+    #[arg(short, long, default_value_t = 10)]
     pub flank: u64,
 
     /// minimal reads to define a positive sample
@@ -149,7 +149,7 @@ fn main() {
 
         writer
             .write(
-                "chrom\tstart\tend\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes"
+                "chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes"
                     .as_bytes(),
             )
             .unwrap();
@@ -172,7 +172,7 @@ fn main() {
 
             if iter_count == 100000 {
                 batch += 1;
-                info!("Processed {} transcripts", iter_count * batch );
+                info!("Processed {} transcripts", iter_count * batch);
                 iter_count = 0;
             }
 
@@ -194,13 +194,21 @@ fn main() {
             if target.len() > 0 {
                 // dbg!(target.len());
 
-                let mut acc_pos_count = 0;
+                let mut acc_pos_count = vec![0u32; meta.get_size()];
                 let mut acc_sample_evidence_arr = vec![0u32; meta.get_size()];
 
                 for i in 0..target.len() {
                     let record: MergedIsoform =
                         read_record_from_archive(&mut isofrom_archive, &target[i]);
-                    acc_pos_count += record.get_positive_count(&cli.min_read);
+
+                    //     
+                    // acc_pos_count += record.get_positive_count(&cli.min_read);
+                    // let curr_rec_sample_evidence_arr = record.get_positive_array(&cli.min_read);
+                    acc_pos_count
+                        .iter_mut()
+                        .zip(record.get_positive_array(&cli.min_read).iter())
+                        .for_each(|(a, b)| *a += b);
+
                     acc_sample_evidence_arr = acc_sample_evidence_arr
                         .iter()
                         .zip(record.get_sample_evidence_arr().iter())
@@ -220,16 +228,22 @@ fn main() {
                 writer
                     .write(
                         format!(
-                            "{}\t{:?}\t{:?}\t{}\t{}\tyes\t{}\t{}\t{}\t{}\n",
+                            "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tyes\t{}\t{}\t{}\t{}\n",
                             trans.chrom,
                             trans.start,
                             trans.end,
+                            trans.get_transcript_length(),
+                            trans.get_exon_count(),
                             trans.trans_id,
                             trans.gene_id,
                             &cli.min_read,
                             format!(
                                 "{}/{}",
-                                acc_pos_count,
+                                // acc_pos_count > 0 size,
+                                acc_pos_count
+                                    .iter()
+                                    .filter(|&&x| x > 0)
+                                    .count(),
                                 // record.sample_size
                                 meta.get_size()
                             ),
@@ -247,10 +261,12 @@ fn main() {
                 writer
                     .write(
                         format!(
-                            "{}\t{:?}\t{:?}\t{}\t{}\tno\t{}\tNA\t{}\t{}\n",
+                            "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t{}\n",
                             trans.chrom,
                             trans.start,
                             trans.end,
+                            trans.get_transcript_length(),
+                            trans.get_exon_count(),
                             trans.trans_id,
                             trans.gene_id,
                             &cli.min_read,

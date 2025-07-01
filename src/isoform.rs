@@ -289,6 +289,13 @@ impl MergedIsoform {
         c
     }
 
+    pub fn get_positive_array(&self, min_evidence: &u32) -> Vec<u32> {
+        self.sample_evidence_arr
+            .iter()
+            .map(|e| if *e >= *min_evidence { 1 } else { 0 })
+            .collect()
+    }
+
     pub fn get_sample_evidence_arr(&self) -> Vec<u32> {
         let arr = self.sample_evidence_arr.to_vec();
         arr[0..self.sample_size as usize].to_vec()
@@ -306,7 +313,6 @@ impl MergedIsoform {
         }
     }
 
-    
     pub fn find_fusion(&self, chrom: &str, pos: u64, flank: u64) -> Vec<u32> {
         let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
 
@@ -324,7 +330,6 @@ impl MergedIsoform {
                 let end = start + *size as usize;
                 let diffs = &self.isoform_diffs_slim_vec[start..end];
                 for diff in diffs {
-                    
                     let supp_vec = &self.supp_segs_vec[diff.supp_seg_vec_offset as usize
                         ..(diff.supp_seg_vec_offset + diff.supp_seg_vec_length) as usize];
                     for seg in supp_vec {
