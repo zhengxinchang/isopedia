@@ -95,6 +95,7 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
     let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
     let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
+    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
     // let blocks = idx.get_blocks(chrom_id);
     let writer = std::fs::File::create(output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
@@ -113,7 +114,7 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
         for block in blocks {
             for record_grp in block {
                 for record_ptr in record_grp.record_ptr_vec {
-                    let rec  = read_record_from_archive(&mut aggr_reader, &record_ptr);
+                    let rec  = read_record_from_archive(&mut aggr_reader, &record_ptr, &mut archive_buf);
                     if processed_signautres.contains(&rec.signature) {
                         continue;
                     }

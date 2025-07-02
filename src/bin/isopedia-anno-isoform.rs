@@ -1,7 +1,8 @@
 use std::{
     env,
     io::{BufReader, BufWriter},
-    path::PathBuf, vec,
+    path::PathBuf,
+    vec,
 };
 
 use clap::{command, Parser};
@@ -27,8 +28,8 @@ struct Cli {
     pub idxdir: PathBuf,
 
     /// positions to be search(-p chr:pos * N)
-    #[arg(short, long)]
-    pub pos: Vec<String>,
+    // #[arg(short, long)]
+    // pub pos: Vec<String>,
 
     /// gtf file
     #[arg(short, long)]
@@ -83,18 +84,6 @@ impl Cli {
             }
         }
 
-        if let Some(ref output) = self.output {
-            let output_dir = output.parent().unwrap();
-
-            if !output_dir.exists() {
-                error!(
-                    "--output: parent dir {} does not exist",
-                    output_dir.display()
-                );
-                is_ok = false;
-            }
-        }
-
         if is_ok != true {
             // error!("Please check the input arguments!");
             std::process::exit(1);
@@ -110,7 +99,7 @@ fn greetings(args: &Cli) {
     }
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
@@ -120,189 +109,257 @@ fn main() {
 
     let mut forest = BPForest::init(&cli.idxdir);
     let meta = Meta::load(&cli.idxdir.join(META_FILE_NAME));
+    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
-    if cli.pos.len() > 0 {
-        info!("Search by a list of positions");
-    } else if !cli.gtf.is_none() {
-        info!("Search by gtf file");
-        let gtfreader = noodles_gtf::io::Reader::new(BufReader::new(
-            std::fs::File::open(cli.gtf.unwrap()).expect("can not read gtf"),
-        ));
+    // if cli.pos.len() > 0 {
+    //     info!("Search by a list of positions");
+    // } else if !cli.gtf.is_none() {
+    info!("Search by gtf/gff file");
+    let gtfreader = noodles_gtf::io::Reader::new(BufReader::new(
+        std::fs::File::open(cli.gtf.unwrap()).expect("can not read gtf"),
+    ));
 
-        let gtf = TranscriptChunker::new(gtfreader);
+    let gtf = TranscriptChunker::new(gtfreader);
 
-        // let mut aggr_file = cli.idxdir.clone();
-        // aggr_file.push(MERGED_FILE_NAME);
+    // let mut aggr_file = cli.idxdir.clone();
+    // aggr_file.push(MERGED_FILE_NAME);
 
-        let mut hit_count = 0u32;
-        let mut miss_count = 0u32;
+    let mut hit_count = 0u32;
+    let mut miss_count = 0u32;
 
-        //output file,if cli.output is none then write to stdout otherwise write to file
+    //output file,if cli.output is none then write to stdout otherwise write to file
 
-        let mut writer = match cli.output {
-            Some(ref output) => {
-                let f = std::fs::File::create(output).expect("can not create output file");
-                Box::new(BufWriter::new(f)) as Box<dyn std::io::Write>
-            }
-            None => Box::new(BufWriter::new(std::io::stdout())) as Box<dyn std::io::Write>,
-        };
+    let mut writer = match cli.output {
+        Some(ref output) => {
+            let f = std::fs::File::create(output).expect("can not create output file");
+            Box::new(BufWriter::new(f)) as Box<dyn std::io::Write>
+        }
+        None => Box::new(BufWriter::new(std::io::stdout())) as Box<dyn std::io::Write>,
+    };
 
-        writer
+    writer
             .write(
                 "chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes"
                     .as_bytes(),
             )
             .unwrap();
-        meta.get_sample_names().iter().for_each(|x| {
-            writer.write(format!("\t{}", x).as_bytes()).unwrap();
-        });
-        writer.write("\n".as_bytes()).unwrap();
+    meta.get_sample_names().iter().for_each(|x| {
+        writer.write(format!("\t{}", x).as_bytes()).unwrap();
+    });
+    writer.write("\n".as_bytes()).unwrap();
 
-        let mut isofrom_archive = std::io::BufReader::new(
-            std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-                .expect("Can not open aggregated records file...exit"),
-        );
+    let mut isofrom_archive = std::io::BufReader::new(
+        std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+            .expect("Can not open aggregated records file...exit"),
+    );
 
-        let mut iter_count = 0;
-        let mut batch = 0;
+    let mut iter_count = 0;
+    let mut batch = 0;
+    let mut acc_pos_count = vec![0u32; meta.get_size()];
+    let mut acc_sample_evidence_arr = vec![0u32; meta.get_size()];
 
-        let mut total_acc_evidence_flag_vec = vec![0u32; meta.get_size()];
-        for trans in gtf {
-            iter_count += 1;
+    let mut total_acc_evidence_flag_vec = vec![0u32; meta.get_size()];
+    for trans in gtf {
+        iter_count += 1;
 
-            if iter_count == 100000 {
-                batch += 1;
-                info!("Processed {} transcripts", iter_count * batch);
-                iter_count = 0;
-            }
+        if iter_count == 100000 {
+            batch += 1;
+            info!("Processed {} transcripts", iter_count * batch);
+            iter_count = 0;
+        }
 
-            let mut queries: Vec<(String, u64)> = trans.get_quieries();
-            queries.sort_by_key(|x| x.1);
-            let res = forest.search_multi(&queries, cli.flank);
+        let mut queries: Vec<(String, u64)> = trans.get_quieries();
+        queries.sort_by_key(|x| x.1);
+        let res = forest.search_multi(&queries, cli.flank);
 
-            let target: Vec<MergedIsoformOffset> = res
-                .into_iter()
-                .filter(|x| x.n_splice_sites == queries.len() as u32)
-                .collect();
+        if res.is_none() {
+            // error!("No results found for queries: {:?}", queries);
+            continue;
+        }
+        let res = res.unwrap();
 
-            if target.len() == 0 {
-                miss_count += 1;
-            } else {
-                hit_count += 1;
-            }
+        let target: Vec<MergedIsoformOffset> = res
+            .into_iter()
+            .filter(|x| x.n_splice_sites == queries.len() as u32)
+            .collect();
 
-            if target.len() > 0 {
-                // dbg!(target.len());
+        if target.len() == 0 {
+            miss_count += 1;
+        } else {
+            hit_count += 1;
+        }
 
-                let mut acc_pos_count = vec![0u32; meta.get_size()];
-                let mut acc_sample_evidence_arr = vec![0u32; meta.get_size()];
+        if target.len() > 0 {
+            // dbg!(target.len());
 
-                for i in 0..target.len() {
-                    let record: MergedIsoform =
-                        read_record_from_archive(&mut isofrom_archive, &target[i]);
+            //**** */
+            acc_pos_count.fill(0);
+            acc_sample_evidence_arr.fill(0);
+            // for i in 0..target.len() {
+            //     let record: MergedIsoform =
+            //         read_record_from_archive(&mut isofrom_archive, &target[i]);
 
-                    //     
-                    // acc_pos_count += record.get_positive_count(&cli.min_read);
-                    // let curr_rec_sample_evidence_arr = record.get_positive_array(&cli.min_read);
-                    acc_pos_count
-                        .iter_mut()
-                        .zip(record.get_positive_array(&cli.min_read).iter())
-                        .for_each(|(a, b)| *a += b);
+            //     acc_pos_count
+            //         .iter_mut()
+            //         .zip(record.get_positive_array(&cli.min_read).iter())
+            //         .for_each(|(a, b)| *a += b);
 
-                    acc_sample_evidence_arr = acc_sample_evidence_arr
-                        .iter()
-                        .zip(record.get_sample_evidence_arr().iter())
-                        .map(|(a, b)| a + b)
-                        .collect();
-                }
+            //     acc_sample_evidence_arr = acc_sample_evidence_arr
+            //         .iter()
+            //         .zip(record.get_sample_evidence_arr().iter())
+            //         .map(|(a, b)| a + b)
+            //         .collect();
+            // }
+
+            for offset in &target {
+                let record: MergedIsoform =
+                    read_record_from_archive(&mut isofrom_archive, offset, &mut archive_buf);
+
+                // 无需 collect，直接累加
+                acc_pos_count
+                    .iter_mut()
+                    .zip(record.get_positive_array(&cli.min_read))
+                    .for_each(|(a, b)| *a += b);
 
                 acc_sample_evidence_arr
-                    .iter()
-                    .enumerate()
-                    .for_each(|(i, x)| {
-                        if *x > 0 {
-                            total_acc_evidence_flag_vec[i] += 1;
-                        }
-                    });
-
-                writer
-                    .write(
-                        format!(
-                            "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tyes\t{}\t{}\t{}\t{}\n",
-                            trans.chrom,
-                            trans.start,
-                            trans.end,
-                            trans.get_transcript_length(),
-                            trans.get_exon_count(),
-                            trans.trans_id,
-                            trans.gene_id,
-                            &cli.min_read,
-                            format!(
-                                "{}/{}",
-                                // acc_pos_count > 0 size,
-                                acc_pos_count
-                                    .iter()
-                                    .filter(|&&x| x > 0)
-                                    .count(),
-                                // record.sample_size
-                                meta.get_size()
-                            ),
-                            trans.get_attributes(),
-                            acc_sample_evidence_arr
-                                .into_iter()
-                                .map(|x| { x.to_string() })
-                                .collect::<Vec<String>>()
-                                .join("\t")
-                        )
-                        .as_bytes(),
-                    )
-                    .unwrap();
-            } else {
-                writer
-                    .write(
-                        format!(
-                            "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t{}\n",
-                            trans.chrom,
-                            trans.start,
-                            trans.end,
-                            trans.get_transcript_length(),
-                            trans.get_exon_count(),
-                            trans.trans_id,
-                            trans.gene_id,
-                            &cli.min_read,
-                            trans.get_attributes(),
-                            meta.get_sample_names()
-                                .iter()
-                                .map(|_| "0")
-                                .collect::<Vec<&str>>()
-                                .join("\t")
-                        )
-                        .as_bytes(),
-                    )
-                    .unwrap();
+                    .iter_mut()
+                    .zip(record.get_sample_evidence_arr())
+                    .for_each(|(a, b)| *a += b);
             }
+
+            acc_sample_evidence_arr
+                .iter()
+                .enumerate()
+                .for_each(|(i, x)| {
+                    if *x > 0 {
+                        total_acc_evidence_flag_vec[i] += 1;
+                    }
+                });
+
+            // writer
+            //     .write(
+            //         format!(
+            //             "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tyes\t{}\t{}\t{}\t{}\n",
+            //             trans.chrom,
+            //             trans.start,
+            //             trans.end,
+            //             trans.get_transcript_length(),
+            //             trans.get_exon_count(),
+            //             trans.trans_id,
+            //             trans.gene_id,
+            //             &cli.min_read,
+            //             format!(
+            //                 "{}/{}",
+            //                 // acc_pos_count > 0 size,
+            //                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
+            //                 // record.sample_size
+            //                 meta.get_size()
+            //             ),
+            //             trans.get_attributes(),
+            //             acc_sample_evidence_arr
+            //                 .into_iter()
+            //                 .map(|x| { x.to_string() })
+            //                 .collect::<Vec<String>>()
+            //                 .join("\t")
+            //         )
+            //         .as_bytes(),
+            //     )
+            //     .unwrap();
+
+            write!(
+                writer,
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t",
+                trans.chrom,
+                trans.start,
+                trans.end,
+                trans.get_transcript_length(),
+                trans.get_exon_count(),
+                trans.trans_id,
+                trans.gene_id,
+                &cli.min_read,
+                acc_pos_count.iter().filter(|&&x| x > 0).count(),
+                meta.get_size(),
+                trans.get_attributes()
+            )?;
+
+            for (i, val) in acc_sample_evidence_arr.iter().enumerate() {
+                if i > 0 {
+                    write!(writer, "\t")?;
+                }
+                write!(writer, "{}", val)?;
+            }
+            write!(writer, "\n")?;
+        } else {
+            // writer
+            //     .write(
+            //         format!(
+            //             "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t{}\n",
+            //             trans.chrom,
+            //             trans.start,
+            //             trans.end,
+            //             trans.get_transcript_length(),
+            //             trans.get_exon_count(),
+            //             trans.trans_id,
+            //             trans.gene_id,
+            //             &cli.min_read,
+            //             trans.get_attributes(),
+            //             meta.get_sample_names()
+            //                 .iter()
+            //                 .map(|_| "0")
+            //                 .collect::<Vec<&str>>()
+            //                 .join("\t")
+            //         )
+            //         .as_bytes(),
+            //     )
+            //     .unwrap();
+            // 写入固定字段（无分配）
+            write!(
+                writer,
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t",
+                trans.chrom,
+                trans.start,
+                trans.end,
+                trans.get_transcript_length(),
+                trans.get_exon_count(),
+                trans.trans_id,
+                trans.gene_id,
+                &cli.min_read,
+                trans.get_attributes()
+            )?;
+
+            // 直接写一连串的 "0"（用迭代器，但不构造 Vec）
+            let sample_count = meta.get_sample_names().len();
+            for i in 0..sample_count {
+                if i > 0 {
+                    write!(writer, "\t")?;
+                }
+                write!(writer, "0")?;
+            }
+
+            write!(writer, "\n")?;
         }
-        let total = hit_count + miss_count;
-        info!("Processed {} transcripts", 100000 * batch + iter_count);
-        info!("Sample-wide stats: ");
-        info!("> Sample\thit\tmiss\tpct");
-        for i in 0..meta.get_size() {
-            info!(
-                "> {:}\t{}\t{}\t {:.2}%",
-                meta.get_sample_names()[i],
-                total_acc_evidence_flag_vec[i],
-                total - total_acc_evidence_flag_vec[i],
-                total_acc_evidence_flag_vec[i] as f64 / total as f64 * 100f64
-            );
-        }
+    }
+    let total = hit_count + miss_count;
+    info!("Processed {} transcripts", 100000 * batch + iter_count);
+    info!("Sample-wide stats: ");
+    info!("> Sample\thit\tmiss\tpct");
+    for i in 0..meta.get_size() {
         info!(
-            "Index-wide stats: hit: {}, miss: {}, total: {}, pct: {:.2}%",
-            hit_count,
-            miss_count,
-            hit_count + miss_count,
-            hit_count as f64 / (hit_count + miss_count) as f64 * 100f64
+            "> {:}\t{}\t{}\t {:.2}%",
+            meta.get_sample_names()[i],
+            total_acc_evidence_flag_vec[i],
+            total - total_acc_evidence_flag_vec[i],
+            total_acc_evidence_flag_vec[i] as f64 / total as f64 * 100f64
         );
     }
+    info!(
+        "Index-wide stats: hit: {}, miss: {}, total: {}, pct: {:.2}%",
+        hit_count,
+        miss_count,
+        hit_count + miss_count,
+        hit_count as f64 / (hit_count + miss_count) as f64 * 100f64
+    );
 
     info!("Finished");
+    Ok(())
 }

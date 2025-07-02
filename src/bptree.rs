@@ -1,9 +1,4 @@
-///
 /// B+ tree implementation for genomic data indexing
-/// Structs:
-///  Node - represents a node in the B+ tree
-///  Cache - represent a tree in the disk cache, query a node from the cache
-///  BPTree - represent a B+ tree, which is a collection of nodes
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
@@ -12,8 +7,8 @@ use crate::tmpidx::MergedIsoformOffset;
 use crate::tmpidx::MergedIsoformOffsetGroup;
 
 use crate::tmpidx::Tmpindex;
-use crate::utils::u64to2u32;
 use ahash::HashSet;
+use memmap2::Mmap;
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use zerocopy::FromBytes;
@@ -57,12 +52,9 @@ pub struct NodeHeader {
     pub num_keys: u64,       // size of the node
     pub keys: [KeyType; ORDER as usize],
     pub childs: [ValueType; ORDER as usize],
-    // pub record_data_offset: NodeHeaderPayloadOffset, // for dump to file
     pub payload_offset: u64, // offset of the payload
     pub payload_size: u64,   // size of the payload
     pub is_leaf_flag: u8,    // 1 for leaf, 0 for internal
-    // for leaf node, it is the address of the record.
-    // the length of record_addr_list is not always the same as size
     _padding: [u8; 4096
         - (std::mem::size_of::<NodeIDType>()
             + std::mem::size_of::<u64>()
@@ -210,7 +202,7 @@ impl Node {
         }
     }
 
-    // serialize the record pointers in the node to bytes
+    /// serialize the record pointers in the node to bytes
     pub fn serialize_payload2bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
         for record in &self.data.merge_isoform_offset_vec {
@@ -252,29 +244,46 @@ impl Node {
         self.header.num_keys += size;
     }
 
+    /// search one key in the node, return the value if found
     pub fn search(&self, key: KeyType) -> Option<ValueType> {
-        let mut i = 0;
+        // let mut i = 0;
 
-        while i < self.header.num_keys && self.header.keys[i as usize] < key {
-            i += 1;
-        }
+        // while i < self.header.num_keys && self.header.keys[i as usize] < key {
+        //     i += 1;
+        // }
 
-        if i == self.header.num_keys {
-            return None;
+        // if i == self.header.num_keys {
+        //     return None;
+        // }
+        // return Some(self.header.childs[i as usize]);
+        match self.header.keys[..self.header.num_keys as usize].binary_search(&key) {
+            Ok(idx) => Some(self.header.childs[idx]),
+            Err(idx) => {
+                // 对于 search，Err(idx) 表示 key 应该插入在 idx 处
+                if idx < self.header.num_keys as usize {
+                    Some(self.header.childs[idx])
+                } else {
+                    None
+                }
+            }
         }
-        return Some(self.header.childs[i as usize]);
     }
 
     /// search one key in the node
     pub fn exact_search(&self, key: KeyType) -> Option<ValueType> {
-        let mut i = 0;
-        while i < self.header.num_keys {
-            if self.header.keys[i as usize] == key {
-                return Some(self.header.childs[i as usize]);
-            }
-            i += 1;
+        // let mut i = 0;
+        // while i < self.header.num_keys {
+        //     if self.header.keys[i as usize] == key {
+        //         return Some(self.header.childs[i as usize]);
+        //     }
+        //     i += 1;
+        // }
+        // return None;
+
+        match self.header.keys[..self.header.num_keys as usize].binary_search(&key) {
+            Ok(idx) => Some(self.header.childs[idx]),
+            Err(_) => None,
         }
-        return None;
     }
 
     // type RangeRes=(u64,u64,Vec<ValueType>);
@@ -369,6 +378,7 @@ impl CacheHeader {
 pub struct Cache {
     pub header: CacheHeader,
     pub file: File,
+    pub mmap: Option<memmap2::Mmap>,
     pub lru: LruCache<u64, Node>,
 }
 
@@ -405,6 +415,7 @@ impl Cache {
         Cache {
             header,
             file,
+            mmap: None,
             lru: LruCache::new(NonZeroUsize::new(LRU_CACHE_SIZE).unwrap()),
         }
     }
@@ -454,8 +465,43 @@ impl Cache {
         Cache {
             header,
             file,
+            mmap: None,
             lru: LruCache::new(NonZeroUsize::new(LRU_CACHE_SIZE).unwrap()),
         }
+    }
+
+    pub fn from_disk_mmap(idx_path: &str) -> io::Result<Cache> {
+        let file = File::options().read(true).write(true).open(idx_path)?;
+        let mmap = unsafe { Mmap::map(&file)? };
+        let header = CacheHeader::from_bytes(&mmap[0..4096])?;
+        Ok(Cache {
+            header,
+            file,
+            mmap: Some(mmap),
+            lru: LruCache::new(NonZeroUsize::new(LRU_CACHE_SIZE).unwrap()),
+        })
+    }
+
+    pub fn get_node2(&mut self, node_id: u64) -> Option<Node> {
+        if let Some(n) = self.lru.get(&node_id) {
+            return Some(n.clone());
+        }
+        let mmap = self.mmap.as_ref().expect("Cache not mmap’d");
+        if node_id == 0 || node_id > self.header.total_nodes {
+            return None;
+        }
+
+        let off = (node_id * 4096) as usize;
+        let hdr_slice = &mmap[off..off + 4096];
+        let mut node = Node::load_header_from_bytes(hdr_slice);
+
+        let po = node.header.payload_offset as usize;
+        let ps = node.header.payload_size as usize;
+        let data_slice = &mmap[po..po + ps];
+        node.load_record_pointers_from_bytes(data_slice);
+
+        self.lru.put(node_id, node.clone());
+        Some(node)
     }
 
     pub fn get_node(&mut self, node_id: u64) -> Option<Node> {
@@ -492,18 +538,18 @@ impl Cache {
     }
 
     pub fn get_root_node(&mut self) -> Node {
-        self.get_node(self.header.root_node_id).unwrap()
+        self.get_node2(self.header.root_node_id).unwrap()
     }
 
     pub fn get_max_key(&mut self) -> u64 {
-        let max_leaf = self.get_node(self.header.leaf_node_count);
+        let max_leaf = self.get_node2(self.header.leaf_node_count);
         // dbg!(&max_leaf);
         let max_key = max_leaf.unwrap().get_max_key();
         max_key
     }
 
     pub fn get_min_key(&mut self) -> u64 {
-        let min_leaf = self.get_node(1);
+        let min_leaf = self.get_node2(1);
         let min_key = min_leaf.unwrap().get_min_key();
         min_key
     }
@@ -539,12 +585,12 @@ impl BPTree {
     }
 
     pub fn from_disk(idx_path: &PathBuf, chrom_id: u16) -> BPTree {
-        let cache = Cache::from_disk(
+        let cache = Cache::from_disk_mmap(
             idx_path
                 .join(format!("bptree_{}.idx", chrom_id))
                 .to_str()
                 .unwrap(),
-        );
+        ).expect("Can not open cache file");
         BPTree {
             root: 0,
             idxdir: PathBuf::from(idx_path),
@@ -715,7 +761,7 @@ impl BPTree {
         };
 
         loop {
-            let node = cache.get_node(hit).expect("Can not get node");
+            let node = cache.get_node2(hit).expect("Can not get node");
             // println!("search node: {}", node.header.id);
             if !node.is_leaf() {
                 hit = match node.search(key) {
@@ -780,6 +826,76 @@ impl BPTree {
         // 目前我这样的搜索实际上是增加了 flank*2 倍数的搜索时间。
 
         return Some(final_addrs);
+    }
+
+    pub fn range_search2(
+        &mut self,
+        pos: KeyType,
+        flank: KeyType,
+    ) -> Option<Vec<MergedIsoformOffset>> {
+        let start = pos.saturating_sub(flank);
+        let end = pos.saturating_add(flank);
+        let cache = self.cache.as_mut().expect("Can not get cache");
+
+        let mut node = {
+            let mut n = cache.get_root_node();
+            loop {
+                if n.is_leaf() {
+                    break n;
+                }
+
+                let slice = &n.header.keys[..n.header.num_keys as usize];
+                let idx = match slice.binary_search(&start) {
+                    Ok(idx) => idx,
+                    Err(idx) => idx,
+                };
+
+                let child_id = n.header.childs[idx];
+                // println!("searching node: {}, ", child_id);
+
+                if child_id == 0 || child_id > cache.header.total_nodes {
+                    // eprintln!("No such node: {}", child_id);
+                    return None; // no such node
+                }
+            
+                n = cache.get_node2(child_id).expect("Can not get next node");
+            }
+        };
+
+        // span the range in the leaf node
+
+        let mut results = Vec::new();
+        loop {
+            let keys = &node.header.keys[..node.header.num_keys as usize];
+            for (nk,k) in keys.iter().enumerate() {
+                if *k < start {
+                    continue;
+                }
+
+                if *k > end {
+                    return Some(results);
+                }
+
+
+                let combined = node.header.childs[nk];
+                results.extend(node.get_addresses_by_children_value(&combined));
+            }
+
+            let next_node_id = node.header.node_id + 1;
+            if next_node_id > cache.header.leaf_node_count {
+                break;
+            }
+            node = cache
+                .get_node2(next_node_id)
+                .expect("Can not get next leaf node");
+        }
+
+        if results.is_empty() {
+            None
+        } else {
+            Some(results)
+        }
+        // Some(results)
     }
 }
 
@@ -866,10 +982,10 @@ impl BPForest {
             None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
         };
 
-        tree.range_search(pos, flank)
+        tree.range_search2(pos, flank)
     }
 
-    fn search_multi_pos(&mut self, positions: &Vec<(String, u64)>) -> Vec<MergedIsoformOffset> {
+    fn search_multi_pos(&mut self, positions: &Vec<(String, u64)>) -> Option<Vec<MergedIsoformOffset>> {
         let res_vec: Vec<Vec<MergedIsoformOffset>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -878,14 +994,14 @@ impl BPForest {
             })
             .collect();
 
-        find_common(&res_vec)
+        Some(find_common(&res_vec))
     }
 
     fn search_multi_range(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
-    ) -> Vec<MergedIsoformOffset> {
+    ) -> Option<Vec<MergedIsoformOffset>> {
         let res_vec: Vec<Vec<MergedIsoformOffset>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -894,14 +1010,14 @@ impl BPForest {
             })
             .collect();
 
-        find_common(&res_vec)
+        Some(find_common(&res_vec))
     }
 
     pub fn search_multi(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
-    ) -> Vec<MergedIsoformOffset> {
+    ) -> Option<Vec<MergedIsoformOffset>> {
         if flank == 0 {
             self.search_multi_pos(positions)
         } else {
@@ -928,7 +1044,6 @@ impl BPForest {
 
 //     result.into_iter().collect()
 // }
-
 
 pub fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
     if vecs.is_empty() {

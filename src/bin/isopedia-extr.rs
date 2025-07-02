@@ -9,7 +9,7 @@ use rust_htslib::bam::{
 };
 use rustc_hash::FxHashMap;
 use std::path::PathBuf;
-use std::{env, io::Write};
+use std::{env};
 
 use isopedia::{
     reads::{AggrRead, SingleRead},

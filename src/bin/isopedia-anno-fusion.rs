@@ -1,26 +1,16 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     env,
     fs::File,
-    hash::Hash,
-    io::{BufReader, BufWriter, Write},
+    io::{BufWriter, Write},
     path::PathBuf,
     vec,
 };
 
 use clap::{command, Parser};
-use isopedia::{
-    bptree::{self, BPForest},
-    constants::*,
-    error::MyError,
-    isoformarchive,
-    meta::Meta,
-    utils,
-};
-use itertools::Unique;
+use isopedia::{bptree::BPForest, constants::*, error::MyError, isoformarchive, meta::Meta, utils};
 use log::{error, info};
-use rust_htslib::bcf::record::Buffer;
-use serde::{de::value, Serialize};
+use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-anno-fusion")]
@@ -189,9 +179,11 @@ fn main() {
             .expect("Can not open aggregated records file...exit"),
     );
 
+    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
+
     let mut writer = File::create(cli.output)
         .and_then(|file| {
-            let mut writer = BufWriter::new(file);
+            let writer = BufWriter::new(file);
 
             Ok(writer)
         })
@@ -231,8 +223,11 @@ fn main() {
         .into_iter()
         .collect::<HashSet<_>>();
     for target in unique_left {
-        let merged_isoform =
-            isoformarchive::read_record_from_archive(&mut isofrom_archive, &target);
+        let merged_isoform = isoformarchive::read_record_from_archive(
+            &mut isofrom_archive,
+            &target,
+            &mut archive_buf,
+        );
         let evidence_vec =
             merged_isoform.find_fusion(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
         // dbg!(&evidence_vec);
@@ -251,8 +246,11 @@ fn main() {
         .into_iter()
         .collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform =
-            isoformarchive::read_record_from_archive(&mut isofrom_archive, &target);
+        let merged_isoform = isoformarchive::read_record_from_archive(
+            &mut isofrom_archive,
+            &target,
+            &mut archive_buf,
+        );
         let evidence_vec =
             merged_isoform.find_fusion(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
 
@@ -299,9 +297,10 @@ fn main() {
                 .write_all(format!("\t{}", fusion_evidence_vec[idx]).as_bytes())
                 .expect("Failed to write sample evidence");
         } else {
-            writer.write_all(b"\t0").expect("Failed to write sample evidence");
+            writer
+                .write_all(b"\t0")
+                .expect("Failed to write sample evidence");
         }
     }
     writer.write_all(b"\n").expect("Failed to write newline");
-
 }

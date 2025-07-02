@@ -7,6 +7,7 @@ use std::{
 use flate2::{write::GzEncoder, Compression};
 
 pub struct MyGzWriter {
+    #[allow(dead_code)]
     file_name: String,
     inner: Option<GzEncoder<BufWriter<File>>>,
 }
