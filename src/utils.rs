@@ -40,4 +40,3 @@ pub fn hash_vec<T: Hash>(value: &T) -> u64 {
     let hasher_builder = RandomState::with_seeds(9336, 5920, 6784, 4496);
     hasher_builder.hash_one(value)
 }
-

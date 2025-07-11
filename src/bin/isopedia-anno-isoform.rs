@@ -7,8 +7,8 @@ use std::{
 
 use clap::{command, Parser};
 use isopedia::{
-    bptree::BPForest, constants::*, gtf::TranscriptChunker, isoform::MergedIsoform,
-    isoformarchive::read_record_from_archive, meta::Meta, tmpidx::MergedIsoformOffset,
+    bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker,
+    isoform::MergedIsoform, isoformarchive::read_record_from_archive, tmpidx::MergedIsoformOffset,
 };
 use log::{error, info};
 use serde::Serialize;
@@ -102,7 +102,7 @@ fn main() -> std::io::Result<()> {
     greetings(&cli);
 
     let mut forest = BPForest::init(&cli.idxdir);
-    let meta = Meta::load(&cli.idxdir.join(META_FILE_NAME));
+    let dataset_info = DatasetInfo::load(&cli.idxdir.join(META_FILE_NAME));
     let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
     // if cli.pos.len() > 0 {
@@ -137,7 +137,7 @@ fn main() -> std::io::Result<()> {
                     .as_bytes(),
             )
             .unwrap();
-    meta.get_sample_names().iter().for_each(|x| {
+    dataset_info.get_sample_names().iter().for_each(|x| {
         writer.write(format!("\t{}", x).as_bytes()).unwrap();
     });
     writer.write("\n".as_bytes()).unwrap();
@@ -149,10 +149,10 @@ fn main() -> std::io::Result<()> {
 
     let mut iter_count = 0;
     let mut batch = 0;
-    let mut acc_pos_count = vec![0u32; meta.get_size()];
-    let mut acc_sample_evidence_arr = vec![0u32; meta.get_size()];
+    let mut acc_pos_count = vec![0u32; dataset_info.get_size()];
+    let mut acc_sample_evidence_arr = vec![0u32; dataset_info.get_size()];
 
-    let mut total_acc_evidence_flag_vec = vec![0u32; meta.get_size()];
+    let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
     for trans in gtf {
         iter_count += 1;
 
@@ -272,7 +272,7 @@ fn main() -> std::io::Result<()> {
                 trans.gene_id,
                 &cli.min_read,
                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
-                meta.get_size(),
+                dataset_info.get_size(),
                 trans.get_attributes()
             )?;
 
@@ -322,7 +322,7 @@ fn main() -> std::io::Result<()> {
             )?;
 
             // 直接写一连串的 "0"（用迭代器，但不构造 Vec）
-            let sample_count = meta.get_sample_names().len();
+            let sample_count = dataset_info.get_sample_names().len();
             for i in 0..sample_count {
                 if i > 0 {
                     write!(writer, "\t")?;
@@ -337,10 +337,10 @@ fn main() -> std::io::Result<()> {
     info!("Processed {} transcripts", 100000 * batch + iter_count);
     info!("Sample-wide stats: ");
     info!("> Sample\thit\tmiss\tpct");
-    for i in 0..meta.get_size() {
+    for i in 0..dataset_info.get_size() {
         info!(
             "> {:}\t{}\t{}\t {:.2}%",
-            meta.get_sample_names()[i],
+            dataset_info.get_sample_names()[i],
             total_acc_evidence_flag_vec[i],
             total - total_acc_evidence_flag_vec[i],
             total_acc_evidence_flag_vec[i] as f64 / total as f64 * 100f64

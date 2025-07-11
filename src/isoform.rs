@@ -1,16 +1,12 @@
-//! aggregation of metainformation from multiple samples.
-// use core::hash;
 use std::io::Read;
 
 use flate2::bufread::GzEncoder;
-// use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
     constants::MAX_SAMPLE_SIZE,
     reads::{AggrRead, Segment, Strand},
-    // utils::{self, hash_vec},
 };
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReadDiffSlim {

@@ -45,7 +45,7 @@ impl MyGzWriter {
     pub fn finish(&mut self) -> io::Result<()> {
         if let Some(writer) = self.inner.take() {
             // take() 移出所有权
-            // let mut buf_writer = 
+            // let mut buf_writer =
             writer.finish()?;
             // buf_writer.flush()?;
         }

@@ -5,9 +5,9 @@ use clap::Parser;
 use isopedia::{
     chromosome::ChromMapping,
     constants::*,
+    dataset_info::DatasetInfo,
     isoform::MergedIsoform,
     isoformarchive::IsoformArchive,
-    meta::Meta,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffset, MergedIsoformOffsetPlusGenomeLoc, Tmpindex},
 };
@@ -183,9 +183,9 @@ fn main() -> Result<()> {
     cli.validate();
     greetings(&cli);
 
-    let mut sample_meta = Meta::parse_manifest(&cli.input);
+    let mut dataset_info = DatasetInfo::parse_manifest(&cli.input);
 
-    let file_list = sample_meta.get_path_list();
+    let file_list = dataset_info.get_path_list();
     if file_list.len() > MAX_SAMPLE_SIZE {
         error!(
             "The number of samples is larger than the maximum number of samples allowed: {}",
@@ -228,7 +228,7 @@ fn main() -> Result<()> {
         if let Some(rec) = reader.next_rec() {
             let sig = rec.signature;
             // add the evidence of the first record in each sample.
-            sample_meta.add_sample_evidence(idx, rec.evidence);
+            dataset_info.add_sample_evidence(idx, rec.evidence);
             heap.push(Reverse(HeapItem {
                 rec: rec,
                 signature: sig,
@@ -255,12 +255,12 @@ fn main() -> Result<()> {
         if let Some(merged_isoform) = merged_map.get_mut(&signature) {
             merged_isoform.add(rec, file_idx as u32);
         } else {
-            let merged_isoform = MergedIsoform::init(rec, sample_meta.get_size(), file_idx as u32);
+            let merged_isoform = MergedIsoform::init(rec, dataset_info.get_size(), file_idx as u32);
             merged_map.insert(signature, merged_isoform);
         }
         if let Some(rec) = file_readers[file_idx].next_rec() {
             // add the evidence of the new record in each sample.
-            sample_meta.add_sample_evidence(file_idx, rec.evidence);
+            dataset_info.add_sample_evidence(file_idx, rec.evidence);
             let _sig = rec.signature;
             heap.push(Reverse(HeapItem {
                 rec: rec,
@@ -413,7 +413,7 @@ fn main() -> Result<()> {
     //     .write_all(sample_meta.get_string().as_bytes())
     //     .expect("can not write meta data");
 
-    sample_meta.save_to_file(&cli.outdir.join(META_FILE_NAME))?;
+    dataset_info.save_to_file(&cli.outdir.join(META_FILE_NAME))?;
 
     info!("Fnished");
     Ok(())

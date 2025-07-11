@@ -590,7 +590,8 @@ impl BPTree {
                 .join(format!("bptree_{}.idx", chrom_id))
                 .to_str()
                 .unwrap(),
-        ).expect("Can not open cache file");
+        )
+        .expect("Can not open cache file");
         BPTree {
             root: 0,
             idxdir: PathBuf::from(idx_path),
@@ -857,7 +858,7 @@ impl BPTree {
                     // eprintln!("No such node: {}", child_id);
                     return None; // no such node
                 }
-            
+
                 n = cache.get_node2(child_id).expect("Can not get next node");
             }
         };
@@ -867,7 +868,7 @@ impl BPTree {
         let mut results = Vec::new();
         loop {
             let keys = &node.header.keys[..node.header.num_keys as usize];
-            for (nk,k) in keys.iter().enumerate() {
+            for (nk, k) in keys.iter().enumerate() {
                 if *k < start {
                     continue;
                 }
@@ -875,7 +876,6 @@ impl BPTree {
                 if *k > end {
                     return Some(results);
                 }
-
 
                 let combined = node.header.childs[nk];
                 results.extend(node.get_addresses_by_children_value(&combined));
@@ -985,7 +985,10 @@ impl BPForest {
         tree.range_search2(pos, flank)
     }
 
-    fn search_multi_pos(&mut self, positions: &Vec<(String, u64)>) -> Option<Vec<MergedIsoformOffset>> {
+    fn search_multi_pos(
+        &mut self,
+        positions: &Vec<(String, u64)>,
+    ) -> Option<Vec<MergedIsoformOffset>> {
         let res_vec: Vec<Vec<MergedIsoformOffset>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -1026,25 +1029,6 @@ impl BPForest {
     }
 }
 
-// fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
-//     if vecs.is_empty() {
-//         return vec![];
-//     }
-
-//     // 将第一个 vec 转为 HashSet
-//     let mut result: HashSet<MergedIsoformOffset> = vecs[0].iter().cloned().collect();
-
-//     // 与其他所有 vec 求交集
-//     for vec in &vecs[1..] {
-//         result = result
-//             .intersection(&vec.iter().cloned().collect())
-//             .cloned()
-//             .collect();
-//     }
-
-//     result.into_iter().collect()
-// }
-
 pub fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
     if vecs.is_empty() {
         return vec![];
@@ -1077,27 +1061,3 @@ pub fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset
 
     result.into_iter().collect()
 }
-
-// fn find_common(vecs: &[Vec<MergedIsoformOffset>]) -> Vec<MergedIsoformOffset> {
-//     // dbg!("findcommon start");
-//     if vecs.is_empty() {
-//         return vec![];
-//     }
-
-//     // 对所有向量按长度排序
-//     let mut sorted_vecs: Vec<_> = vecs.iter().collect();
-//     sorted_vecs.sort_by_key(|v| v.len());
-
-//     // 使用第一个(最短)向量作为基准
-//     let mut result = sorted_vecs[0].clone();
-
-//     // 二分查找优化
-//     for vec in &sorted_vecs[1..] {
-//         result.retain(|x| vec.binary_search(x).is_ok());
-//         if result.is_empty() {
-//             return vec![];
-//         }
-//     }
-//     // dbg!("findcommon end");
-//     result
-//  }

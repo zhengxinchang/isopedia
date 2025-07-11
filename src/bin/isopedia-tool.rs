@@ -1,11 +1,11 @@
 use clap::{Parser, Subcommand};
-use isopedia::isoformarchive::read_record_from_archive;
-use log::error;
-use std::path::PathBuf;
-use std::io::Write;
-use isopedia::tmpidx::Tmpindex;
 use isopedia::chromosome::ChromMapping;
 use isopedia::constants::*;
+use isopedia::isoformarchive::read_record_from_archive;
+use isopedia::tmpidx::Tmpindex;
+use log::error;
+use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Parser, Clone, Debug)]
 #[command(name = "isopedia-tool")]
@@ -33,8 +33,8 @@ pub struct InspectArgs {
     #[arg(short, long)]
     pub idx: PathBuf,
 
-    /// type of file to be inspect can be either 'tmpidx' or 'archive'
-    #[arg(short, long, name = "type")]
+    /// type of file to be inspect can be either 'tmpidx' or 'archive' or "meta"
+    #[arg(short = 't', long, name = "type")]
     pub type_f: String,
 
     /// Output file name
@@ -51,16 +51,14 @@ impl Validate for InspectArgs {
             is_ok = false;
         }
 
-        if self.type_f != "tmpidx" && self.type_f != "archive" {
-            error!("--type: type must be either 'tmpidx' or 'archive'");
+        if self.type_f != "tmpidx" && self.type_f != "archive" && self.type_f != "meta" {
+            error!("--type: type must be either 'tmpidx' or 'archive' or 'meta'");
             is_ok = false;
         }
 
         is_ok
     }
 }
-
-
 
 pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
     let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
@@ -89,14 +87,13 @@ pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
 }
 
 pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
-
     let mut processed_signautres = std::collections::HashSet::new();
 
     let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
     let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
     let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-    // let blocks = idx.get_blocks(chrom_id);
+                                                           // let blocks = idx.get_blocks(chrom_id);
     let writer = std::fs::File::create(output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
 
@@ -114,7 +111,8 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
         for block in blocks {
             for record_grp in block {
                 for record_ptr in record_grp.record_ptr_vec {
-                    let rec  = read_record_from_archive(&mut aggr_reader, &record_ptr, &mut archive_buf);
+                    let rec =
+                        read_record_from_archive(&mut aggr_reader, &record_ptr, &mut archive_buf);
                     if processed_signautres.contains(&rec.signature) {
                         continue;
                     }
@@ -126,6 +124,11 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
     }
 }
 
+fn inspect_meta(idx: &PathBuf) {
+    let dataset_info =
+        isopedia::dataset_info::DatasetInfo::load_from_file(&idx.join(META_FILE_NAME));
+    dbg!(&dataset_info);
+}
 
 fn main() {
     env_logger::Builder::from_env(
@@ -153,6 +156,8 @@ fn main() {
                 inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
             } else if inspec_args.type_f == "archive" {
                 inspect_aggr_dat(&inspec_args.idx, &inspec_args.output);
+            } else if inspec_args.type_f == "meta" {
+                inspect_meta(&inspec_args.idx);
             }
         }
     }

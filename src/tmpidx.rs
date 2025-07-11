@@ -1,3 +1,8 @@
+use crate::constants::{MAGIC, ORDER};
+use indexmap::IndexMap;
+use itertools::Itertools;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter, Read, Seek, Write},
@@ -5,11 +10,6 @@ use std::{
 };
 use zerocopy::{FromBytes, IntoBytes};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes};
-use crate::constants::{MAGIC, ORDER};
-use indexmap::IndexMap;
-use itertools::Itertools;
-use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
 
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -18,13 +18,12 @@ type ChromIdxStartart = u64;
 type ChromIdxLength = u64;
 type ChromId = u16;
 
-#[derive(Debug, Serialize, Deserialize)] 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TmpindexMeta {
     pub magic: u64,
     pub chrom_offsets: FxHashMap<ChromId, (ChromIdxStartart, ChromIdxLength)>,
     pub data_size: u64,
 }
-
 
 // This is the Temporary Index structure for indexing.
 // it use `MergedIsoformOffsetPlusGenomeLoc` to store the genomic location and the record offset of the isforms in the isoform archive file.
@@ -155,7 +154,8 @@ impl Tmpindex {
             }
         };
 
-        let curr_offset: u64 = 8u64 + (chrom_start_idx) * MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
+        let curr_offset: u64 =
+            8u64 + (chrom_start_idx) * MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
         // dbg!(curr_offset);
         let mut reader: BufReader<&File> = BufReader::new(&self.file);
 
@@ -195,11 +195,6 @@ impl Tmpindex {
         groups.chunks(ORDER as usize).map(|x| x.to_vec()).collect()
     }
 }
-
-
-
-
-
 
 /// this struct is used to write the interim index file
 /// it only contaions one record pointer
@@ -319,7 +314,6 @@ impl MergedIsoformOffsetGroup {
     }
 }
 
-
 #[derive(Debug, Clone, IntoBytes, FromBytes, Immutable, Serialize, Deserialize)]
 #[repr(C)]
 pub struct MergedIsoformOffset {
@@ -384,6 +378,3 @@ impl Hash for MergedIsoformOffset {
         self.offset.hash(state);
     }
 }
-
-
-

@@ -109,19 +109,6 @@ impl Cli {
             is_ok = false;
         }
 
-        // let output_dir = self
-        //     .output
-        //     .parent()
-        //     .unwrap_or_else(|| std::path::Path::new("."));
-
-        // if !output_dir.is_dir() {
-        //     error!(
-        //         "--output: parent dir {} does not exist",
-        //         output_dir.display()
-        //     );
-        //     is_ok = false;
-        // }
-
         // check output is not a directory
         if self.output.is_dir() {
             error!(
@@ -130,15 +117,6 @@ impl Cli {
             );
             is_ok = false;
         }
-
-        // optional: prevent silent overwrite unless forced
-        // if self.output.exists() {
-        //     error!(
-        //         "--output: file {} already exists. Consider removing it or adding --force",
-        //         self.output.display()
-        //     );
-        //     is_ok = false;
-        // }
 
         if is_ok != true {
             panic!("Invalid arguments, please check the error messages above.");
@@ -161,9 +139,7 @@ fn main() {
     let cli = Cli::parse();
     cli.validate();
     greetings(&cli);
-
     let bam_path = &cli.bam;
-
     let mut bam_reader = bam::Reader::from_path(bam_path).expect("Failed to open BAM file");
 
     if &cli.bam.ends_with(".cram") & &cli.reference.is_some() {
@@ -175,7 +151,7 @@ fn main() {
             )
             .expect("Failed to set reference for CRAM file");
     }
-
+    let mut n_record = 0u32;
     let mut record = Record::new();
     let header = bam_reader.header().to_owned();
     let mut chrom_set: IndexSet<String> = IndexSet::new();
@@ -186,14 +162,13 @@ fn main() {
         &cli.output.display()
     ));
 
-    let mut batches = 0;
-    let mut curr_count = 0;
+    // let mut batches = 0;
+    let mut total_count = 0;
     let batch_size = 1000000; // 1 million records per batch
     let mut skipped_records = 0;
 
     while let Some(result) = bam_reader.read(&mut record) {
-        
-        curr_count += 1;
+        total_count += 1;
 
         match result {
             Err(_) => {
@@ -203,9 +178,9 @@ fn main() {
             Ok(()) => {}
         }
 
-        if curr_count % batch_size == 0 {
-            info!("Processing {} records", batches * batch_size);
-            batches += 1;
+        if total_count % batch_size == 0 {
+            info!("Processing {} records", total_count);
+            // batches += 1;
         }
 
         if record.is_unmapped() {
@@ -224,6 +199,8 @@ fn main() {
             skipped_records += 1;
             continue;
         }
+
+        n_record += 1;
 
         // dont use record.tid() before it is filled by bam.read()
         // otherwise it will be random number and cuase the error with random memory access.
@@ -370,10 +347,10 @@ fn main() {
             .write_all_bytes(agg_isoform.to_record().as_bytes())
             .expect("can not write record...");
     }
-    info!(
-        "Total records processed: {}",
-        batches * batch_size + curr_count
-    );
+    info!("Total records processed: {}", total_count);
+
+    info!("Total valid records: {}", n_record);
+    // info!("Total records : {}", n_record);
     info!("Total records skipped: {}", skipped_records);
     info!("Finished");
 }

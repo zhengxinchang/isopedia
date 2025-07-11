@@ -3,7 +3,8 @@ use std::{collections::HashSet, env, fs::File, io::BufRead, path::PathBuf, vec};
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
 use isopedia::{
-    bptree::BPForest, constants::*, isoformarchive, meta::Meta, utils, writer::MyGzWriter,
+    bptree::BPForest, constants::*, dataset_info::DatasetInfo, isoformarchive, utils,
+    writer::MyGzWriter,
 };
 use log::{error, info};
 use serde::Serialize;
@@ -163,7 +164,7 @@ fn anno_single_fusion(
     forest: &mut BPForest,
     isofrom_archive: &mut std::io::BufReader<File>,
     archive_buf: &mut Vec<u8>,
-    meta: &Meta,
+    meta: &DatasetInfo,
 ) -> Result<()> {
     info!(
         "Processing breakpoints: {}:{}-{}:{}",
@@ -287,7 +288,7 @@ fn main() -> Result<()> {
     greetings(&cli);
 
     let mut forest = BPForest::init(&cli.idxdir);
-    let meta = Meta::load(&cli.idxdir.join(META_FILE_NAME));
+    let dataset_info = DatasetInfo::load(&cli.idxdir.join(META_FILE_NAME));
 
     let mut isofrom_archive = std::io::BufReader::new(
         std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
@@ -300,7 +301,7 @@ fn main() -> Result<()> {
 
     let mut header_str =
         String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count");
-    let sample_name = meta.get_sample_names();
+    let sample_name = dataset_info.get_sample_names();
     for name in sample_name {
         header_str.push_str(&format!("\t{}", name));
     }
@@ -324,7 +325,7 @@ fn main() -> Result<()> {
             &mut forest,
             &mut isofrom_archive,
             &mut archive_buf,
-            &meta,
+            &dataset_info,
         )?;
     } else {
         // open the bed file
@@ -343,7 +344,7 @@ fn main() -> Result<()> {
                 &mut forest,
                 &mut isofrom_archive,
                 &mut archive_buf,
-                &meta,
+                &dataset_info,
             )?;
         }
     }
