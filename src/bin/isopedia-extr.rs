@@ -8,8 +8,8 @@ use rust_htslib::bam::{
     Read, Record,
 };
 use rustc_hash::FxHashMap;
+use std::env;
 use std::path::PathBuf;
-use std::{env};
 
 use isopedia::{
     reads::{AggrRead, SingleRead},
@@ -177,20 +177,24 @@ fn main() {
     }
 
     let mut record = Record::new();
-    // let outfile = std::fs::File::create(&cli.output).expect("Can't create output file");
-    // let mut writer = std::io::BufWriter::new(outfile);
     let header = bam_reader.header().to_owned();
     let mut chrom_set: IndexSet<String> = IndexSet::new();
     let mut agg_isoform_map: FxHashMap<u64, AggrRead> = FxHashMap::default();
 
-    let mut mywriter = MyGzWriter::new(&cli.output).expect(&format!("Can not create output file {} .",&cli.output.display()));
+    let mut mywriter = MyGzWriter::new(&cli.output).expect(&format!(
+        "Can not create output file {} .",
+        &cli.output.display()
+    ));
 
     let mut batches = 0;
-    let curr_count = 0;
+    let mut curr_count = 0;
     let batch_size = 1000000; // 1 million records per batch
     let mut skipped_records = 0;
 
     while let Some(result) = bam_reader.read(&mut record) {
+        
+        curr_count += 1;
+
         match result {
             Err(_) => {
                 eprintln!("Can not read record");
@@ -224,7 +228,7 @@ fn main() {
         // dont use record.tid() before it is filled by bam.read()
         // otherwise it will be random number and cuase the error with random memory access.
         let mut chrom = String::from_utf8(header.tid2name(record.tid() as u32).to_vec()).unwrap();
-        if chrom.starts_with("chr") {
+        if chrom.len() >= 3 && chrom.starts_with("chr") {
             chrom = chrom[3..].to_owned();
         }
         chrom_set.insert(chrom.clone());
@@ -253,7 +257,7 @@ fn main() {
             // Diff(u32),     // X
             match cigar {
                 Cigar::Match(n) | Cigar::Del(n) | Cigar::Equal(n) | Cigar::Diff(n) => {
-                    right += n;
+                    right += *n;
                 }
                 Cigar::RefSkip(n) => {
                     isoform.add_segment(chrom.clone(), left as u64, right as u64, &strand, false);
@@ -310,7 +314,7 @@ fn main() {
                             });
                             isoform.add_supp_segment(chrom2.clone(), left, right, &strand, true);
                         });
-                }else {
+                } else {
                     error!("SA tag is not a string: {:?}", sa);
                 }
             }
@@ -352,7 +356,7 @@ fn main() {
         .expect("can not write headers..");
 
     if cli.debug {
-        // aggr isoform size 
+        // aggr isoform size
         info!("Number of aggr isoforms: {}", agg_isoform_map.len());
     }
 
@@ -366,7 +370,10 @@ fn main() {
             .write_all_bytes(agg_isoform.to_record().as_bytes())
             .expect("can not write record...");
     }
-    info!("Total records processed: {}", batches * batch_size + curr_count);
+    info!(
+        "Total records processed: {}",
+        batches * batch_size + curr_count
+    );
     info!("Total records skipped: {}", skipped_records);
     info!("Finished");
 }

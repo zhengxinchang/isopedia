@@ -27,13 +27,9 @@ struct Cli {
     #[arg(short, long)]
     pub idxdir: PathBuf,
 
-    /// positions to be search(-p chr:pos * N)
-    // #[arg(short, long)]
-    // pub pos: Vec<String>,
-
     /// gtf file
     #[arg(short, long)]
-    pub gtf: Option<PathBuf>,
+    pub gtf: PathBuf,
 
     /// flank size for search, before and after the position
     #[arg(short, long, default_value_t = 10)]
@@ -77,11 +73,9 @@ impl Cli {
             is_ok = false;
         }
 
-        if let Some(ref gtf) = self.gtf {
-            if !gtf.exists() {
-                error!("--gtf: gtf file {} does not exist", gtf.display());
-                is_ok = false;
-            }
+        if !self.gtf.exists() {
+            error!("--gtf: gtf file {} does not exist", self.gtf.display());
+            is_ok = false;
         }
 
         if is_ok != true {
@@ -116,7 +110,7 @@ fn main() -> std::io::Result<()> {
     // } else if !cli.gtf.is_none() {
     info!("Search by gtf/gff file");
     let gtfreader = noodles_gtf::io::Reader::new(BufReader::new(
-        std::fs::File::open(cli.gtf.unwrap()).expect("can not read gtf"),
+        std::fs::File::open(cli.gtf).expect("can not read gtf"),
     ));
 
     let gtf = TranscriptChunker::new(gtfreader);

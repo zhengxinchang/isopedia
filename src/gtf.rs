@@ -122,8 +122,9 @@ impl<R: BufRead> TranscriptChunker<R> {
 
         loop {
             let record = records.next();
+            // println!("Processing record: {:?}", &record);
             match record {
-                Some(rec) => match rec {
+                Some(ref rec) => match rec {
                     Ok(rec) => match rec.ty() {
                         "transcript" => match self.hold_transcript {
                             Some(_) => {
@@ -152,7 +153,7 @@ impl<R: BufRead> TranscriptChunker<R> {
                         _ => {}
                     },
                     Err(e) => {
-                        panic!("error in reading gtf: {:?}", e);
+                        panic!("error in reading gtf/gff: {:?}, record: {:?}\nPlease check your gtf/gff format", e, &record);
                     }
                 },
                 None => {

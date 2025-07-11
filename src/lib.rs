@@ -8,5 +8,5 @@ pub mod tmpidx;
 pub mod isoformarchive;
 pub mod bptree;
 pub mod gtf;
-pub mod error;
+// pub mod error;
 pub mod writer;

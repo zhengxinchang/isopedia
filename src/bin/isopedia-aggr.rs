@@ -1,5 +1,6 @@
 use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
 
+use anyhow::Result;
 use clap::Parser;
 use isopedia::{
     chromosome::ChromMapping,
@@ -25,11 +26,11 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com,Xinchang.Zheng@bcm.edu>
 #[clap(after_long_help = "Exmaple:
 
 The input file example(tab-separated)
-(reqired)            (reqired)  (optional) (optional) ...
--------------------- ---------- ---------- ----------
-path                 name       meta1      meta2     <- header
-/path/to/sample1.bam sample1    value1     value2
-/path/to/sample2.bam sample2    value1     value2
+(reqired)                   (reqired) 
+--------------------------- ----------
+path                        name 
+/path/to/sample1.isoform.gz sample1
+/path/to/sample2.isoform.gz sample2
 
 Run aggregation:
 
@@ -41,8 +42,7 @@ struct Cli {
         short,
         long,
         help = "Input manifest(tabs-separated) file.\
-                             \nFrist 2 cols are required: sample path and sample name.\
-                             \nThe rest of cols are optional and will be used as sample meta.\
+                             \nFrist 2 cols are required: sample path and sample name.
                              \nFirst row is header."
     )]
     pub input: PathBuf,
@@ -119,16 +119,6 @@ impl Cli {
             }
         }
 
-        // let output_dir = self.outdir.parent().unwrap();
-
-        // if !output_dir.exists() {
-        //     error!(
-        //         "--output: parent dir {} does not exist",
-        //         output_dir.display()
-        //     );
-        //     is_ok = false;
-        // }
-
         if !self.outdir.exists() {
             // create the directory
             std::fs::create_dir_all(&self.outdir).expect("Can not create output directory");
@@ -185,7 +175,7 @@ impl Display for HeapItem<AggrRead> {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
@@ -193,7 +183,7 @@ fn main() {
     cli.validate();
     greetings(&cli);
 
-    let sample_meta = Meta::parse(&cli.input);
+    let mut sample_meta = Meta::parse_manifest(&cli.input);
 
     let file_list = sample_meta.get_path_list();
     if file_list.len() > MAX_SAMPLE_SIZE {
@@ -228,15 +218,8 @@ fn main() {
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
     // init the output file
 
-    // let mut merged_isoform_writer = std::io::BufWriter::new(
-    //     std::fs::File::create(&cli.outdir.join(MERGED_FILE_NAME))
-    //       .expect("Can not create merged records file...exit")  ,
-    // );
-
     let mut isoform_archive = IsoformArchive::create(&cli.outdir.join(MERGED_FILE_NAME));
 
-    // let mut out_intrim_path = ag_args.outdir.clone();
-    // out_intrim_path.push("interim.idx");
     let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME));
 
     let mut merged_offset = 0;
@@ -244,6 +227,8 @@ fn main() {
     for (idx, reader) in file_readers.iter_mut().enumerate() {
         if let Some(rec) = reader.next_rec() {
             let sig = rec.signature;
+            // add the evidence of the first record in each sample.
+            sample_meta.add_sample_evidence(idx, rec.evidence);
             heap.push(Reverse(HeapItem {
                 rec: rec,
                 signature: sig,
@@ -274,6 +259,8 @@ fn main() {
             merged_map.insert(signature, merged_isoform);
         }
         if let Some(rec) = file_readers[file_idx].next_rec() {
+            // add the evidence of the new record in each sample.
+            sample_meta.add_sample_evidence(file_idx, rec.evidence);
             let _sig = rec.signature;
             heap.push(Reverse(HeapItem {
                 rec: rec,
@@ -352,10 +339,7 @@ fn main() {
     }
 
     for (_, merged_isoform_rec) in &merged_map {
-        // let bytes_len = merged_isoform_rec.gz_encode(&mut buf);
-        // merged_isoform_writer.write_all(&buf).unwrap();
         let bytes_len = isoform_archive.dump_to_disk(&merged_isoform_rec);
-        // buf.clear();
         let sjs = merged_isoform_rec.get_common_splice_sites();
         sjs.iter().for_each(|sj| {
             let interim_record = MergedIsoformOffsetPlusGenomeLoc {
@@ -371,7 +355,6 @@ fn main() {
             };
             tmpidx.add_one(interim_record);
         });
-
 
         // add the left and right position of a single read
         let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
@@ -411,22 +394,27 @@ fn main() {
     tmpidx.dump_to_disk();
 
     // write the chromsome map file
-    // let mut out_chrom_map_path = ag_args.outdir.clone();
-    // out_chrom_map_path.push("chrom.map");
     let mut out_chrom_map_writer = std::io::BufWriter::new(
         std::fs::File::create(&cli.outdir.join(CHROM_FILE_NAME))
             .expect("Can not create chromsome map file...exit"),
     );
     out_chrom_map_writer.write_all(&chroms.encode()).unwrap();
 
-
-    let mut out_sample_meta_writer = std::io::BufWriter::new(
-        std::fs::File::create(&cli.outdir.join(META_FILE_NAME))
-            .expect("Can not create sample meta file...exit"),
+    info!(
+        "Dump sample info to disk: {}",
+        &cli.outdir.join(META_FILE_NAME).display()
     );
-    out_sample_meta_writer
-        .write_all(sample_meta.get_string().as_bytes())
-        .expect("can not write meta data");
+
+    // let mut out_sample_meta_writer = std::io::BufWriter::new(
+    //     std::fs::File::create(&cli.outdir.join(META_FILE_NAME))
+    //         .expect("Can not create sample meta file...exit"),
+    // );
+    // out_sample_meta_writer
+    //     .write_all(sample_meta.get_string().as_bytes())
+    //     .expect("can not write meta data");
+
+    sample_meta.save_to_file(&cli.outdir.join(META_FILE_NAME))?;
 
     info!("Fnished");
+    Ok(())
 }

@@ -1,14 +1,10 @@
-use std::{
-    collections::HashSet,
-    env,
-    fs::File,
-    io::{BufWriter, Write},
-    path::PathBuf,
-    vec,
-};
+use std::{collections::HashSet, env, fs::File, io::BufRead, path::PathBuf, vec};
 
+use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
-use isopedia::{bptree::BPForest, constants::*, error::MyError, isoformarchive, meta::Meta, utils};
+use isopedia::{
+    bptree::BPForest, constants::*, isoformarchive, meta::Meta, utils, writer::MyGzWriter,
+};
 use log::{error, info};
 use serde::Serialize;
 
@@ -28,10 +24,14 @@ struct Cli {
 
     /// two breakpoints for gene fusion to be search(-p chr1:pos1,chr2:pos2)
     #[arg(short, long)]
-    pub pos: String,
+    pub pos: Option<String>,
+
+    /// two breakpoints for gene fusion to be search(-p chr1:pos1,chr2:pos2)
+    #[arg(short = 'P', long)]
+    pub pos_bed: Option<PathBuf>,
 
     /// flank size for search, before and after the position
-    #[arg(short, long, default_value_t = 2)]
+    #[arg(short, long, default_value_t = 10)]
     pub flank: u64,
 
     /// minimal reads to define a positive sample
@@ -41,6 +41,10 @@ struct Cli {
     /// output file for search results
     #[arg(short, long)]
     pub output: PathBuf,
+
+    /// debug mode
+    #[arg(long, default_value_t = false)]
+    pub debug: bool,
 }
 
 impl Cli {
@@ -72,25 +76,27 @@ impl Cli {
             is_ok = false;
         }
 
-        match process_fusion_positions(&self.pos) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Error parsing --pos: {}", e);
-                is_ok = false;
+        if self.pos.is_none() && self.pos_bed.is_none() {
+            error!("Please provide either --pos or --pos-bed");
+            is_ok = false;
+        }
+
+        if let Some(pos) = &self.pos {
+            match process_fusion_positions(pos) {
+                Ok(_) => (),
+                Err(e) => {
+                    error!("Error parsing --pos: {}", e);
+                    is_ok = false;
+                }
             }
         }
 
-        // if let Some(ref output) = self.output {
-        //     let output_dir = output.parent().unwrap();
-
-        //     if !output_dir.exists() {
-        //         error!(
-        //             "--output: parent dir {} does not exist",
-        //             output_dir.display()
-        //         );
-        //         is_ok = false;
-        //     }
-        // }
+        if let Some(pos_bed2) = &self.pos_bed {
+            if !pos_bed2.exists() {
+                error!("--pos-bed: file {} does not exist", pos_bed2.display());
+                is_ok = false;
+            }
+        }
 
         let output_dir = self.output.parent().unwrap();
 
@@ -103,26 +109,26 @@ impl Cli {
         }
 
         if is_ok != true {
-            // error!("Please check the input arguments!");
+            error!("Please check the input arguments!");
             std::process::exit(1);
         }
     }
 }
 
-fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64)), MyError> {
+fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64))> {
     let parts: Vec<&str> = pos.split(',').collect();
 
     if parts.len() != 2 {
-        return Err(MyError::InvalidInput(
-            "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2".to_string(),
+        return Err(anyhow::anyhow!(
+            "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2"
         ));
     }
     let mut breakpoints = Vec::new();
     for part in parts {
         let subparts: Vec<&str> = part.split(':').collect();
         if subparts.len() != 2 {
-            return Err(MyError::InvalidInput(
-                "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2".to_string(),
+            return Err(anyhow::anyhow!(
+                "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2"
             ));
         }
         let chr = subparts[0].to_string();
@@ -131,9 +137,7 @@ fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64)),
         let pos = match subparts[1].parse::<u64>() {
             Ok(p) => p,
             Err(_) => {
-                return Err(MyError::InvalidInput(
-                    "Position must be a valid integer".to_string(),
-                ))
+                return Err(anyhow::anyhow!("Position must be a valid integer"));
             }
         };
         breakpoints.push((chr, pos));
@@ -150,84 +154,50 @@ fn greetings(args: &Cli) {
     }
 }
 
-fn main() {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
+type BreakpointType = ((String, u64), (String, u64), String);
 
-    let cli = Cli::parse();
-    cli.validate();
-    greetings(&cli);
-
-    let breakpoints = match process_fusion_positions(&cli.pos) {
-        Ok(bp) => bp,
-        Err(e) => {
-            error!("Error parsing --pos: {}", e);
-            std::process::exit(1);
-        }
-    };
-
+fn anno_single_fusion(
+    breakpoints: BreakpointType,
+    mywriter: &mut MyGzWriter,
+    cli: &Cli,
+    forest: &mut BPForest,
+    isofrom_archive: &mut std::io::BufReader<File>,
+    archive_buf: &mut Vec<u8>,
+    meta: &Meta,
+) -> Result<()> {
     info!(
-        "Searching for fusion, breakpoints: {:?} and {:?}",
-        breakpoints.0, breakpoints.1
+        "Processing breakpoints: {}:{}-{}:{}",
+        breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
     );
-
-    let mut forest = BPForest::init(&cli.idxdir);
-    let meta = Meta::load(&cli.idxdir.join(META_FILE_NAME));
-
-    let mut isofrom_archive = std::io::BufReader::new(
-        std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-            .expect("Can not open aggregated records file...exit"),
-    );
-
-    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-
-    let mut writer = File::create(cli.output)
-        .and_then(|file| {
-            let writer = BufWriter::new(file);
-
-            Ok(writer)
-        })
-        .unwrap_or_else(|e| {
-            error!("Failed to create output file: {}", e);
-            std::process::exit(1);
-        });
-
-    writer
-        .write_all(b"chr1\tpos1\tchr2\tpos2\tmin_read\tsample_size\tpositive_sample_count")
-        .expect("Failed to write header");
-    meta.get_sample_names().iter().for_each(|x| {
-        writer
-            .write_all(format!("\t{}", x).as_bytes())
-            .expect("Failed to write sample name");
-    });
-    writer.write_all(b"\n").expect("Failed to write newline");
-
     let left_target = forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
     let right_target = forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
 
     if left_target.is_none() || right_target.is_none() {
-        info!("No candidates found for the given breakpoints");
-        return;
+        if cli.debug {
+            error!(
+                "No candidates found for breakpoints: {}:{}-{}:{}",
+                breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
+            );
+        }
+        return Ok(());
     }
-    info!(
-        "Found {} candidates",
-        left_target.clone().unwrap().len() + right_target.clone().unwrap().len()
-    );
+
+    let left_target = left_target.unwrap();
+    let right_target = right_target.unwrap();
+    if cli.debug {
+        info!(
+            "Found {} candidates",
+            left_target.len() + right_target.len()
+        );
+    }
 
     let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
 
     // process the left targets
-    let unique_left = left_target
-        .clone()
-        .unwrap()
-        .into_iter()
-        .collect::<HashSet<_>>();
+    let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
-        let merged_isoform = isoformarchive::read_record_from_archive(
-            &mut isofrom_archive,
-            &target,
-            &mut archive_buf,
-        );
+        let merged_isoform =
+            isoformarchive::read_record_from_archive(isofrom_archive, &target, archive_buf);
         let evidence_vec =
             merged_isoform.find_fusion(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
         // dbg!(&evidence_vec);
@@ -240,17 +210,10 @@ fn main() {
     }
 
     // process the right targets
-    let unique_right = right_target
-        .clone()
-        .unwrap()
-        .into_iter()
-        .collect::<HashSet<_>>();
+    let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform = isoformarchive::read_record_from_archive(
-            &mut isofrom_archive,
-            &target,
-            &mut archive_buf,
-        );
+        let merged_isoform: isopedia::isoform::MergedIsoform =
+            isoformarchive::read_record_from_archive(isofrom_archive, &target, archive_buf);
         let evidence_vec =
             merged_isoform.find_fusion(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
 
@@ -261,46 +224,132 @@ fn main() {
             .collect();
     }
 
-    info!(
-        "Fusion evidence found in {} samples with minimal read support {}",
+    let mut record_parts = vec![
+        breakpoints.0 .0.to_string(),
+        breakpoints.0 .1.to_string(),
+        breakpoints.1 .0.to_string(),
+        breakpoints.1 .1.to_string(),
+        breakpoints.2.to_string(),
+        cli.min_read.to_string(),
+        meta.get_size().to_string(),
         fusion_evidence_vec
             .iter()
             .filter(|&&x| x >= cli.min_read)
-            .count(),
-        cli.min_read
-    );
-
-    // writer.write_all(b"\n").expect("Failed to write newline");
-
-    writer
-        .write_all(
-            format!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                breakpoints.0 .0,
-                breakpoints.0 .1,
-                breakpoints.1 .0,
-                breakpoints.1 .1,
-                cli.min_read,
-                meta.get_size(),
-                fusion_evidence_vec
-                    .iter()
-                    .filter(|&&x| x >= cli.min_read)
-                    .count(),
-            )
-            .as_bytes(),
-        )
-        .expect("Failed to write fusion evidence");
+            .count()
+            .to_string(),
+    ];
 
     for idx in 0..meta.get_size() {
         if fusion_evidence_vec[idx] >= cli.min_read {
-            writer
-                .write_all(format!("\t{}", fusion_evidence_vec[idx]).as_bytes())
-                .expect("Failed to write sample evidence");
+            record_parts.push(fusion_evidence_vec[idx].to_string());
         } else {
-            writer
-                .write_all(b"\t0")
-                .expect("Failed to write sample evidence");
+            record_parts.push("0".to_string());
         }
     }
-    writer.write_all(b"\n").expect("Failed to write newline");
+
+    let record_string = record_parts.join("\t") + "\n";
+    mywriter
+        .write_all_bytes(record_string.as_bytes())
+        .context("Failed to write record string")?;
+    Ok(())
+}
+
+fn parse_bed_line(line: &str) -> Result<BreakpointType> {
+    let fields: Vec<&str> = line.split('\t').collect();
+    if fields.len() < 5 {
+        return Err(anyhow!(
+            "Invalid bed line: {}. Expected at least 5 fields.",
+            line
+        ));
+    }
+    // trim the chr prefix and convert to uppercase
+    let chr1 = fields[0].to_string();
+    let chr1 = utils::trim_chr_prefix_to_upper(&chr1);
+    let pos1 = fields[1]
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Invalid position"))?;
+    let chr2 = fields[2].to_string();
+    let chr2 = utils::trim_chr_prefix_to_upper(&chr2);
+    let pos2 = fields[3]
+        .parse::<u64>()
+        .map_err(|_| anyhow!("Invalid position"))?;
+    let fusion_id = fields[4].to_string();
+
+    Ok(((chr1, pos1), (chr2, pos2), fusion_id))
+}
+
+fn main() -> Result<()> {
+    env::set_var("RUST_LOG", "info");
+    env_logger::init();
+
+    let cli = Cli::parse();
+    cli.validate();
+    greetings(&cli);
+
+    let mut forest = BPForest::init(&cli.idxdir);
+    let meta = Meta::load(&cli.idxdir.join(META_FILE_NAME));
+
+    let mut isofrom_archive = std::io::BufReader::new(
+        std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+            .context("Failed to open merged file")?,
+    );
+
+    let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
+
+    let mut mywriter = MyGzWriter::new(&cli.output)?;
+
+    let mut header_str =
+        String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count");
+    let sample_name = meta.get_sample_names();
+    for name in sample_name {
+        header_str.push_str(&format!("\t{}", name));
+    }
+    header_str.push('\n');
+    mywriter.write_all_bytes(header_str.as_bytes())?;
+
+    if !cli.pos.is_none() {
+        let pos = &cli.pos.clone().unwrap();
+        let breakpoints: BreakpointType = match process_fusion_positions(pos) {
+            Ok(bp) => (bp.0, bp.1, "SingleQuery".to_string()),
+            Err(e) => {
+                error!("Error parsing --pos: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        anno_single_fusion(
+            breakpoints,
+            &mut mywriter,
+            &cli,
+            &mut forest,
+            &mut isofrom_archive,
+            &mut archive_buf,
+            &meta,
+        )?;
+    } else {
+        // open the bed file
+        let pos_bed = cli.pos_bed.clone().unwrap();
+        let bed_file = File::open(&pos_bed).context("Failed to open the provided bed file")?;
+        let reader = std::io::BufReader::new(bed_file);
+
+        for line in reader.lines() {
+            let line = line.context("Failed to read line from bed file")?;
+            let breakpoints: BreakpointType = parse_bed_line(&line)?;
+
+            anno_single_fusion(
+                breakpoints,
+                &mut mywriter,
+                &cli,
+                &mut forest,
+                &mut isofrom_archive,
+                &mut archive_buf,
+                &meta,
+            )?;
+        }
+    }
+
+    mywriter.finish()?;
+    info!("Results written to {}", cli.output.display());
+    info!("Finished!");
+    Ok(())
 }

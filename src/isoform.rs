@@ -1,7 +1,4 @@
 //! aggregation of metainformation from multiple samples.
-//!
-//!
-//!
 // use core::hash;
 use std::io::Read;
 

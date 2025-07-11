@@ -1,6 +1,8 @@
-1. fuison gene search
-2. search funciton 优化
-3. external sort of tmp idex
+X1. fuison gene search
+X2. search funciton 优化
+X3. external sort of tmp idex
     currently took 32G for 172 sample merging task(18min)
 4. add metadata looking up funciton
-make sure 
+X5. fusion gene batch search by providing a bed file of breakpoints
+6. fusion gene search by provide a bed file of gene regions[discovery mode]
+
