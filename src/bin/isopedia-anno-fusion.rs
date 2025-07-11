@@ -288,7 +288,7 @@ fn main() -> Result<()> {
     greetings(&cli);
 
     let mut forest = BPForest::init(&cli.idxdir);
-    let dataset_info = DatasetInfo::load(&cli.idxdir.join(META_FILE_NAME));
+    let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
     let mut isofrom_archive = std::io::BufReader::new(
         std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))

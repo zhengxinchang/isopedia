@@ -316,16 +316,10 @@ fn main() {
     chrom_set.into_iter().for_each(|x| {
         chrom_str.extend_from_slice(x.as_bytes());
         chrom_str.push(b'\t');
-        // writer.write_all(x.as_bytes()).unwrap();
-        // writer.write_all(b"\t").unwrap();
     });
     chrom_str.push(b'\n');
-    // writer.write_all(b"\n").unwrap();
 
     info!("Write to output file");
-    // writer
-    //     .write(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n")
-    //     .unwrap();
 
     chrom_str.extend_from_slice(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n");
     mywriter

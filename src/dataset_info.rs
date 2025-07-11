@@ -46,22 +46,22 @@ impl DatasetInfo {
     }
 
     /// load sample meta from index
-    pub fn load<P: AsRef<Path>>(path: P) -> DatasetInfo {
-        let content = std::fs::read_to_string(path.as_ref()).expect(&format!(
-            "Cannot read sample meta file {}",
-            path.as_ref().display()
-        ));
-        let mut samples = DatasetInfo::new();
-        for line in content.lines().skip(1) {
-            let fields = line
-                .split('\t')
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>();
-            let name = fields[0].clone();
-            samples.add_sample(name, None);
-        }
-        samples
-    }
+    // pub fn load<P: AsRef<Path>>(path: P) -> DatasetInfo {
+    //     let content = std::fs::read_to_string(path.as_ref()).expect(&format!(
+    //         "Cannot read sample meta file {}",
+    //         path.as_ref().display()
+    //     ));
+    //     let mut samples = DatasetInfo::new();
+    //     for line in content.lines().skip(1) {
+    //         let fields = line
+    //             .split('\t')
+    //             .map(|x| x.to_string())
+    //             .collect::<Vec<String>>();
+    //         let name = fields[0].clone();
+    //         samples.add_sample(name, None);
+    //     }
+    //     samples
+    // }
 
     pub fn save_to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
         let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
@@ -71,7 +71,7 @@ impl DatasetInfo {
     }
 
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<DatasetInfo> {
-        let bytes = fs::read(path.as_ref())?;
+        let bytes: Vec<u8> = fs::read(path.as_ref())?;
         let decoded: DatasetInfo = bincode::deserialize(&bytes).unwrap();
         Ok(decoded)
     }

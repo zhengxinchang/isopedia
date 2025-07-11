@@ -102,7 +102,7 @@ fn main() -> std::io::Result<()> {
     greetings(&cli);
 
     let mut forest = BPForest::init(&cli.idxdir);
-    let dataset_info = DatasetInfo::load(&cli.idxdir.join(META_FILE_NAME));
+    let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
     let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
     // if cli.pos.len() > 0 {
@@ -135,12 +135,11 @@ fn main() -> std::io::Result<()> {
             .write(
                 "chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes"
                     .as_bytes(),
-            )
-            .unwrap();
+            )?;
     dataset_info.get_sample_names().iter().for_each(|x| {
-        writer.write(format!("\t{}", x).as_bytes()).unwrap();
+        writer.write(format!("\t{}", x).as_bytes())?;
     });
-    writer.write("\n".as_bytes()).unwrap();
+    writer.write("\n".as_bytes())?;
 
     let mut isofrom_archive = std::io::BufReader::new(
         std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
@@ -184,32 +183,13 @@ fn main() -> std::io::Result<()> {
         }
 
         if target.len() > 0 {
-            // dbg!(target.len());
-
-            //**** */
             acc_pos_count.fill(0);
             acc_sample_evidence_arr.fill(0);
-            // for i in 0..target.len() {
-            //     let record: MergedIsoform =
-            //         read_record_from_archive(&mut isofrom_archive, &target[i]);
-
-            //     acc_pos_count
-            //         .iter_mut()
-            //         .zip(record.get_positive_array(&cli.min_read).iter())
-            //         .for_each(|(a, b)| *a += b);
-
-            //     acc_sample_evidence_arr = acc_sample_evidence_arr
-            //         .iter()
-            //         .zip(record.get_sample_evidence_arr().iter())
-            //         .map(|(a, b)| a + b)
-            //         .collect();
-            // }
 
             for offset in &target {
                 let record: MergedIsoform =
                     read_record_from_archive(&mut isofrom_archive, offset, &mut archive_buf);
 
-                // 无需 collect，直接累加
                 acc_pos_count
                     .iter_mut()
                     .zip(record.get_positive_array(&cli.min_read))
@@ -229,36 +209,6 @@ fn main() -> std::io::Result<()> {
                         total_acc_evidence_flag_vec[i] += 1;
                     }
                 });
-
-            // writer
-            //     .write(
-            //         format!(
-            //             "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tyes\t{}\t{}\t{}\t{}\n",
-            //             trans.chrom,
-            //             trans.start,
-            //             trans.end,
-            //             trans.get_transcript_length(),
-            //             trans.get_exon_count(),
-            //             trans.trans_id,
-            //             trans.gene_id,
-            //             &cli.min_read,
-            //             format!(
-            //                 "{}/{}",
-            //                 // acc_pos_count > 0 size,
-            //                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
-            //                 // record.sample_size
-            //                 meta.get_size()
-            //             ),
-            //             trans.get_attributes(),
-            //             acc_sample_evidence_arr
-            //                 .into_iter()
-            //                 .map(|x| { x.to_string() })
-            //                 .collect::<Vec<String>>()
-            //                 .join("\t")
-            //         )
-            //         .as_bytes(),
-            //     )
-            //     .unwrap();
 
             write!(
                 writer,
@@ -284,29 +234,6 @@ fn main() -> std::io::Result<()> {
             }
             write!(writer, "\n")?;
         } else {
-            // writer
-            //     .write(
-            //         format!(
-            //             "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t{}\n",
-            //             trans.chrom,
-            //             trans.start,
-            //             trans.end,
-            //             trans.get_transcript_length(),
-            //             trans.get_exon_count(),
-            //             trans.trans_id,
-            //             trans.gene_id,
-            //             &cli.min_read,
-            //             trans.get_attributes(),
-            //             meta.get_sample_names()
-            //                 .iter()
-            //                 .map(|_| "0")
-            //                 .collect::<Vec<&str>>()
-            //                 .join("\t")
-            //         )
-            //         .as_bytes(),
-            //     )
-            //     .unwrap();
-            // 写入固定字段（无分配）
             write!(
                 writer,
                 "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t",
@@ -320,8 +247,6 @@ fn main() -> std::io::Result<()> {
                 &cli.min_read,
                 trans.get_attributes()
             )?;
-
-            // 直接写一连串的 "0"（用迭代器，但不构造 Vec）
             let sample_count = dataset_info.get_sample_names().len();
             for i in 0..sample_count {
                 if i > 0 {

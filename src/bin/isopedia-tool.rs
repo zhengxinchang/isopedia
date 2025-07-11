@@ -126,7 +126,7 @@ pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
 
 fn inspect_meta(idx: &PathBuf) {
     let dataset_info =
-        isopedia::dataset_info::DatasetInfo::load_from_file(&idx.join(META_FILE_NAME));
+        isopedia::dataset_info::DatasetInfo::load_from_file(&idx.join(DATASET_INFO_FILE_NAME));
     dbg!(&dataset_info);
 }
 

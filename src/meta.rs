@@ -1,17 +1,17 @@
 use std::{
     fs::File,
-    io::{self, BufRead},
+    io::{self, BufRead, Write},
     path::Path,
 };
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use rust_htslib::bam::header::HeaderRecord;
+use log::info;
 
 #[derive(Debug, Clone)]
-struct MetaEntry {
-    name: String,
-    fields: IndexMap<String, String>,
+pub struct MetaEntry {
+    pub name: String,
+    pub fields: IndexMap<String, String>,
 }
 
 impl MetaEntry {
@@ -29,10 +29,10 @@ impl MetaEntry {
 }
 
 #[derive(Debug, Clone)]
-struct Meta {
-    samples: Vec<String>,
-    header: Vec<String>,
-    records: IndexMap<String, MetaEntry>,
+pub struct Meta {
+    pub samples: Vec<String>,
+    pub header: Vec<String>,
+    pub records: IndexMap<String, MetaEntry>,
 }
 
 impl Meta {
@@ -48,16 +48,29 @@ impl Meta {
             .split('\t')
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
+
+        info!("Parsed {} fields from header: {:?}", header.len(), header);
         let mut samples = Vec::new();
+        let mut line_no = 0;
         for line in reader.lines() {
             let line = line?;
-
+            line_no += 1;
             let parts: Vec<String> = line
                 .trim_end()
                 .split('\t')
                 // .into_iter()
                 .map(|part| part.to_string())
                 .collect();
+
+            if parts.len() != header.len() {
+                return Err(anyhow::anyhow!(
+                    "The {} record does not match header length: {} != {}",
+                    line_no,
+                    parts.len(),
+                    header.len()
+                ));
+            }
+
             samples.push(parts[0].clone());
 
             let mut meta_entry = MetaEntry::new(parts[0].clone());
@@ -73,6 +86,38 @@ impl Meta {
             records,
         })
     }
+
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let mut writer = File::create(path)?;
+        writeln!(writer, "{}", self.header.join("\t"))?;
+
+        for sample in &self.samples {
+            if let Some(entry) = self.records.get(sample) {
+                let fields: Vec<String> = self
+                    .header
+                    .iter()
+                    .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
+                    .collect();
+                writeln!(writer, "{}\t{}", entry.name, fields.join("\t"))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn get_record_by_name(&self, name: &str) -> Option<&MetaEntry> {
+        self.records.get(name)
+    }
+
+    pub fn get_samples(&self) -> Vec<String> {
+        self.samples.clone()
+    }
+
+    pub fn get_attr_by_name(&self, name: &str, attr: &str) -> Option<&String> {
+        self.records
+            .get(name)
+            .and_then(|entry| entry.fields.get(attr))
+    }
 }
 // wrote tests for Meta
 #[cfg(test)]
@@ -87,7 +132,7 @@ mod tests {
         writeln!(temp_file, "Sample\tField1\tField2").unwrap();
         writeln!(temp_file, "Sample1\tValue1\tValue2").unwrap();
         writeln!(temp_file, "Sample2\tValue3\tValue4").unwrap();
-        temp_file.flush().unwrap(); // Ensure all data is written   
+        temp_file.flush().unwrap(); // Ensure all data is written
         let meta = Meta::parse(temp_file.path()).unwrap();
         assert_eq!(meta.samples.len(), 2);
         assert_eq!(meta.samples[0], "Sample1");

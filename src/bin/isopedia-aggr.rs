@@ -26,7 +26,7 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com,Xinchang.Zheng@bcm.edu>
 #[clap(after_long_help = "Exmaple:
 
 The input file example(tab-separated)
-(reqired)                   (reqired) 
+(required)                   (reqired) 
 --------------------------- ----------
 path                        name 
 /path/to/sample1.isoform.gz sample1
@@ -402,7 +402,7 @@ fn main() -> Result<()> {
 
     info!(
         "Dump sample info to disk: {}",
-        &cli.outdir.join(META_FILE_NAME).display()
+        &cli.outdir.join(DATASET_INFO_FILE_NAME).display()
     );
 
     // let mut out_sample_meta_writer = std::io::BufWriter::new(
@@ -413,7 +413,7 @@ fn main() -> Result<()> {
     //     .write_all(sample_meta.get_string().as_bytes())
     //     .expect("can not write meta data");
 
-    dataset_info.save_to_file(&cli.outdir.join(META_FILE_NAME))?;
+    dataset_info.save_to_file(&cli.outdir.join(DATASET_INFO_FILE_NAME))?;
 
     info!("Fnished");
     Ok(())
