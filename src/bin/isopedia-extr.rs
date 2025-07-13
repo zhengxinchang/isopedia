@@ -93,7 +93,7 @@ struct Cli {
     pub mapq: u8,
 
     /// Include secondary reads in the analysis
-    #[arg(long = "use-secondary")]
+    #[arg(long = "use-secondary", default_value_t = false)]
     pub use_secondary: bool,
 
     /// Debug mode

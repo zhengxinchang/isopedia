@@ -33,7 +33,7 @@ t2:build
 	target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
 
 t3:build
-	target/release/isopedia-idx  -i test/HG002_idx/
+	target/release/isopedia-idx  -i test/HG002_idx/ -m test/HG002.meta.txt 
 
 
 t4:build

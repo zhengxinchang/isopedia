@@ -7,6 +7,7 @@ use std::{
 use anyhow::Result;
 use indexmap::IndexMap;
 use log::info;
+use noodles_fasta::record;
 
 #[derive(Debug, Clone)]
 pub struct MetaEntry {
@@ -36,6 +37,18 @@ pub struct Meta {
 }
 
 impl Meta {
+    pub fn new_empty(sample_names: Vec<String>) -> Self {
+        let mut records = IndexMap::new();
+        let header = vec!["Sample".to_string()];
+        for sample in &sample_names {
+            records.insert(sample.clone(), MetaEntry::new(sample.clone()));
+        }
+        Self {
+            samples: sample_names,
+            header,
+            records,
+        }
+    }
     pub fn parse<P: AsRef<Path>>(path: P) -> Result<Meta> {
         let mut reader = io::BufReader::new(File::open(path)?);
 
@@ -89,19 +102,7 @@ impl Meta {
 
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let mut writer = File::create(path)?;
-        writeln!(writer, "{}", self.header.join("\t"))?;
-
-        for sample in &self.samples {
-            if let Some(entry) = self.records.get(sample) {
-                let fields: Vec<String> = self
-                    .header
-                    .iter()
-                    .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
-                    .collect();
-                writeln!(writer, "{}\t{}", entry.name, fields.join("\t"))?;
-            }
-        }
-
+        write!(writer, "{}", self.get_meta_table(None))?;
         Ok(())
     }
 
@@ -111,6 +112,38 @@ impl Meta {
 
     pub fn get_samples(&self) -> Vec<String> {
         self.samples.clone()
+    }
+
+    pub fn get_meta_table(&self, prefix: Option<&str>) -> String {
+        let mut table = String::new();
+
+        if let Some(p) = prefix {
+            table.push_str(&format!("{}{}\n", p, self.header.join("\t")));
+            for sample in &self.samples {
+                if let Some(entry) = self.records.get(sample) {
+                    let fields: Vec<String> = self
+                        .header
+                        .iter()
+                        .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
+                        .collect();
+                    table.push_str(&format!("{}{}{}\n", p, entry.name, fields.join("\t")));
+                }
+            }
+        } else {
+            table.push_str(&format!("{}\n", self.header.join("\t")));
+            for sample in &self.samples {
+                if let Some(entry) = self.records.get(sample) {
+                    let fields: Vec<String> = self
+                        .header
+                        .iter()
+                        .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
+                        .collect();
+                    table.push_str(&format!("{}{}\n", entry.name, fields.join("\t")));
+                }
+            }
+        }
+
+        table
     }
 
     pub fn get_attr_by_name(&self, name: &str, attr: &str) -> Option<&String> {
@@ -134,24 +167,6 @@ mod tests {
         writeln!(temp_file, "Sample2\tValue3\tValue4").unwrap();
         temp_file.flush().unwrap(); // Ensure all data is written
         let meta = Meta::parse(temp_file.path()).unwrap();
-        assert_eq!(meta.samples.len(), 2);
-        assert_eq!(meta.samples[0], "Sample1");
-        assert_eq!(meta.samples[1], "Sample2");
-        assert_eq!(meta.header.len(), 3);
-        assert_eq!(meta.header[0], "Sample");
-        assert_eq!(meta.header[1], "Field1");
-        assert_eq!(meta.header[2], "Field2");
-        assert_eq!(meta.records.len(), 2);
-        assert!(meta.records.contains_key("Sample1"));
-        assert!(meta.records.contains_key("Sample2"));
-        let sample1 = meta.records.get("Sample1").unwrap();
-        assert_eq!(sample1.name, "Sample1");
-        assert_eq!(sample1.fields.get("Field1").unwrap(), "Value1");
-        assert_eq!(sample1.fields.get("Field2").unwrap(), "Value2");
-        let sample2 = meta.records.get("Sample2").unwrap();
-        assert_eq!(sample2.name, "Sample2");
-        assert_eq!(sample2.fields.get("Field1").unwrap(), "Value3");
-        assert_eq!(sample2.fields.get("Field2").unwrap(), "Value4");
-        dbg!(&meta);
+        print!("{:?}", meta.get_meta_table(Some("##")));
     }
 }

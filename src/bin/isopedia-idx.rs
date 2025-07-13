@@ -109,11 +109,13 @@ fn main() -> Result<()> {
         BPTree::build_tree(blocks, &cli.idxdir, chrom_id);
     }
 
+    let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
+    
     if let Some(meta_path) = &cli.meta {
         info!("Integrating meta data from {}", meta_path.display());
         let meta = Meta::parse(meta_path).expect("Failed to parse meta file");
         let meta_samples = meta.get_samples();
-        let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
+
         let dataset_samples = dataset_info.get_sample_names();
         if meta_samples.len() != dataset_samples.len() {
             error!(
@@ -135,7 +137,11 @@ fn main() -> Result<()> {
         meta.save_to_file(&cli.idxdir.join(META_FILE_NAME))
             .expect("Failed to save meta file");
     } else {
-        warn!("Meta file is not provided. Skipping meta data integration.");
+        warn!("Meta file is not provided, Write empty meta file, you can redo index to update the metadata later.");
+        let empty_meta = Meta::new_empty(dataset_info.get_sample_names());
+        empty_meta
+            .save_to_file(&cli.idxdir.join(META_FILE_NAME))
+            .expect("Failed to save empty meta file");
     }
 
     info!("Finished!");

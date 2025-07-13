@@ -3,6 +3,10 @@ X2. search funciton 优化
 X3. external sort of tmp idex
     currently took 32G for 172 sample merging task(18min)
 4. add metadata looking up funciton
+    annotation line starts with #
+    # sample meta1..
+    # s1.   m1..
+    
 X5. fusion gene batch search by providing a bed file of breakpoints
 6. fusion gene search by provide a bed file of gene regions[discovery mode]
 
