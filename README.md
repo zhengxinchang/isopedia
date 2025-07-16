@@ -1,4 +1,4 @@
-<img src="./img/logo2.png" alt="isopedia" width="200"/>
+<img src="./img/logo2.png" alt="isopedia" width="150" align="right" style="vertical-align: middle;"> 
 
 
 # About the Isopedia

@@ -3,10 +3,18 @@ use std::{collections::HashSet, env, fs::File, io::BufRead, path::PathBuf, vec};
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
 use isopedia::{
-    bptree::BPForest, constants::*, dataset_info::DatasetInfo, isoformarchive, utils,
+    bptree::BPForest,
+    constants::*,
+    dataset_info::DatasetInfo,
+    gtf::GeneIntervalTree,
+    isoform::MergedIsoform,
+    isoformarchive::{self, read_record_from_archive},
+    utils,
     writer::MyGzWriter,
 };
-use log::{error, info};
+
+use log::{error, info, warn};
+use noodles_gtf::io::Reader as gtfReader;
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
@@ -27,9 +35,13 @@ struct Cli {
     #[arg(short, long)]
     pub pos: Option<String>,
 
-    /// two breakpoints for gene fusion to be search(-p chr1:pos1,chr2:pos2)
+    /// bed file that has the breakpoints for gene fusions. First four columns are chr1, pos1, chr2, pos2, and starts from the fifth column is the fusion id.
     #[arg(short = 'P', long)]
     pub pos_bed: Option<PathBuf>,
+
+    /// bed file that has the start-end positions of the genes, used to find any possible gene fusions within the provided gene regions.
+    #[arg(short = 'G', long)]
+    pub gene_gtf: Option<PathBuf>,
 
     /// flank size for search, before and after the position
     #[arg(short, long, default_value_t = 10)]
@@ -95,6 +107,13 @@ impl Cli {
         if let Some(pos_bed2) = &self.pos_bed {
             if !pos_bed2.exists() {
                 error!("--pos-bed: file {} does not exist", pos_bed2.display());
+                is_ok = false;
+            }
+        }
+
+        if let Some(gene_gtf) = &self.gene_gtf {
+            if !gene_gtf.exists() {
+                error!("--gene-gtf: file {} does not exist", gene_gtf.display());
                 is_ok = false;
             }
         }
@@ -199,8 +218,11 @@ fn anno_single_fusion(
     for target in unique_left {
         let merged_isoform =
             isoformarchive::read_record_from_archive(isofrom_archive, &target, archive_buf);
-        let evidence_vec =
-            merged_isoform.find_fusion(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
+        let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
+            &breakpoints.1 .0,
+            breakpoints.1 .1,
+            cli.flank,
+        );
         // dbg!(&evidence_vec);
 
         fusion_evidence_vec = fusion_evidence_vec
@@ -215,8 +237,11 @@ fn anno_single_fusion(
     for target in unique_right {
         let merged_isoform: isopedia::isoform::MergedIsoform =
             isoformarchive::read_record_from_archive(isofrom_archive, &target, archive_buf);
-        let evidence_vec =
-            merged_isoform.find_fusion(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
+        let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
+            &breakpoints.0 .0,
+            breakpoints.0 .1,
+            cli.flank,
+        );
 
         fusion_evidence_vec = fusion_evidence_vec
             .iter()
@@ -297,18 +322,7 @@ fn main() -> Result<()> {
 
     let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
 
-    let mut mywriter = MyGzWriter::new(&cli.output)?;
-
-    let mut header_str =
-        String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count");
-    let sample_name = dataset_info.get_sample_names();
-    for name in sample_name {
-        header_str.push_str(&format!("\t{}", name));
-    }
-    header_str.push('\n');
-    mywriter.write_all_bytes(header_str.as_bytes())?;
-
-    if !cli.pos.is_none() {
+    if cli.pos.is_some() {
         let pos = &cli.pos.clone().unwrap();
         let breakpoints: BreakpointType = match process_fusion_positions(pos) {
             Ok(bp) => (bp.0, bp.1, "SingleQuery".to_string()),
@@ -317,6 +331,18 @@ fn main() -> Result<()> {
                 std::process::exit(1);
             }
         };
+
+        let mut mywriter = MyGzWriter::new(&cli.output)?;
+
+        let mut header_str = String::from(
+            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count",
+        );
+        let sample_name = dataset_info.get_sample_names();
+        for name in sample_name {
+            header_str.push_str(&format!("\t{}", name));
+        }
+        header_str.push('\n');
+        mywriter.write_all_bytes(header_str.as_bytes())?;
 
         anno_single_fusion(
             breakpoints,
@@ -327,11 +353,24 @@ fn main() -> Result<()> {
             &mut archive_buf,
             &dataset_info,
         )?;
-    } else {
+        mywriter.finish()?;
+    } else if cli.pos_bed.is_some() {
         // open the bed file
         let pos_bed = cli.pos_bed.clone().unwrap();
         let bed_file = File::open(&pos_bed).context("Failed to open the provided bed file")?;
         let reader = std::io::BufReader::new(bed_file);
+
+        let mut mywriter = MyGzWriter::new(&cli.output)?;
+
+        let mut header_str = String::from(
+            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count",
+        );
+        let sample_name = dataset_info.get_sample_names();
+        for name in sample_name {
+            header_str.push_str(&format!("\t{}", name));
+        }
+        header_str.push('\n');
+        mywriter.write_all_bytes(header_str.as_bytes())?;
 
         for line in reader.lines() {
             let line = line.context("Failed to read line from bed file")?;
@@ -347,9 +386,63 @@ fn main() -> Result<()> {
                 &dataset_info,
             )?;
         }
+        mywriter.finish()?;
+    } else if cli.gene_gtf.is_some() {
+        let gtf_path = cli.gene_gtf.clone().unwrap();
+        let file = std::fs::File::open(gtf_path).expect("Failed to open GTF file");
+        let reader = std::io::BufReader::new(file);
+        let mut gtf_reader = gtfReader::new(reader);
+
+        let gene_tree =
+            GeneIntervalTree::new(&mut gtf_reader).expect("Failed to create GeneIntervalTree");
+        info!("loaded {} genes", gene_tree.count);
+
+        for chromosome in gene_tree.chroms.clone() {
+            info!("Processing chromosome {}", chromosome);
+
+            let intervals = gene_tree.tree.get(&chromosome);
+            if intervals.is_none() {
+                warn!(
+                    "No intervals were indexed for chromosome {}, skipping",
+                    chromosome
+                );
+                continue;
+            }
+
+            for interval in intervals.unwrap() {
+                let gene_interval = &interval.val;
+                let positions = gene_interval
+                    .splice_sites
+                    .iter()
+                    .map(|x| (chromosome.clone(), *x))
+                    .collect::<Vec<(String, u64)>>();
+                let target = forest.search_partial_match(&positions, cli.flank, 2);
+
+                if target.is_none() {
+                    continue;
+                }
+
+                let target = target.unwrap();
+
+                for rec_ptr in target {
+                    let isoform: MergedIsoform =
+                        read_record_from_archive(&mut isofrom_archive, &rec_ptr, &mut archive_buf);
+
+                    let supp_segs = isoform.get_fusion_candidates();
+                    for (sample_idx, segs) in supp_segs.iter().enumerate() {
+                        // Process each segment for the current isoform
+
+                        let matched_read = gene_tree.match_splice_sites(segs, cli.flank, 2);
+                    }
+                }
+
+                //保留至少两个offsetptr hit的transcripts
+                // 解析每个isoform的数据，查找过滤包含supplementary的isoform
+                // 获取suppementary的所有的 breakpoints，查询其中是否有跟其他gene overlap(splice site within flank)
+            }
+        }
     }
 
-    mywriter.finish()?;
     info!("Results written to {}", cli.output.display());
     info!("Finished!");
     Ok(())

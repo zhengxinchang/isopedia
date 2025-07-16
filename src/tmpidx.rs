@@ -202,7 +202,7 @@ impl Tmpindex {
 #[repr(C, align(8))]
 pub struct MergedIsoformOffsetPlusGenomeLoc {
     pub pos: u64,
-    pub record_ptr: MergedIsoformOffset,
+    pub record_ptr: MergedIsoformOffsetPtr,
     pub chrom_id: u16,
 }
 
@@ -241,7 +241,7 @@ impl MergedIsoformOffsetPlusGenomeLoc {
         MergedIsoformOffsetPlusGenomeLoc {
             chrom_id,
             pos: position,
-            record_ptr: MergedIsoformOffset::new(offset, length, nsj),
+            record_ptr: MergedIsoformOffsetPtr::new(offset, length, nsj),
         }
     }
 }
@@ -291,7 +291,7 @@ impl Hash for MergedIsoformOffsetPlusGenomeLoc {
 pub struct MergedIsoformOffsetGroup {
     pub chrom_id: u16,
     pub pos: u64,
-    pub record_ptr_vec: Vec<MergedIsoformOffset>,
+    pub record_ptr_vec: Vec<MergedIsoformOffsetPtr>,
 }
 
 impl MergedIsoformOffsetGroup {
@@ -307,7 +307,7 @@ impl MergedIsoformOffsetGroup {
         self.chrom_id == 0 && self.pos == 0
     }
 
-    pub fn update(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<MergedIsoformOffset>) {
+    pub fn update(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<MergedIsoformOffsetPtr>) {
         self.chrom_id = chrom_id;
         self.pos = pos;
         self.record_ptr_vec = record_ptr_vec;
@@ -316,12 +316,12 @@ impl MergedIsoformOffsetGroup {
 
 #[derive(Debug, Clone, IntoBytes, FromBytes, Immutable, Serialize, Deserialize)]
 #[repr(C)]
-pub struct MergedIsoformOffset {
+pub struct MergedIsoformOffsetPtr {
     pub offset: u64,
     pub length: u32,
     pub n_splice_sites: u32,
 }
-impl MergedIsoformOffset {
+impl MergedIsoformOffsetPtr {
     pub fn new(offset: u64, length: u32, n_splice_sites: u32) -> Self {
         Self {
             offset,
@@ -335,45 +335,45 @@ impl MergedIsoformOffset {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        if bytes.len() != std::mem::size_of::<MergedIsoformOffset>() {
+        if bytes.len() != std::mem::size_of::<MergedIsoformOffsetPtr>() {
             panic!(
                 "{}",
                 format!(
                     "RecordPtr bytes should be {} bytes long, while the length is {}",
-                    std::mem::size_of::<MergedIsoformOffset>(),
+                    std::mem::size_of::<MergedIsoformOffsetPtr>(),
                     bytes.len()
                 )
             );
         }
-        let record_bytes: &[u8; std::mem::size_of::<MergedIsoformOffset>()] = bytes
-            [0..std::mem::size_of::<MergedIsoformOffset>()]
+        let record_bytes: &[u8; std::mem::size_of::<MergedIsoformOffsetPtr>()] = bytes
+            [0..std::mem::size_of::<MergedIsoformOffsetPtr>()]
             .try_into()
             .unwrap();
-        MergedIsoformOffset::read_from_bytes(record_bytes).unwrap()
+        MergedIsoformOffsetPtr::read_from_bytes(record_bytes).unwrap()
     }
 }
 
-impl PartialEq for MergedIsoformOffset {
+impl PartialEq for MergedIsoformOffsetPtr {
     fn eq(&self, other: &Self) -> bool {
         self.offset == other.offset
     }
 }
 
-impl PartialOrd for MergedIsoformOffset {
+impl PartialOrd for MergedIsoformOffsetPtr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.offset.cmp(&other.offset))
     }
 }
 
-impl Eq for MergedIsoformOffset {}
+impl Eq for MergedIsoformOffsetPtr {}
 
-impl Ord for MergedIsoformOffset {
+impl Ord for MergedIsoformOffsetPtr {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.offset.cmp(&other.offset)
     }
 }
 
-impl Hash for MergedIsoformOffset {
+impl Hash for MergedIsoformOffsetPtr {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.offset.hash(state);
     }

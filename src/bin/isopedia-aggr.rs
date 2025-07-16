@@ -9,7 +9,7 @@ use isopedia::{
     isoform::MergedIsoform,
     isoformarchive::IsoformArchive,
     reads::{AggrRead, SingleSampleReader},
-    tmpidx::{MergedIsoformOffset, MergedIsoformOffsetPlusGenomeLoc, Tmpindex},
+    tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
 };
 use log::{error, info};
 use rustc_hash::FxHashMap;
@@ -291,7 +291,7 @@ fn main() -> Result<()> {
                             .get_chrom_idx(merged_isoform_rec.chrom.as_str())
                             .unwrap(),
                         pos: *sj,
-                        record_ptr: MergedIsoformOffset {
+                        record_ptr: MergedIsoformOffsetPtr {
                             offset: merged_offset,
                             length: bytes_len,
                             n_splice_sites: sjs.len() as u32,
@@ -310,7 +310,7 @@ fn main() -> Result<()> {
                                 .get_chrom_idx(merged_isoform_rec.chrom.as_str())
                                 .unwrap(),
                             pos: *position,
-                            record_ptr: MergedIsoformOffset {
+                            record_ptr: MergedIsoformOffsetPtr {
                                 offset: merged_offset,
                                 length: bytes_len,
                                 n_splice_sites: 0,
@@ -347,7 +347,7 @@ fn main() -> Result<()> {
                     .get_chrom_idx(merged_isoform_rec.chrom.as_str())
                     .unwrap(),
                 pos: *sj,
-                record_ptr: MergedIsoformOffset {
+                record_ptr: MergedIsoformOffsetPtr {
                     offset: merged_offset,
                     length: bytes_len,
                     n_splice_sites: sjs.len() as u32,
@@ -365,7 +365,7 @@ fn main() -> Result<()> {
                         .get_chrom_idx(merged_isoform_rec.chrom.as_str())
                         .unwrap(),
                     pos: *position,
-                    record_ptr: MergedIsoformOffset {
+                    record_ptr: MergedIsoformOffsetPtr {
                         offset: merged_offset,
                         length: bytes_len,
                         n_splice_sites: 0,

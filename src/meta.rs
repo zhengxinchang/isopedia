@@ -7,7 +7,6 @@ use std::{
 use anyhow::Result;
 use indexmap::IndexMap;
 use log::info;
-use noodles_fasta::record;
 
 #[derive(Debug, Clone)]
 pub struct MetaEntry {

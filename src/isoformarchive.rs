@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffset};
+use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffsetPtr};
 
 pub struct IsoformArchive {
     writer: BufWriter<File>,
@@ -31,7 +31,7 @@ impl IsoformArchive {
 
 pub fn read_record_from_archive(
     reader: &mut BufReader<File>,
-    record_ptr: &MergedIsoformOffset,
+    record_ptr: &MergedIsoformOffsetPtr,
     buf: &mut Vec<u8>,
 ) -> MergedIsoform {
     buf.clear();

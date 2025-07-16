@@ -110,7 +110,7 @@ fn main() -> Result<()> {
     }
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
-    
+
     if let Some(meta_path) = &cli.meta {
         info!("Integrating meta data from {}", meta_path.display());
         let meta = Meta::parse(meta_path).expect("Failed to parse meta file");

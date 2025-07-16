@@ -5,13 +5,15 @@ use std::{
     vec,
 };
 
+use anyhow::Result;
 use clap::{command, Parser};
 use isopedia::{
-    bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker, isoform::MergedIsoform, isoformarchive::read_record_from_archive, meta::Meta, tmpidx::MergedIsoformOffset
+    bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker,
+    isoform::MergedIsoform, isoformarchive::read_record_from_archive, meta::Meta,
+    tmpidx::MergedIsoformOffsetPtr,
 };
 use log::{error, info};
 use serde::Serialize;
-use anyhow::Result;
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-ann-isoform")]
@@ -105,14 +107,12 @@ fn main() -> Result<()> {
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
     let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
-
     info!("Search by gtf/gff file");
-    let gtfreader = noodles_gtf::io::Reader::new(BufReader::new(
-        std::fs::File::open(cli.gtf).expect("can not read gtf"),
-    ));
+    let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
+        BufReader::new(std::fs::File::open(cli.gtf).expect("can not read gtf")),
+    );
 
     let gtf = TranscriptChunker::new(gtfreader);
-
 
     let mut hit_count = 0u32;
     let mut miss_count = 0u32;
@@ -132,13 +132,14 @@ fn main() -> Result<()> {
     info!("Writing sample meta...");
     writer.write(meta.get_meta_table(Some("##")).as_bytes())?;
 
-
     writer.write(
         "#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes".as_bytes()
     )?;
 
     dataset_info.get_sample_names().iter().for_each(|x| {
-        writer.write(format!("\t{}", x).as_bytes()).expect("Failed to write sample header");
+        writer
+            .write(format!("\t{}", x).as_bytes())
+            .expect("Failed to write sample header");
     });
 
     writer
@@ -147,7 +148,9 @@ fn main() -> Result<()> {
                     .as_bytes(),
             )?;
     dataset_info.get_sample_names().iter().for_each(|x| {
-        writer.write(format!("\t{}", x).as_bytes()).expect("Failed to write sample header");
+        writer
+            .write(format!("\t{}", x).as_bytes())
+            .expect("Failed to write sample header");
     });
     writer.write("\n".as_bytes())?;
 
@@ -173,7 +176,7 @@ fn main() -> Result<()> {
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
-        let res = forest.search_multi(&queries, cli.flank);
+        let res = forest.search_all_match(&queries, cli.flank);
 
         if res.is_none() {
             // error!("No results found for queries: {:?}", queries);
@@ -181,7 +184,8 @@ fn main() -> Result<()> {
         }
         let res = res.unwrap();
 
-        let target: Vec<MergedIsoformOffset> = res
+        // make sure the returned isoform has exactly the same number of splice sites as the query
+        let target: Vec<MergedIsoformOffsetPtr> = res
             .into_iter()
             .filter(|x| x.n_splice_sites == queries.len() as u32)
             .collect();

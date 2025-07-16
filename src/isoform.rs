@@ -38,7 +38,7 @@ pub struct MergedIsoform {
     pub chrom: String,
     pub rec_type: RecordType, // indicate the status of the aggr isoform, also reserved for SV.
     pub splice_junctions_vec: Vec<(u64, u64)>,
-    pub isoform_diffs_slim_vec: Vec<ReadDiffSlim>,
+    pub isoform_reads_slim_vec: Vec<ReadDiffSlim>,
     pub supp_segs_vec: Vec<Segment>,
 }
 
@@ -73,7 +73,7 @@ impl MergedIsoform {
             chrom: aggr_isofrom.chrom.clone(),
             rec_type: RecordType::UnK,
             splice_junctions_vec: Vec::new(),
-            isoform_diffs_slim_vec: Vec::new(),
+            isoform_reads_slim_vec: Vec::new(),
             supp_segs_vec: Vec::new(),
         };
 
@@ -114,7 +114,7 @@ impl MergedIsoform {
             });
 
         // update supp_segs_vec and isoform_diffs_slim_vec
-        aggr_record.isoform_diffs_slim_vec = aggr_isofrom_delta_slim_arr;
+        aggr_record.isoform_reads_slim_vec = aggr_isofrom_delta_slim_arr;
         aggr_record.supp_segs_vec = supp_segs_vec;
 
         aggr_record
@@ -128,7 +128,7 @@ impl MergedIsoform {
         // update the sample evidence
         self.sample_evidence_arr[sample_idx as usize] = aggr_isofrom.evidence;
         // update the sample offset
-        self.sample_offset_arr[sample_idx as usize] = self.isoform_diffs_slim_vec.len() as u32;
+        self.sample_offset_arr[sample_idx as usize] = self.isoform_reads_slim_vec.len() as u32;
 
         // build supp_segs_vec and isoform_diffs_slim_vec
         let mut supp_segs_vec: Vec<Segment> = Vec::new();
@@ -155,7 +155,7 @@ impl MergedIsoform {
             .for_each(|mut isoform_delta_slim| {
                 isoform_delta_slim.supp_seg_vec_offset = curr_offset;
                 curr_offset = curr_offset + isoform_delta_slim.supp_seg_vec_length;
-                self.isoform_diffs_slim_vec.push(isoform_delta_slim);
+                self.isoform_reads_slim_vec.push(isoform_delta_slim);
             });
 
         // update supp_segs_vec
@@ -207,7 +207,7 @@ impl MergedIsoform {
 
         record.push_str(
             &self
-                .isoform_diffs_slim_vec
+                .isoform_reads_slim_vec
                 .iter()
                 .map(|delta| {
                     format!(
@@ -266,7 +266,7 @@ impl MergedIsoform {
 
     // return the left and right positions of each isoform diff
     pub fn get_read_ref_span_vec(&self) -> Vec<u64> {
-        self.isoform_diffs_slim_vec
+        self.isoform_reads_slim_vec
             .iter()
             .flat_map(|d| [d.left, d.right])
             .collect()
@@ -306,7 +306,7 @@ impl MergedIsoform {
         }
     }
 
-    pub fn find_fusion(&self, chrom: &str, pos: u64, flank: u64) -> Vec<u32> {
+    pub fn find_fusion_by_breakpoints(&self, chrom: &str, pos: u64, flank: u64) -> Vec<u32> {
         let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
 
         // for each sampple
@@ -321,7 +321,7 @@ impl MergedIsoform {
                 // dbg!(idx, offset, size);
                 let start = *offset as usize;
                 let end = start + *size as usize;
-                let diffs = &self.isoform_diffs_slim_vec[start..end];
+                let diffs = &self.isoform_reads_slim_vec[start..end];
                 for diff in diffs {
                     let supp_vec = &self.supp_segs_vec[diff.supp_seg_vec_offset as usize
                         ..(diff.supp_seg_vec_offset + diff.supp_seg_vec_length) as usize];
@@ -341,4 +341,48 @@ impl MergedIsoform {
         }
         fusion_evidence_vec
     }
+
+    /// Get the supporting segments of all reads that support this isoform, grouped by sample.
+    pub fn get_fusion_candidates(&self) -> Vec<FusionCandidate> {
+        let mut grouped_by_sample: Vec<FusionCandidate> = Vec::new();
+        for (sample_idx, (sample_offset, sample_evidence)) in self
+            .sample_offset_arr
+            .iter()
+            .zip(self.sample_evidence_arr.iter())
+            .enumerate()
+        {
+            // Only process valid samples
+            if sample_idx >= self.sample_size as usize {
+                break;
+            }
+
+            // Only process samples with evidence
+            if *sample_evidence > 0 {
+                let read_start = *sample_offset as usize;
+                let read_end = read_start + *sample_evidence as usize;
+                let reads = &self.isoform_reads_slim_vec[read_start..read_end];
+                let mut supp_segments_per_read = Vec::new();
+                // Process each read in the sample
+                for read in reads {
+                    let seg_start = read.supp_seg_vec_offset as usize;
+                    let seg_end = seg_start + read.supp_seg_vec_length as usize;
+                    let supp_segments = self.supp_segs_vec[seg_start..seg_end].to_vec();
+                    supp_segments_per_read.push(supp_segments);
+                }
+                grouped_by_sample.push(FusionCandidate {
+                    sample_idx,
+                    supp_segments_by_read: supp_segments_per_read,
+                });
+            }
+        }
+
+        grouped_by_sample
+    }
+}
+
+type SuppSegmentVec = Vec<Segment>;
+
+pub struct FusionCandidate {
+    pub sample_idx: usize,
+    pub supp_segments_by_read: Vec<SuppSegmentVec>,
 }
