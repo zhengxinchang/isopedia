@@ -1,10 +1,10 @@
-use std::hash::Hash;
-
 use rustc_hash::FxHashMap;
 
-use crate::{gtf::{GeneInterval, GeneIntervalTree}, reads::Segment, utils::hash_vec};
-
-type SuppSegmentVec = Vec<Segment>;
+use crate::{
+    gene_index::{self, GeneIntervalTree},
+    reads::Segment,
+    utils::hash_vec,
+};
 
 // isoform derived fusion read event.
 // This is a per-read level representation of a supplimentary mapped read.
@@ -62,8 +62,8 @@ pub struct FusionAggrReads {
     pub supp_splice_junctions_vec: Vec<(u64, u64)>,
     pub left_matched_gene: String,
     pub right_matched_gene: String,
-    pub left_matched_splice_junctions: Vec<(u64, u64)>,
-    pub right_matched_splice_junctions: Vec<(u64, u64)>,
+    pub left_matched_splice_junctions: Vec<u64>,
+    pub right_matched_splice_junctions: Vec<u64>,
 }
 
 impl FusionAggrReads {
@@ -90,21 +90,45 @@ impl FusionAggrReads {
     }
 
     pub fn add(&mut self, other: &FusionSingleRead) {
-
         self.tootal_evidences += 1;
         *self.sample_evidence.entry(other.sample_id).or_insert(0) += 1
-
     }
 
-    pub fn find_gene(&mut self, gene_tree:&GeneIntervalTree) {
+    pub fn match_gene(&mut self, gene_indexing: &GeneIntervalTree, flank: u64) -> bool {
+        let mut is_good = true;
 
+        let flat_main_splices = self
+            .main_splice_junctions_vec
+            .iter()
+            .flat_map(|x| vec![x.0, x.1])
+            .collect::<Vec<u64>>();
 
+        let results = gene_indexing.match2(self.chr1.as_str(), &flat_main_splices, flank);
+        if let Some((chrom, splice_sites)) = results {
+            self.left_matched_gene = chrom;
+            self.left_matched_splice_junctions = splice_sites;
+        } else {
+            is_good = false;
+        }
+
+        let flat_supp_splices = self
+            .supp_splice_junctions_vec
+            .iter()
+            .flat_map(|x| vec![x.0, x.1])
+            .collect::<Vec<u64>>();
+        let results = gene_indexing.match2(self.chr2.as_str(), &flat_supp_splices, flank);
+
+        if let Some((chrom, splice_sites)) = results {
+            self.right_matched_gene = chrom;
+            self.right_matched_splice_junctions = splice_sites;
+        } else {
+            is_good = false;
+        }
+
+        is_good
     }
-
 
     pub fn get_string(&self, total_samples: usize) -> String {
-        // Generate a string representation of the FusionAggrRead
-        // This could include details like fusion_hash, sample_ids, splice junctions, etc.
         todo!()
     }
 }

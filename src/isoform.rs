@@ -8,7 +8,7 @@ use serde_with::serde_as;
 
 use crate::{
     constants::MAX_SAMPLE_SIZE,
-    fusion::{FusionAggrReads, FusionCandidate, FusionSingleRead},
+    fusion::{FusionAggrReads, FusionSingleRead},
     reads::{AggrRead, Segment, Strand},
 };
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -350,7 +350,11 @@ impl MergedIsoform {
     /// reads that does not have any supp segments will be ignored.
     pub fn to_fusion_candidates(&self) -> Option<Vec<FusionAggrReads>> {
         let mut candidates: Vec<FusionSingleRead> = Vec::new();
-        let mut aggr_candidates: std::collections::HashMap<u64, FusionAggrReads, rustc_hash::FxBuildHasher> = FxHashMap::default();
+        let mut aggr_candidates: std::collections::HashMap<
+            u64,
+            FusionAggrReads,
+            rustc_hash::FxBuildHasher,
+        > = FxHashMap::default();
 
         for sample_idx in 0..self.sample_size as usize {
             // process all read from a sample
@@ -411,7 +415,7 @@ impl MergedIsoform {
                 existing.add(&candidate);
             } else {
                 // create a new FusionAggrReads from the candidate
-                let mut new_aggr_read = FusionAggrReads::init(&candidate);
+                let new_aggr_read = FusionAggrReads::init(&candidate);
                 aggr_candidates.insert(candidate.fusion_hash, new_aggr_read);
             };
         }

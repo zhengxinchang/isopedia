@@ -6,7 +6,7 @@ use isopedia::{
     bptree::BPForest,
     constants::*,
     dataset_info::DatasetInfo,
-    gtf::GeneIntervalTree,
+    gene_index::GeneIntervalTree,
     isoform::MergedIsoform,
     isoformarchive::{self, read_record_from_archive},
     utils,
@@ -89,7 +89,7 @@ impl Cli {
             is_ok = false;
         }
 
-        if self.pos.is_none() && self.pos_bed.is_none() {
+        if self.pos.is_none() && self.pos_bed.is_none() && self.gene_gtf.is_none() {
             error!("Please provide either --pos or --pos-bed");
             is_ok = false;
         }
@@ -439,19 +439,18 @@ fn main() -> Result<()> {
                     for mut candidate in candidates {
                         // search gene interval for left and right part
 
-                        candidate.find_gene(&gene_indexing);
-                    }
-                }
+                        candidate.match_gene(&gene_indexing, cli.flank);
 
-                // write the candidates to the output file
-                for candidate in candidates {
-                    let record_string = candidate.get_string(dataset_info.get_size());
-                    mywriter
-                        .write_all_bytes(record_string.as_bytes())
-                        .context("Failed to write record string")?;
+                        let record_string = candidate.get_string(dataset_info.get_size());
+                        mywriter
+                            .write_all_bytes(record_string.as_bytes())
+                            .context("Failed to write record string")?;
+                    }
                 }
             }
         }
+
+        mywriter.finish()?;
     }
 
     info!("Results written to {}", cli.output.display());

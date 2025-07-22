@@ -2,6 +2,9 @@
 build:
 	cargo build --release
 
+push:
+	cargo fmt && git add . && git commit -m "WIP" && git pushß
+
 
 t1:build
 
@@ -47,6 +50,10 @@ tfusion:build
 
 tfusion2:build
 	target/release/isopedia-anno-fusion -i ../stix-isoform-experiment/stage/fusion_idx/ -f 200 -P test/fusion.bed  -o test/fusion.output.gz
+
+
+tfusion3:build
+	target/release/isopedia-anno-fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.mini.gtf  -o test/fusion_discovery.output.gz
 
 
 
