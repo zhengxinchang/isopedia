@@ -218,6 +218,10 @@ impl GeneInterval {
 
 type IV = Interval<u64, GeneInterval>;
 
+
+/// # GeneIntervalTree
+/// A structure to hold gene intervals indexed by chromosome using Lapper.
+/// It used in indexing the GTF file
 pub struct GeneIntervalTree {
     pub tree: HashMap<String, Lapper<u64, GeneInterval>>,
     pub count: usize,

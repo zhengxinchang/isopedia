@@ -1,11 +1,14 @@
 use std::io::Read;
 
 use flate2::bufread::GzEncoder;
+use log::warn;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
     constants::MAX_SAMPLE_SIZE,
+    fusion::{FusionAggrReads, FusionCandidate, FusionSingleRead},
     reads::{AggrRead, Segment, Strand},
 };
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -30,7 +33,8 @@ pub struct MergedIsoform {
     pub total_evidence: u32,
     pub sample_size: u32,
     #[serde_as(as = "[_; 256]")]
-    //Records the number of reads (evidence) from each sample that support the merged isoform.
+    // Records the number of reads (evidence) from each sample that support the merged isoform.
+    // the evidence number is also the size of read_diffs_slim_vec for this sample.
     pub sample_evidence_arr: [u32; MAX_SAMPLE_SIZE],
     #[serde_as(as = "[_; 256]")]
     // Stores the starting index of each sample’s read-level differences (ReadDiffSlim) within the shared isoform_diffs_slim_vec array.
@@ -342,47 +346,82 @@ impl MergedIsoform {
         fusion_evidence_vec
     }
 
-    /// Get the supporting segments of all reads that support this isoform, grouped by sample.
-    pub fn get_fusion_candidates(&self) -> Vec<FusionCandidate> {
-        let mut grouped_by_sample: Vec<FusionCandidate> = Vec::new();
-        for (sample_idx, (sample_offset, sample_evidence)) in self
-            .sample_offset_arr
-            .iter()
-            .zip(self.sample_evidence_arr.iter())
-            .enumerate()
-        {
-            // Only process valid samples
-            if sample_idx >= self.sample_size as usize {
-                break;
-            }
+    /// returns a vector of FusionCandidate,  each candidates contains the potental fusion segments in each sample.
+    /// reads that does not have any supp segments will be ignored.
+    pub fn to_fusion_candidates(&self) -> Option<Vec<FusionAggrReads>> {
+        let mut candidates: Vec<FusionSingleRead> = Vec::new();
+        let mut aggr_candidates: std::collections::HashMap<u64, FusionAggrReads, rustc_hash::FxBuildHasher> = FxHashMap::default();
 
-            // Only process samples with evidence
-            if *sample_evidence > 0 {
-                let read_start = *sample_offset as usize;
-                let read_end = read_start + *sample_evidence as usize;
-                let reads = &self.isoform_reads_slim_vec[read_start..read_end];
-                let mut supp_segments_per_read = Vec::new();
-                // Process each read in the sample
-                for read in reads {
-                    let seg_start = read.supp_seg_vec_offset as usize;
-                    let seg_end = seg_start + read.supp_seg_vec_length as usize;
-                    let supp_segments = self.supp_segs_vec[seg_start..seg_end].to_vec();
-                    supp_segments_per_read.push(supp_segments);
+        for sample_idx in 0..self.sample_size as usize {
+            // process all read from a sample
+            let sample_evidence = self.sample_evidence_arr[sample_idx] as usize;
+            if sample_evidence == 0 {
+                warn!(
+                    "Sample {} has no evidence for this isoform, skipping...",
+                    sample_idx
+                );
+                continue; // skip samples with no evidence
+            }
+            let sample_evidence_offset = self.sample_offset_arr[sample_idx] as usize;
+
+            // process each read in the sample
+            let read_diffs = &self.isoform_reads_slim_vec
+                [sample_evidence_offset..sample_evidence_offset + sample_evidence];
+
+            for read_diff in read_diffs {
+                // skip reads with no supp segments
+                if read_diff.supp_seg_vec_length == 0 {
+                    continue; // skip reads with no supp segments
                 }
-                grouped_by_sample.push(FusionCandidate {
-                    sample_idx,
-                    supp_segments_by_read: supp_segments_per_read,
-                });
+
+                if read_diff.supp_seg_vec_length < 2 {
+                    continue; // skip reads with less than 2 supp segments
+                }
+
+                let supp_segments = &self.supp_segs_vec[read_diff.supp_seg_vec_offset as usize
+                    ..(read_diff.supp_seg_vec_offset + read_diff.supp_seg_vec_length) as usize];
+
+                // skip reads with supp segments on different chromosomes
+                let unique_chr = if let Some(first_chr) = supp_segments.first().map(|o| &o.chrom) {
+                    supp_segments.iter().all(|o| &o.chrom == first_chr)
+                } else {
+                    true
+                };
+
+                if !unique_chr {
+                    continue; // skip reads with supp segments on different chromosomes
+                }
+
+                // create a FusionSingleRead for this read
+                let fusion_read = FusionSingleRead::new(
+                    self.chrom.clone(),
+                    supp_segments.last().unwrap().chrom.clone(),
+                    sample_idx as u32,
+                    supp_segments,
+                    &self.splice_junctions_vec,
+                );
+
+                candidates.push(fusion_read);
             }
         }
 
-        grouped_by_sample
+        for candidate in candidates {
+            // check if the candidate already exists in the aggr_candidates map
+            if let Some(existing) = aggr_candidates.get_mut(&candidate.fusion_hash) {
+                existing.add(&candidate);
+            } else {
+                // create a new FusionAggrReads from the candidate
+                let mut new_aggr_read = FusionAggrReads::init(&candidate);
+                aggr_candidates.insert(candidate.fusion_hash, new_aggr_read);
+            };
+        }
+
+        if aggr_candidates.is_empty() {
+            return None; // no valid candidates found
+        }
+
+        // convert the aggr_candidates map into a vector
+        let fusion_candidates: Vec<FusionAggrReads> = aggr_candidates.into_values().collect();
+        Some(fusion_candidates)
     }
-}
-
-type SuppSegmentVec = Vec<Segment>;
-
-pub struct FusionCandidate {
-    pub sample_idx: usize,
-    pub supp_segments_by_read: Vec<SuppSegmentVec>,
 }

@@ -392,16 +392,16 @@ fn main() -> Result<()> {
         let file = std::fs::File::open(gtf_path).expect("Failed to open GTF file");
         let reader = std::io::BufReader::new(file);
         let mut gtf_reader = gtfReader::new(reader);
-
-        let gene_tree =
+        let mut mywriter = MyGzWriter::new(&cli.output)?;
+        let gene_indexing =
             GeneIntervalTree::new(&mut gtf_reader).expect("Failed to create GeneIntervalTree");
-        info!("loaded {} genes", gene_tree.count);
+        info!("loaded {} genes", gene_indexing.count);
 
-        for chromosome in gene_tree.chroms.clone() {
+        for chromosome in gene_indexing.chroms.clone() {
             info!("Processing chromosome {}", chromosome);
 
-            let intervals = gene_tree.tree.get(&chromosome);
-            if intervals.is_none() {
+            let gene_list_to_be_queried = gene_indexing.tree.get(&chromosome);
+            if gene_list_to_be_queried.is_none() {
                 warn!(
                     "No intervals were indexed for chromosome {}, skipping",
                     chromosome
@@ -409,36 +409,47 @@ fn main() -> Result<()> {
                 continue;
             }
 
-            for interval in intervals.unwrap() {
-                let gene_interval = &interval.val;
-                let positions = gene_interval
+            for queried_gene_interval in gene_list_to_be_queried.unwrap() {
+                let gene_interval = &queried_gene_interval.val;
+                let quried_positions = gene_interval
                     .splice_sites
                     .iter()
                     .map(|x| (chromosome.clone(), *x))
                     .collect::<Vec<(String, u64)>>();
-                let target = forest.search_partial_match(&positions, cli.flank, 2);
+                let target = forest.search_partial_match(&quried_positions, cli.flank, 2);
 
                 if target.is_none() {
                     continue;
                 }
 
-                let target = target.unwrap();
+                let targets = target.unwrap();
 
-                for rec_ptr in target {
+                for rec_ptr in targets {
                     let isoform: MergedIsoform =
                         read_record_from_archive(&mut isofrom_archive, &rec_ptr, &mut archive_buf);
 
-                    let supp_segs = isoform.get_fusion_candidates();
-                    for (sample_idx, segs) in supp_segs.iter().enumerate() {
-                        // Process each segment for the current isoform
+                    let candidates = isoform.to_fusion_candidates();
 
-                        let matched_read = gene_tree.match_splice_sites(segs, cli.flank, 2);
+                    if candidates.is_none() {
+                        continue;
+                    }
+
+                    let candidates = candidates.unwrap();
+
+                    for mut candidate in candidates {
+                        // search gene interval for left and right part
+
+                        candidate.find_gene(&gene_indexing);
                     }
                 }
 
-                //保留至少两个offsetptr hit的transcripts
-                // 解析每个isoform的数据，查找过滤包含supplementary的isoform
-                // 获取suppementary的所有的 breakpoints，查询其中是否有跟其他gene overlap(splice site within flank)
+                // write the candidates to the output file
+                for candidate in candidates {
+                    let record_string = candidate.get_string(dataset_info.get_size());
+                    mywriter
+                        .write_all_bytes(record_string.as_bytes())
+                        .context("Failed to write record string")?;
+                }
             }
         }
     }
