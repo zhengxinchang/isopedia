@@ -3,7 +3,7 @@ build:
 	cargo build --release
 
 push:
-	cargo fmt && git add . && git commit -m "WIP" && git pushß
+	cargo fmt && git add . && git commit -m "WIP" && git push
 
 
 t1:build
