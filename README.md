@@ -9,7 +9,7 @@
 
 Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
     </div></td>
-    <td align="right"><span>  <img src="./img/logo2.png" alt="isopedia" width="150" style="vertical-align: middle; z-index: 1000; display: inline;"></span></td>
+    <td align="right"> <img src="./img/logo2.png" alt="isopedia" width="150" style="vertical-align: middle; z-index: 1000; display: inline;"></td>
   </tr>
 </table>
 
