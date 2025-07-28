@@ -1,18 +1,8 @@
 
 
-<div style="display: flex; justify-content: space-between;">
-  <span>
 
 
-  </span>
-  <span width="150" style="margin-left: 20px;">
-    <img src="./img/logo2.png" alt="isopedia" width="150" style="vertical-align: middle; z-index: 1000; display: inline;"></span>
-</span>
-</div>
-
-
-
-<table>
+<table style="width:100%; border-collapse:collapse;">
   <tr>
     <td align="left">    <div>
       <h1>About the Isopedia</h1>
