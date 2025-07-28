@@ -1,49 +1,7 @@
 
-<div style="width: 100%; overflow: hidden;">
-
-  <div style="float: left; display: inline-block;">
-    <h1 style="margin: 0; padding: 0;">About the Isopedia</h1>
-    <p style="margin: 0; padding: 0;">
-      Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
-    </p>
-  </div>
-
-  <div style="float: right; display: inline-block;">
-    <img src="./img/logo2.png" alt="isopedia" width="150" style="margin: 0; padding: 0; vertical-align: middle;">
-  </div>
-
-</div>
-
-
-
-<table style="width:100%; border: none; border-collapse: collapse;">
-  <tr>
-    <td align="left">    <div>
-      <h1>About the Isopedia</h1>
+# About the Isopedia
 
 Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
-    </div></td>
-    <td align="right"> <img src="./img/logo2.png" alt="isopedia" width="150" style="vertical-align: middle; z-index: 1000; display: inline;"></td>
-  </tr>
-</table>
-
-
-<table style="width:100%; border: none; border-collapse: collapse; padding: 0; margin: 0;">
-  <tr>
-    <td align="left" style="border: none; padding: 0; margin: 0;">
-      <div style="margin: 0; padding: 0;">
-        <h1 style="margin: 0; padding: 0;">About the Isopedia</h1>
-        <p style="margin: 0; padding: 0;">
-          Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
-        </p>
-      </div>
-    </td>
-    <td align="right" style="border: none; padding: 0; margin: 0;">
-      <img src="./img/logo2.png" alt="isopedia" width="150" style="vertical-align: middle; z-index: 1000; display: inline; margin: 0; padding: 0;">
-    </td>
-  </tr>
-</table>
-
 
 # Quick Q&A:
 
