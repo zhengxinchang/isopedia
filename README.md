@@ -2,9 +2,12 @@
 
 <div style="display: flex; justify-content: space-between;">
   <span>
-    <h1>About the Isopedia</h1>
+    <div>
+      <h1>About the Isopedia</h1>
 
-    Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
+Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
+    </div>
+
   </span>
   <span width="150" style="margin-left: 20px;">
     <img src="./img/logo2.png" alt="isopedia" width="150" style="vertical-align: middle; z-index: 1000; display: inline;"></span>
