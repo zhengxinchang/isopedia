@@ -2,7 +2,7 @@
 
 
 
-<table style="width:100%; border-collapse:collapse">
+<table style="width:100%; border: none; border-collapse: collapse;">
   <tr>
     <td align="left">    <div>
       <h1>About the Isopedia</h1>
