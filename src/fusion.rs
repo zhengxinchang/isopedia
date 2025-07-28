@@ -1,9 +1,15 @@
-use rustc_hash::FxHashMap;
+use std::vec;
+
+use ahash::HashSet;
+use log::debug;
+use rustc_hash::{FxHashMap, FxHasher};
 
 use crate::{
-    gene_index::{self, GeneIntervalTree},
+    dataset_info::DatasetInfo,
+    fusion,
+    gene_index::{CandidateMatchStatus, GeneInterval, GeneIntervalTree},
     reads::Segment,
-    utils::hash_vec,
+    utils::{hash_vec, is_overlap},
 };
 
 // isoform derived fusion read event.
@@ -52,16 +58,18 @@ impl<'a> FusionSingleRead<'a> {
 
 /// aggregated fusion read event.
 /// it has a fusion hash that is derived from the main_splice_junctions_vec and supp_splice_junctions_vec.
+#[derive(Debug, Clone)]
 pub struct FusionAggrReads {
     pub fusion_hash: u64,
     pub chr1: String,
     pub chr2: String,
     pub sample_evidence: FxHashMap<u32, u32>, // sample_id -> evidence count
     pub tootal_evidences: u32,
+    pub is_ambiguous: bool, // if the fusion is ambiguous, i.e. multiple genes matched
     pub main_splice_junctions_vec: Vec<(u64, u64)>,
     pub supp_splice_junctions_vec: Vec<(u64, u64)>,
-    pub left_matched_gene: String,
-    pub right_matched_gene: String,
+    pub left_matched_gene: GeneInterval,
+    pub right_matched_gene: GeneInterval,
     pub left_matched_splice_junctions: Vec<u64>,
     pub right_matched_splice_junctions: Vec<u64>,
 }
@@ -80,10 +88,11 @@ impl FusionAggrReads {
             chr2: fusion_single_read.chr2.clone(),
             sample_evidence: FxHashMap::from_iter(vec![(fusion_single_read.sample_id, 1)]),
             tootal_evidences: 1,
+            is_ambiguous: false, // initially not ambiguous
             main_splice_junctions_vec: fusion_single_read.main_splice_junctions_vec.clone(),
             supp_splice_junctions_vec: supp_splice_junctions_vec,
-            left_matched_gene: String::new(),
-            right_matched_gene: String::new(),
+            left_matched_gene: GeneInterval::default(),
+            right_matched_gene: GeneInterval::default(),
             left_matched_splice_junctions: Vec::new(),
             right_matched_splice_junctions: Vec::new(),
         }
@@ -104,9 +113,16 @@ impl FusionAggrReads {
             .collect::<Vec<u64>>();
 
         let results = gene_indexing.match2(self.chr1.as_str(), &flat_main_splices, flank);
-        if let Some((chrom, splice_sites)) = results {
-            self.left_matched_gene = chrom;
+        if self.fusion_hash == 7337552384227817871u64 {
+            debug!("{:?}", results);
+        }
+
+        if let Some((mached_gene1, splice_sites, status)) = results {
+            self.left_matched_gene = mached_gene1;
             self.left_matched_splice_junctions = splice_sites;
+            if status == CandidateMatchStatus::Ambiguous {
+                self.is_ambiguous = true; // if the match is ambiguous, set the flag
+            }
         } else {
             is_good = false;
         }
@@ -117,18 +133,491 @@ impl FusionAggrReads {
             .flat_map(|x| vec![x.0, x.1])
             .collect::<Vec<u64>>();
         let results = gene_indexing.match2(self.chr2.as_str(), &flat_supp_splices, flank);
-
-        if let Some((chrom, splice_sites)) = results {
-            self.right_matched_gene = chrom;
+        if self.fusion_hash == 7337552384227817871u64 {
+            debug!("{:?}", results);
+        }
+        if let Some((matched_gene2, splice_sites, status)) = results {
+            self.right_matched_gene = matched_gene2;
             self.right_matched_splice_junctions = splice_sites;
+            if status == CandidateMatchStatus::Ambiguous {
+                self.is_ambiguous = true; // if the match is ambiguous, set the flag
+            }
         } else {
             is_good = false;
         }
 
+        if self.left_matched_gene.gene_id == self.right_matched_gene.gene_id {
+            is_good = false; // both genes are the same, not a fusion
+        }
+
+        // if self.left_matched_splice_junctions.len() < 2 || self.right_matched_splice_junctions.len() < 2 {
+        //     is_good = false; // not enough splice junctions to consider it a fusion
+        // }
+
         is_good
     }
 
-    pub fn get_string(&self, total_samples: usize) -> String {
-        todo!()
+    pub fn get_gene_hash(&self) -> (String, String, String) {
+        let mut v = vec![
+            self.left_matched_gene.gene_name.clone(),
+            self.right_matched_gene.gene_name.clone(),
+        ];
+        v.sort();
+        return (v.join("_"), self.left_matched_gene.gene_name.clone(), self.right_matched_gene.gene_name.clone());
+    }
+
+    pub fn get_string(&self, index_info: &DatasetInfo) -> String {
+        let mut out_str = String::new();
+        let total_samples = index_info.get_size();
+        // let sample_names = index_info.get_sample_names();
+
+        let mut sample_str = String::new();
+        for sample_id in 0..total_samples {
+            if let Some(count) = self.sample_evidence.get(&(sample_id as u32)) {
+                sample_str.push_str(&format!("{}\t", count));
+            } else {
+                sample_str.push_str(&format!("0\t"));
+            }
+        }
+
+        let splice_str_left = self
+            .left_matched_splice_junctions
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+        let splice_str_right = self
+            .right_matched_splice_junctions
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join(",");
+
+        out_str.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            self.left_matched_gene.gene_name,
+            self.left_matched_gene.gene_id,
+            self.right_matched_gene.gene_name,
+            self.right_matched_gene.gene_id,
+            self.chr1,
+            self.left_matched_gene.start,
+            self.left_matched_gene.end,
+            self.chr2,
+            self.right_matched_gene.start,
+            self.right_matched_gene.end,
+            self.tootal_evidences,
+            total_samples,
+            self.left_matched_splice_junctions.len(),
+            self.right_matched_splice_junctions.len(),
+            sample_str.trim_end_matches('\t'),
+            splice_str_left,
+            splice_str_right,
+            if self.is_ambiguous {
+                "ambiguous"
+            } else {
+                "unique"
+            }
+        ));
+        // dbg!(&out_str);
+        out_str
+    }
+
+    pub fn get_table_header(index_info: &DatasetInfo) -> String {
+        let sample_names = index_info.get_sample_names();
+        // dbg!(&sample_names);
+        let sample_str = sample_names.join("\t");
+
+        let header = format!("gene1_name\tene1_id\tgene2_name\tgene2_id\tchr1\tstart1\tend1\tchr2\tstart2\tend2\ttotal_evidences\ttotal_samples\tsplice_junctions_count1\tsplice_junctions_count2\t{}\tmatched_left_splice_sites\tmatched_right_splice_sites\tambiguity\n", sample_str);
+        // dbg!(&header);
+        header
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct FusionCluster {
+    pub gene_hash: String,
+    pub gene_combination: HashSet<String>,
+    pub gene1: String,
+    pub gene2: String,
+    pub chr1:String,
+    pub chr2:String,
+    pub evidence_by_sample: Vec<FxHashMap<u32, u32>>,
+    pub total_evidences: u32,
+    pub order_a_main_left_most_splice_sites: Vec<u64>,
+    pub order_a_main_right_most_splice_sites: Vec<u64>,
+    pub order_a_supp_left_most_splice_sites: Vec<u64>,
+    pub order_a_supp_right_most_splice_sites: Vec<u64>,
+    pub order_b_main_left_most_splice_sites: Vec<u64>,
+    pub order_b_main_right_most_splice_sites: Vec<u64>,
+    pub order_b_supp_left_most_splice_sites: Vec<u64>,
+    pub order_b_supp_right_most_splice_sites: Vec<u64>,
+    pub order_a_main_left_mean: f64,
+    pub order_a_main_right_mean: f64,
+    pub order_a_supp_left_mean: f64,
+    pub order_a_supp_right_mean: f64,
+    pub order_b_main_left_mean: f64,
+    pub order_b_main_right_mean: f64,
+    pub order_b_supp_left_mean: f64,
+    pub order_b_supp_right_mean: f64,
+    pub order_a_main_left_std: f64,
+    pub order_a_main_right_std: f64,
+    pub order_a_supp_left_std: f64,
+    pub order_a_supp_right_std: f64,
+    pub order_b_main_left_std: f64,
+    pub order_b_main_right_std: f64,
+    pub order_b_supp_left_std: f64,
+    pub order_b_supp_right_std: f64,
+}
+
+impl FusionCluster {
+    pub fn new(fusion_aggr: &FusionAggrReads) -> Self {
+        let (gene_hash, gene1, gene2) = fusion_aggr.get_gene_hash();
+
+        let evidence_by_sample = vec![fusion_aggr.sample_evidence.clone()];
+        let gene_natural_order = format!("{}_{}", gene1, gene2);
+
+        let mut cluster = FusionCluster {
+            gene_hash: gene_hash,
+            gene_combination: HashSet::from_iter(vec![gene_natural_order]),
+            gene1,
+            gene2,
+            chr1: fusion_aggr.chr1.clone(),
+            chr2: fusion_aggr.chr2.clone(),
+            evidence_by_sample,
+            total_evidences: fusion_aggr.tootal_evidences,
+            order_a_main_left_most_splice_sites: Vec::new(),
+            order_a_main_right_most_splice_sites: Vec::new(),
+            order_a_supp_left_most_splice_sites: Vec::new(),
+            order_a_supp_right_most_splice_sites: Vec::new(),
+            order_b_main_left_most_splice_sites: Vec::new(),
+            order_b_main_right_most_splice_sites: Vec::new(),
+            order_b_supp_left_most_splice_sites: Vec::new(),
+            order_b_supp_right_most_splice_sites: Vec::new(),
+
+            order_a_main_left_mean: 0.0,
+            order_a_main_right_mean: 0.0,
+            order_a_supp_left_mean: 0.0,
+            order_a_supp_right_mean: 0.0,
+
+            order_b_main_left_mean: 0.0,
+            order_b_main_right_mean: 0.0,
+            order_b_supp_left_mean: 0.0,
+            order_b_supp_right_mean: 0.0,
+
+            order_a_main_left_std: 0.0,
+            order_a_main_right_std: 0.0,
+            order_a_supp_left_std: 0.0,
+            order_a_supp_right_std: 0.0,
+
+            order_b_main_left_std: 0.0,
+            order_b_main_right_std: 0.0,
+            order_b_supp_left_std: 0.0,
+            order_b_supp_right_std: 0.0,
+        };
+
+        cluster.order_a_main_left_most_splice_sites.push(
+            fusion_aggr
+                .left_matched_splice_junctions
+                .first()
+                .cloned()
+                .unwrap_or_default(),
+        );
+        cluster.order_a_main_right_most_splice_sites.push(
+            fusion_aggr
+                .left_matched_splice_junctions
+                .last()
+                .cloned()
+                .unwrap_or_default(),
+        );
+        cluster.order_a_supp_left_most_splice_sites.push(
+            fusion_aggr
+                .right_matched_splice_junctions
+                .first()
+                .cloned()
+                .unwrap_or_default(),
+        );
+        cluster.order_a_supp_right_most_splice_sites.push(
+            fusion_aggr
+                .right_matched_splice_junctions
+                .last()
+                .cloned()
+                .unwrap_or_default(),
+        );
+
+        cluster
+    }
+
+    pub fn add(&mut self, fusion_aggr: &FusionAggrReads) {
+        let (gene_hash, gene1, gene2) = fusion_aggr.get_gene_hash();
+        let gene_natural_order = format!("{}_{}", gene1, gene2);
+        self.total_evidences += fusion_aggr.tootal_evidences;
+        self.evidence_by_sample
+            .push(fusion_aggr.sample_evidence.clone());
+        self.gene_combination.insert(gene_natural_order);
+
+        // dbg!(&self.gene1,&self.gene2,&gene1,&gene2);
+
+        if (self.gene1 == gene1) && (self.gene2 == gene2) {
+            // order a
+
+            self.order_a_main_left_most_splice_sites.push(
+                fusion_aggr
+                    .left_matched_splice_junctions
+                    .first()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            self.order_a_main_right_most_splice_sites.push(
+                fusion_aggr
+                    .left_matched_splice_junctions
+                    .last()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            self.order_a_supp_left_most_splice_sites.push(
+                fusion_aggr
+                    .right_matched_splice_junctions
+                    .first()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            self.order_a_supp_right_most_splice_sites.push(
+                fusion_aggr
+                    .right_matched_splice_junctions
+                    .last()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+        } else {
+            //oerder b
+            self.order_b_main_left_most_splice_sites.push(
+                fusion_aggr
+                    .left_matched_splice_junctions
+                    .first()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            self.order_b_main_right_most_splice_sites.push(
+                fusion_aggr
+                    .left_matched_splice_junctions
+                    .last()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            self.order_b_supp_left_most_splice_sites.push(
+                fusion_aggr
+                    .right_matched_splice_junctions
+                    .first()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+            self.order_b_supp_right_most_splice_sites.push(
+                fusion_aggr
+                    .right_matched_splice_junctions
+                    .last()
+                    .cloned()
+                    .unwrap_or_default(),
+            );
+        }
+    }
+
+    pub fn evaluate(&mut self) ->bool {
+        // calcuate the mean and std of the splice sites
+    
+            self.order_a_main_left_mean = self
+                .order_a_main_left_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_a_main_left_most_splice_sites.len() as f64;
+            self.order_a_main_right_mean = self
+                .order_a_main_right_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_a_main_right_most_splice_sites.len() as f64;
+            self.order_a_supp_left_mean = self
+                .order_a_supp_left_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_a_supp_left_most_splice_sites.len() as f64;
+            self.order_a_supp_right_mean = self
+                .order_a_supp_right_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_a_supp_right_most_splice_sites.len() as f64;
+
+            let left_std: Vec<f64> = self
+                .order_a_main_left_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_a_main_left_mean).powi(2))
+                .collect();
+            let right_std: Vec<f64> = self
+                .order_a_main_right_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_a_main_right_mean).powi(2))
+                .collect();
+            let supp_left_std: Vec<f64> = self
+                .order_a_supp_left_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_a_supp_left_mean).powi(2))
+                .collect();
+            let supp_right_std: Vec<f64> = self
+                .order_a_supp_right_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_a_supp_right_mean).powi(2))
+                .collect();
+
+            if !left_std.is_empty() {
+                self.order_a_main_left_std =
+                    (left_std.iter().sum::<f64>() / left_std.len() as f64).sqrt();
+            }
+            if !right_std.is_empty() {
+                self.order_a_main_right_std =
+                    (right_std.iter().sum::<f64>() / right_std.len() as f64).sqrt();
+            }
+            if !supp_left_std.is_empty() {
+                self.order_a_supp_left_std =
+                    (supp_left_std.iter().sum::<f64>() / supp_left_std.len() as f64).sqrt();
+            }
+            if !supp_right_std.is_empty() {
+                self.order_a_supp_right_std =
+                    (supp_right_std.iter().sum::<f64>() / supp_right_std.len() as f64).sqrt();
+            }
+
+            // order b
+            self.order_b_main_left_mean = self
+                .order_b_main_left_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_b_main_left_most_splice_sites.len() as f64;
+            self.order_b_main_right_mean = self
+                .order_b_main_right_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_b_main_right_most_splice_sites.len() as f64;
+            self.order_b_supp_left_mean = self
+                .order_b_supp_left_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_b_supp_left_most_splice_sites.len() as f64;
+            self.order_b_supp_right_mean = self
+                .order_b_supp_right_most_splice_sites
+                .iter()
+                .copied()
+                .map(|x| x as f64)
+                .sum::<f64>()
+                / self.order_b_supp_right_most_splice_sites.len() as f64;
+            let left_std: Vec<f64> = self
+                .order_b_main_left_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_b_main_left_mean).powi(2))
+                .collect();
+            let right_std: Vec<f64> = self
+                .order_b_main_right_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_b_main_right_mean).powi(2))
+                .collect();
+            let supp_left_std: Vec<f64> = self
+                .order_b_supp_left_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_b_supp_left_mean).powi(2))
+                .collect();
+            let supp_right_std: Vec<f64> = self
+                .order_b_supp_right_most_splice_sites
+                .iter()
+                .map(|&x| (x as f64 - self.order_b_supp_right_mean).powi(2))
+                .collect(); 
+            if !left_std.is_empty() {
+                self.order_b_main_left_std =
+                    (left_std.iter().sum::<f64>() / left_std.len() as f64).sqrt();
+            }
+            if !right_std.is_empty() {
+                self.order_b_main_right_std =
+                    (right_std.iter().sum::<f64>() / right_std.len() as f64).sqrt();
+            }
+            if !supp_left_std.is_empty() {
+                self.order_b_supp_left_std =
+                    (supp_left_std.iter().sum::<f64>() / supp_left_std.len() as f64).sqrt();
+            }
+            if !supp_right_std.is_empty() {
+                self.order_b_supp_right_std =
+                    (supp_right_std.iter().sum::<f64>() / supp_right_std.len() as f64).sqrt();
+            }
+
+            let mut is_good = false;
+            // if order_a_main overlaop with order_b_supp, then it is not a good fusion
+            let main_a = vec![self.order_a_main_left_mean, self.order_a_main_right_mean];
+            let main_b = vec![self.order_b_main_left_mean, self.order_b_main_right_mean];
+            let supp_a = vec![self.order_a_supp_left_mean, self.order_a_supp_right_mean];
+            let supp_b = vec![self.order_b_supp_left_mean, self.order_b_supp_right_mean];
+            if is_overlap(&main_a, &supp_b) && is_overlap(&main_b, &supp_a) {
+
+                is_good = true;
+                
+            }
+
+            is_good
+
+        }
+
+        pub fn get_string(&self, index_info: &DatasetInfo) -> String {
+            let mut out_str = String::new();
+            let total_samples = index_info.get_size();
+
+            let mut merged_sample_evidence = FxHashMap::default();
+
+            for sample_evidence in self.evidence_by_sample.iter() {
+                for (sample_id, count) in sample_evidence.iter() {
+                    *merged_sample_evidence.entry(*sample_id).or_insert(0) += *count;
+                }
+            }
+
+            let mut sample_count_str = String::new();
+            for sample_id in 0..total_samples {
+                if let Some(count) = merged_sample_evidence.get(&(sample_id as u32)) {
+                    sample_count_str.push_str(&format!("{}\t", count));
+                } else {
+                    sample_count_str.push_str("0\t");
+                }
+            }
+
+            out_str.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}\n",
+                self.gene1,
+                self.gene2,
+                self.gene_hash,
+                self.total_evidences,
+                total_samples,
+                self.gene_combination.len()> 1,
+                self.chr1,
+                self.order_a_main_left_mean as u32,
+                self.order_a_main_right_mean as u32,
+                self.chr2,
+                self.order_a_supp_left_mean as u32,
+                self.order_a_supp_right_mean as u32,
+                self.chr2,
+                self.order_b_main_left_mean as u32,
+                self.order_b_main_right_mean as u32,
+                self.chr1,
+                self.order_b_supp_left_mean as u32,
+                self.order_b_supp_right_mean as u32,
+                sample_count_str
+            ));
+
+            out_str
+        }
+    }
+

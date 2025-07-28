@@ -40,3 +40,17 @@ pub fn hash_vec<T: Hash>(value: &T) -> u64 {
     let hasher_builder = RandomState::with_seeds(9336, 5920, 6784, 4496);
     hasher_builder.hash_one(value)
 }
+
+
+pub fn is_overlap(a:&Vec<f64>, b:&Vec<f64>) -> bool {
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    let a_start = a[0];
+    let a_end = a[a.len() - 1];
+    let b_start = b[0];
+    let b_end = b[b.len() - 1];
+
+    // Check if the ranges overlap
+    (a_start <= b_end) && (b_start <= a_end)
+}

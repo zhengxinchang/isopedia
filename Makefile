@@ -1,4 +1,6 @@
 
+SHELL := /bin/bash
+
 build:
 	cargo build --release
 
@@ -53,8 +55,24 @@ tfusion2:build
 
 
 tfusion3:build
-	target/release/isopedia-anno-fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.mini.gtf  -o test/fusion_discovery.output.gz
+	target/release/isopedia-anno-fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.gtf  -o test/fusion_discovery.output.gz
 
+tfusion4:build
+	target/release/isopedia-anno-fusion --debug -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
+	-G test/gencode.v47.basic.annotation.RUNX1RUNX1T1.gtf  \
+	-o test/fusion_discovery_cancer.output.gz &> aa.log
+
+tfusion5:build
+	target/release/isopedia-anno-fusion  --debug -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
+	-G /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  \
+	-o test/fusion_discovery_cancer.output.all.gz &> aa.log
+
+
+
+tfusion6:build
+	target/release/isopedia-anno-fusion  --debug -i /ssd1/stix-iso-devspace/isopedia-dev/test/HG002_idx \
+	-G /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  \
+	-o test/hg002_fusion_discovery_cancer.output.all.gz &> aa.log
 
 
 t8:build # for flnc reads

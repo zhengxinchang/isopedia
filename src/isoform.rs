@@ -346,8 +346,7 @@ impl MergedIsoform {
         fusion_evidence_vec
     }
 
-    /// returns a vector of FusionCandidate,  each candidates contains the potental fusion segments in each sample.
-    /// reads that does not have any supp segments will be ignored.
+    /// Each isoform will be re-scattered at read level, and regrouped by their fusion hash.
     pub fn to_fusion_candidates(&self) -> Option<Vec<FusionAggrReads>> {
         let mut candidates: Vec<FusionSingleRead> = Vec::new();
         let mut aggr_candidates: std::collections::HashMap<
@@ -360,10 +359,10 @@ impl MergedIsoform {
             // process all read from a sample
             let sample_evidence = self.sample_evidence_arr[sample_idx] as usize;
             if sample_evidence == 0 {
-                warn!(
-                    "Sample {} has no evidence for this isoform, skipping...",
-                    sample_idx
-                );
+                // warn!(
+                //     "Sample {} has no evidence for this isoform, skipping...",
+                //     sample_idx
+                // );
                 continue; // skip samples with no evidence
             }
             let sample_evidence_offset = self.sample_offset_arr[sample_idx] as usize;
@@ -378,9 +377,9 @@ impl MergedIsoform {
                     continue; // skip reads with no supp segments
                 }
 
-                if read_diff.supp_seg_vec_length < 2 {
-                    continue; // skip reads with less than 2 supp segments
-                }
+                // if read_diff.supp_seg_vec_length < 1 {
+                //     continue; // skip reads with less than 2 supp segments
+                // }
 
                 let supp_segments = &self.supp_segs_vec[read_diff.supp_seg_vec_offset as usize
                     ..(read_diff.supp_seg_vec_offset + read_diff.supp_seg_vec_length) as usize];
@@ -422,10 +421,15 @@ impl MergedIsoform {
 
         if aggr_candidates.is_empty() {
             return None; // no valid candidates found
+        } else {
+            // convert the aggr_candidates map into a vector
+            let fusion_candidates: Vec<FusionAggrReads> = aggr_candidates.into_values().collect();
+            Some(fusion_candidates)
         }
+    }
 
-        // convert the aggr_candidates map into a vector
-        let fusion_candidates: Vec<FusionAggrReads> = aggr_candidates.into_values().collect();
-        Some(fusion_candidates)
+    // function to get the confidence value of the isoform based on the evidence
+    pub fn get_confidence_value(&self, min_read: u32, total_reads_vec: &Vec<u32>) -> f64 {
+        todo!()
     }
 }

@@ -1021,6 +1021,8 @@ impl BPForest {
                     .unwrap_or_else(|| vec![])
             })
             .collect();
+        
+        // dbg!(&res_vec);
 
         if min_match == 0 || min_match >= positions.len() {
             Some(find_common(&res_vec))

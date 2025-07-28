@@ -1,4 +1,4 @@
-use std::{collections::HashSet, env, fs::File, io::BufRead, path::PathBuf, vec};
+use std::{collections::{HashMap, HashSet}, env, fs::File, io::BufRead, path::PathBuf, vec};
 
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
@@ -6,15 +6,16 @@ use isopedia::{
     bptree::BPForest,
     constants::*,
     dataset_info::DatasetInfo,
-    gene_index::GeneIntervalTree,
+    fusion::{FusionAggrReads, FusionCluster},
+    gene_index::{self, GeneIntervalTree},
     isoform::MergedIsoform,
     isoformarchive::{self, read_record_from_archive},
     utils,
     writer::MyGzWriter,
 };
 
-use log::{error, info, warn};
-use noodles_gtf::io::Reader as gtfReader;
+use log::{debug, error, info, warn};
+use noodles_gtf::{io::Reader as gtfReader, record::attributes::entry};
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
@@ -305,12 +306,16 @@ fn parse_bed_line(line: &str) -> Result<BreakpointType> {
 }
 
 fn main() -> Result<()> {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
-
     let cli = Cli::parse();
     cli.validate();
     greetings(&cli);
+
+    if cli.debug {
+        env::set_var("RUST_LOG", "debug");
+    } else {
+        env::set_var("RUST_LOG", "info");
+    }
+    env_logger::init();
 
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
@@ -392,10 +397,17 @@ fn main() -> Result<()> {
         let file = std::fs::File::open(gtf_path).expect("Failed to open GTF file");
         let reader = std::io::BufReader::new(file);
         let mut gtf_reader = gtfReader::new(reader);
-        let mut mywriter = MyGzWriter::new(&cli.output)?;
+
+        let mut skipped_genes = 0;
+
         let gene_indexing =
             GeneIntervalTree::new(&mut gtf_reader).expect("Failed to create GeneIntervalTree");
         info!("loaded {} genes", gene_indexing.count);
+
+        let mut mywriter = MyGzWriter::new(&cli.output)?;
+        mywriter.write_all_bytes(FusionAggrReads::get_table_header(&dataset_info).as_bytes())?;
+
+        let mut fusion_cluster_map = HashMap::new();
 
         for chromosome in gene_indexing.chroms.clone() {
             info!("Processing chromosome {}", chromosome);
@@ -411,18 +423,27 @@ fn main() -> Result<()> {
 
             for queried_gene_interval in gene_list_to_be_queried.unwrap() {
                 let gene_interval = &queried_gene_interval.val;
+
                 let quried_positions = gene_interval
                     .splice_sites
                     .iter()
                     .map(|x| (chromosome.clone(), *x))
                     .collect::<Vec<(String, u64)>>();
-                let target = forest.search_partial_match(&quried_positions, cli.flank, 2);
+
+                let target = forest.search_partial_match(&quried_positions, cli.flank, 1);
+
 
                 if target.is_none() {
+                    skipped_genes += 1;
                     continue;
                 }
 
                 let targets = target.unwrap();
+
+                if targets.is_empty() {
+                    skipped_genes += 1;
+                    continue;
+                }
 
                 for rec_ptr in targets {
                     let isoform: MergedIsoform =
@@ -430,28 +451,53 @@ fn main() -> Result<()> {
 
                     let candidates = isoform.to_fusion_candidates();
 
+
                     if candidates.is_none() {
                         continue;
                     }
 
-                    let candidates = candidates.unwrap();
+                    let candidates: Vec<FusionAggrReads> = candidates.unwrap();
 
                     for mut candidate in candidates {
-                        // search gene interval for left and right part
+                        if candidate.match_gene(&gene_indexing, cli.flank) {
+                            // if gene_interval.gene_name.contains("RUNX1") {
+                            //     debug!("matched RUNX1 gene: candidates: {:?}", &candidate);
+                            // }
+                            let record_string = candidate.get_string(&dataset_info);
+                            debug!("{}",&record_string);
+                            // mywriter
+                            //     .write_all_bytes(record_string.as_bytes())
+                            //     .context("Failed to write record string")?;
 
-                        candidate.match_gene(&gene_indexing, cli.flank);
-
-                        let record_string = candidate.get_string(dataset_info.get_size());
-                        mywriter
-                            .write_all_bytes(record_string.as_bytes())
-                            .context("Failed to write record string")?;
+                            fusion_cluster_map.entry(candidate.get_gene_hash().0).or_insert_with(|| {
+                                FusionCluster::new(&candidate)
+                            }).add(&candidate);
+                        }
                     }
                 }
             }
         }
 
+
+
+        for fusion_cluster in fusion_cluster_map.values_mut() {
+            if fusion_cluster.evaluate() {
+
+                let record_string = fusion_cluster.get_string(&dataset_info);
+                mywriter
+                    .write_all_bytes(record_string.as_bytes())
+                    .context("Failed to write record string")?;
+            }
+            
+        };
+
+        info!("Total processed genes: {}", gene_indexing.count);
+        info!("Total skipped genes: {}", skipped_genes);
+
         mywriter.finish()?;
     }
+
+    info!("Total processed samples: {}", dataset_info.get_size());
 
     info!("Results written to {}", cli.output.display());
     info!("Finished!");
