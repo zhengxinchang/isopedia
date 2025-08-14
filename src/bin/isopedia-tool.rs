@@ -86,7 +86,7 @@ pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
     }
 }
 
-pub fn inspect_aggr_dat(idx: &PathBuf, output: &PathBuf) {
+pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
     let mut processed_signautres = std::collections::HashSet::new();
 
     let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
@@ -155,7 +155,7 @@ fn main() {
             if inspec_args.type_f == "tmpidx" {
                 inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
             } else if inspec_args.type_f == "archive" {
-                inspect_aggr_dat(&inspec_args.idx, &inspec_args.output);
+                inspect_archive(&inspec_args.idx, &inspec_args.output);
             } else if inspec_args.type_f == "meta" {
                 inspect_meta(&inspec_args.idx);
             }

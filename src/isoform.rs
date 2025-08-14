@@ -1,13 +1,13 @@
 use std::io::Read;
 
 use flate2::bufread::GzEncoder;
-use log::warn;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
     constants::MAX_SAMPLE_SIZE,
+    dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     reads::{AggrRead, Segment, Strand},
 };
@@ -359,10 +359,6 @@ impl MergedIsoform {
             // process all read from a sample
             let sample_evidence = self.sample_evidence_arr[sample_idx] as usize;
             if sample_evidence == 0 {
-                // warn!(
-                //     "Sample {} has no evidence for this isoform, skipping...",
-                //     sample_idx
-                // );
                 continue; // skip samples with no evidence
             }
             let sample_evidence_offset = self.sample_offset_arr[sample_idx] as usize;
@@ -376,10 +372,6 @@ impl MergedIsoform {
                 if read_diff.supp_seg_vec_length == 0 {
                     continue; // skip reads with no supp segments
                 }
-
-                // if read_diff.supp_seg_vec_length < 1 {
-                //     continue; // skip reads with less than 2 supp segments
-                // }
 
                 let supp_segments = &self.supp_segs_vec[read_diff.supp_seg_vec_offset as usize
                     ..(read_diff.supp_seg_vec_offset + read_diff.supp_seg_vec_length) as usize];
@@ -428,8 +420,57 @@ impl MergedIsoform {
         }
     }
 
-    // function to get the confidence value of the isoform based on the evidence
-    pub fn get_confidence_value(&self, min_read: u32, total_reads_vec: &Vec<u32>) -> f64 {
-        todo!()
+    /// Function to get the confidence value of the isoform based on the evidence
+    pub fn get_confidence_value(evidence_arr: Vec<u32>, dataset_info: &DatasetInfo) -> f64 {
+        let n = dataset_info.get_size();
+        let mut total = 0;
+        let mut sorted_evidence = Vec::new();
+        let mut max_reads = 0;
+        for idx in 0..n {
+            if evidence_arr[idx] > max_reads {
+                max_reads = evidence_arr[idx];
+            }
+            sorted_evidence.push(evidence_arr[idx]);
+            total += evidence_arr[idx];
+        }
+
+        let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
+
+        sorted_evidence.sort_unstable_by(|a, b| b.cmp(a)); // sort in descending order
+        dbg!(&sorted_evidence);
+
+        let mut tmp = 0;
+        for (i, &e) in sorted_evidence.iter().enumerate() {
+            tmp += (i + 1) as u32 * e;
+        }
+
+        dbg!(n, tmp);
+        let a = 2.0f64 * (tmp as f64) / (n as f64 * total as f64);
+        let b = ((n + 1) as f64) / n as f64;
+
+        dbg!(a, b);
+        let gini = a - b;
+        dbg!(gini, avg_reads, max_reads);
+
+        let confidence = (1.0 - gini) * avg_reads / max_reads as f64;
+
+        confidence
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_confidence_value() {
+        let evidence_arr = vec![1, 2, 3, 4];
+        let mut dataset_info = DatasetInfo::new();
+        dataset_info.sample_size = evidence_arr.len();
+
+        let confidence = MergedIsoform::get_confidence_value(evidence_arr, &dataset_info);
+
+        dbg!(confidence);
     }
 }

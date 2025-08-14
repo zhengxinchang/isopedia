@@ -1,9 +1,6 @@
 
-<img src="./img/logo2.png" alt="isopedia" width="150" style="margin: 0; padding: 0; vertical-align: middle;">
 
-
-
-# About the Isopedia
+# About the Isopedia <img src="./img/logo2.png" align="right" alt="" width=120 />
 
 Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
 

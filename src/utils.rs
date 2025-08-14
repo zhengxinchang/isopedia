@@ -41,8 +41,7 @@ pub fn hash_vec<T: Hash>(value: &T) -> u64 {
     hasher_builder.hash_one(value)
 }
 
-
-pub fn is_overlap(a:&Vec<f64>, b:&Vec<f64>) -> bool {
+pub fn is_overlap(a: &Vec<f64>, b: &Vec<f64>) -> bool {
     if a.is_empty() || b.is_empty() {
         return false;
     }

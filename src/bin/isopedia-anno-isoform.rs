@@ -9,7 +9,7 @@ use anyhow::Result;
 use clap::{command, Parser};
 use isopedia::{
     bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker,
-    isoform::MergedIsoform, isoformarchive::read_record_from_archive, meta::Meta,
+    isoform::{self, MergedIsoform}, isoformarchive::read_record_from_archive, meta::Meta,
     tmpidx::MergedIsoformOffsetPtr,
 };
 use log::{error, info};
@@ -196,7 +196,7 @@ fn main() -> Result<()> {
             hit_count += 1;
         }
 
-        if target.len() > 0 {
+        if target.len() > 0 { // have hits
             acc_pos_count.fill(0);
             acc_sample_evidence_arr.fill(0);
 
@@ -224,9 +224,15 @@ fn main() -> Result<()> {
                     }
                 });
 
+
+            let confidence = isoform::MergedIsoform::get_confidence_value(
+                acc_sample_evidence_arr.clone(),
+                &dataset_info,
+            );
+
             write!(
                 writer,
-                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t",
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t",
                 trans.chrom,
                 trans.start,
                 trans.end,
@@ -234,6 +240,7 @@ fn main() -> Result<()> {
                 trans.get_exon_count(),
                 trans.trans_id,
                 trans.gene_id,
+                confidence,
                 &cli.min_read,
                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
                 dataset_info.get_size(),
@@ -250,7 +257,7 @@ fn main() -> Result<()> {
         } else {
             write!(
                 writer,
-                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\tno\t{}\tNA\t{}\t",
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\tNA\t{}\t",
                 trans.chrom,
                 trans.start,
                 trans.end,

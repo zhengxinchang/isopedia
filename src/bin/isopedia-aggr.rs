@@ -405,13 +405,7 @@ fn main() -> Result<()> {
         &cli.outdir.join(DATASET_INFO_FILE_NAME).display()
     );
 
-    // let mut out_sample_meta_writer = std::io::BufWriter::new(
-    //     std::fs::File::create(&cli.outdir.join(META_FILE_NAME))
-    //         .expect("Can not create sample meta file...exit"),
-    // );
-    // out_sample_meta_writer
-    //     .write_all(sample_meta.get_string().as_bytes())
-    //     .expect("can not write meta data");
+
 
     dataset_info.save_to_file(&cli.outdir.join(DATASET_INFO_FILE_NAME))?;
 

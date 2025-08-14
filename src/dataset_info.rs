@@ -13,7 +13,8 @@ pub struct DatasetInfo {
     name_vec: Vec<String>,
     path_vec: Vec<PathBuf>,
     isoform_size: Vec<u32>,
-    sample_size: usize,
+    total_evidence_vec: Vec<u32>,
+    pub sample_size: usize,
 }
 
 impl DatasetInfo {
@@ -23,6 +24,7 @@ impl DatasetInfo {
             name_vec: Vec::new(),
             path_vec: Vec::new(),
             isoform_size: Vec::new(),
+            total_evidence_vec: Vec::new(),
             sample_size: 0,
         }
     }
@@ -44,24 +46,6 @@ impl DatasetInfo {
         meta.isoform_size = vec![0; meta.sample_size];
         meta
     }
-
-    /// load sample meta from index
-    // pub fn load<P: AsRef<Path>>(path: P) -> DatasetInfo {
-    //     let content = std::fs::read_to_string(path.as_ref()).expect(&format!(
-    //         "Cannot read sample meta file {}",
-    //         path.as_ref().display()
-    //     ));
-    //     let mut samples = DatasetInfo::new();
-    //     for line in content.lines().skip(1) {
-    //         let fields = line
-    //             .split('\t')
-    //             .map(|x| x.to_string())
-    //             .collect::<Vec<String>>();
-    //         let name = fields[0].clone();
-    //         samples.add_sample(name, None);
-    //     }
-    //     samples
-    // }
 
     pub fn save_to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {
         let encoded: Vec<u8> = bincode::serialize(&self).unwrap();

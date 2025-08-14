@@ -1,4 +1,11 @@
-use std::{collections::{HashMap, HashSet}, env, fs::File, io::BufRead, path::PathBuf, vec};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    fs::File,
+    io::BufRead,
+    path::PathBuf,
+    vec,
+};
 
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
@@ -7,7 +14,7 @@ use isopedia::{
     constants::*,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionCluster},
-    gene_index::{self, GeneIntervalTree},
+    gene_index::GeneIntervalTree,
     isoform::MergedIsoform,
     isoformarchive::{self, read_record_from_archive},
     utils,
@@ -15,7 +22,7 @@ use isopedia::{
 };
 
 use log::{debug, error, info, warn};
-use noodles_gtf::{io::Reader as gtfReader, record::attributes::entry};
+use noodles_gtf::io::Reader as gtfReader;
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
@@ -25,8 +32,24 @@ use serde::Serialize;
 #[command(about = "
 Contact: Xinchang Zheng <zhengxc93@gmail.com>
 ", long_about = None)]
-#[clap(after_long_help = "
-")]
+#[clap(after_long_help = r#"
+Examples:
+
+# Annotate a fusion by providing the fusion breakpoints
+isopedia-anno-fusion --idxdir /path/to/index --pos chr1:1000,chr2:2000 -o out.txt
+
+# Annotate a list of fusions using a bed file
+
+isopedia-anno-fusion --idxdir /path/to/index --pos-bed /path/to/fusion_breakpoints.bed -o out.txt
+
+Format of fusion_breakpoints.bed:
+chr2 \t 50795173 \t chr17 \t 61368325 \t BCAS4:BCAS3,UHR(optional)
+
+# Discover any potential fusions using a GTF file
+isopedia-anno-fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.txt
+
+"#
+)]
 struct Cli {
     /// index directory
     #[arg(short, long)]
@@ -405,7 +428,7 @@ fn main() -> Result<()> {
         info!("loaded {} genes", gene_indexing.count);
 
         let mut mywriter = MyGzWriter::new(&cli.output)?;
-        mywriter.write_all_bytes(FusionAggrReads::get_table_header(&dataset_info).as_bytes())?;
+        mywriter.write_all_bytes(FusionCluster::get_table_header(&dataset_info).as_bytes())?;
 
         let mut fusion_cluster_map = HashMap::new();
 
@@ -432,7 +455,6 @@ fn main() -> Result<()> {
 
                 let target = forest.search_partial_match(&quried_positions, cli.flank, 1);
 
-
                 if target.is_none() {
                     skipped_genes += 1;
                     continue;
@@ -451,7 +473,6 @@ fn main() -> Result<()> {
 
                     let candidates = isoform.to_fusion_candidates();
 
-
                     if candidates.is_none() {
                         continue;
                     }
@@ -464,32 +485,29 @@ fn main() -> Result<()> {
                             //     debug!("matched RUNX1 gene: candidates: {:?}", &candidate);
                             // }
                             let record_string = candidate.get_string(&dataset_info);
-                            debug!("{}",&record_string);
+                            debug!("{}", &record_string);
                             // mywriter
                             //     .write_all_bytes(record_string.as_bytes())
                             //     .context("Failed to write record string")?;
 
-                            fusion_cluster_map.entry(candidate.get_gene_hash().0).or_insert_with(|| {
-                                FusionCluster::new(&candidate)
-                            }).add(&candidate);
+                            fusion_cluster_map
+                                .entry(candidate.get_gene_hash().0)
+                                .or_insert_with(|| FusionCluster::new(&candidate))
+                                .add(&candidate);
                         }
                     }
                 }
             }
         }
 
-
-
         for fusion_cluster in fusion_cluster_map.values_mut() {
             if fusion_cluster.evaluate() {
-
                 let record_string = fusion_cluster.get_string(&dataset_info);
                 mywriter
                     .write_all_bytes(record_string.as_bytes())
                     .context("Failed to write record string")?;
             }
-            
-        };
+        }
 
         info!("Total processed genes: {}", gene_indexing.count);
         info!("Total skipped genes: {}", skipped_genes);

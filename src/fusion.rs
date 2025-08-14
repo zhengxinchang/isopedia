@@ -1,12 +1,10 @@
 use std::vec;
 
 use ahash::HashSet;
-use log::debug;
-use rustc_hash::{FxHashMap, FxHasher};
+use rustc_hash::FxHashMap;
 
 use crate::{
     dataset_info::DatasetInfo,
-    fusion,
     gene_index::{CandidateMatchStatus, GeneInterval, GeneIntervalTree},
     reads::Segment,
     utils::{hash_vec, is_overlap},
@@ -113,9 +111,6 @@ impl FusionAggrReads {
             .collect::<Vec<u64>>();
 
         let results = gene_indexing.match2(self.chr1.as_str(), &flat_main_splices, flank);
-        if self.fusion_hash == 7337552384227817871u64 {
-            debug!("{:?}", results);
-        }
 
         if let Some((mached_gene1, splice_sites, status)) = results {
             self.left_matched_gene = mached_gene1;
@@ -133,9 +128,7 @@ impl FusionAggrReads {
             .flat_map(|x| vec![x.0, x.1])
             .collect::<Vec<u64>>();
         let results = gene_indexing.match2(self.chr2.as_str(), &flat_supp_splices, flank);
-        if self.fusion_hash == 7337552384227817871u64 {
-            debug!("{:?}", results);
-        }
+
         if let Some((matched_gene2, splice_sites, status)) = results {
             self.right_matched_gene = matched_gene2;
             self.right_matched_splice_junctions = splice_sites;
@@ -150,10 +143,6 @@ impl FusionAggrReads {
             is_good = false; // both genes are the same, not a fusion
         }
 
-        // if self.left_matched_splice_junctions.len() < 2 || self.right_matched_splice_junctions.len() < 2 {
-        //     is_good = false; // not enough splice junctions to consider it a fusion
-        // }
-
         is_good
     }
 
@@ -163,7 +152,11 @@ impl FusionAggrReads {
             self.right_matched_gene.gene_name.clone(),
         ];
         v.sort();
-        return (v.join("_"), self.left_matched_gene.gene_name.clone(), self.right_matched_gene.gene_name.clone());
+        return (
+            v.join("_"),
+            self.left_matched_gene.gene_name.clone(),
+            self.right_matched_gene.gene_name.clone(),
+        );
     }
 
     pub fn get_string(&self, index_info: &DatasetInfo) -> String {
@@ -239,8 +232,8 @@ pub struct FusionCluster {
     pub gene_combination: HashSet<String>,
     pub gene1: String,
     pub gene2: String,
-    pub chr1:String,
-    pub chr2:String,
+    pub chr1: String,
+    pub chr2: String,
     pub evidence_by_sample: Vec<FxHashMap<u32, u32>>,
     pub total_evidences: u32,
     pub order_a_main_left_most_splice_sites: Vec<u64>,
@@ -348,17 +341,14 @@ impl FusionCluster {
     }
 
     pub fn add(&mut self, fusion_aggr: &FusionAggrReads) {
-        let (gene_hash, gene1, gene2) = fusion_aggr.get_gene_hash();
+        let (_, gene1, gene2) = fusion_aggr.get_gene_hash();
         let gene_natural_order = format!("{}_{}", gene1, gene2);
         self.total_evidences += fusion_aggr.tootal_evidences;
         self.evidence_by_sample
             .push(fusion_aggr.sample_evidence.clone());
         self.gene_combination.insert(gene_natural_order);
 
-        // dbg!(&self.gene1,&self.gene2,&gene1,&gene2);
-
         if (self.gene1 == gene1) && (self.gene2 == gene2) {
-            // order a
 
             self.order_a_main_left_most_splice_sites.push(
                 fusion_aggr
@@ -421,203 +411,208 @@ impl FusionCluster {
         }
     }
 
-    pub fn evaluate(&mut self) ->bool {
+    pub fn evaluate(&mut self) -> bool {
         // calcuate the mean and std of the splice sites
-    
-            self.order_a_main_left_mean = self
-                .order_a_main_left_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_a_main_left_most_splice_sites.len() as f64;
-            self.order_a_main_right_mean = self
-                .order_a_main_right_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_a_main_right_most_splice_sites.len() as f64;
-            self.order_a_supp_left_mean = self
-                .order_a_supp_left_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_a_supp_left_most_splice_sites.len() as f64;
-            self.order_a_supp_right_mean = self
-                .order_a_supp_right_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_a_supp_right_most_splice_sites.len() as f64;
 
-            let left_std: Vec<f64> = self
-                .order_a_main_left_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_a_main_left_mean).powi(2))
-                .collect();
-            let right_std: Vec<f64> = self
-                .order_a_main_right_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_a_main_right_mean).powi(2))
-                .collect();
-            let supp_left_std: Vec<f64> = self
-                .order_a_supp_left_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_a_supp_left_mean).powi(2))
-                .collect();
-            let supp_right_std: Vec<f64> = self
-                .order_a_supp_right_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_a_supp_right_mean).powi(2))
-                .collect();
+        self.order_a_main_left_mean = self
+            .order_a_main_left_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_a_main_left_most_splice_sites.len() as f64;
+        self.order_a_main_right_mean = self
+            .order_a_main_right_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_a_main_right_most_splice_sites.len() as f64;
+        self.order_a_supp_left_mean = self
+            .order_a_supp_left_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_a_supp_left_most_splice_sites.len() as f64;
+        self.order_a_supp_right_mean = self
+            .order_a_supp_right_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_a_supp_right_most_splice_sites.len() as f64;
 
-            if !left_std.is_empty() {
-                self.order_a_main_left_std =
-                    (left_std.iter().sum::<f64>() / left_std.len() as f64).sqrt();
-            }
-            if !right_std.is_empty() {
-                self.order_a_main_right_std =
-                    (right_std.iter().sum::<f64>() / right_std.len() as f64).sqrt();
-            }
-            if !supp_left_std.is_empty() {
-                self.order_a_supp_left_std =
-                    (supp_left_std.iter().sum::<f64>() / supp_left_std.len() as f64).sqrt();
-            }
-            if !supp_right_std.is_empty() {
-                self.order_a_supp_right_std =
-                    (supp_right_std.iter().sum::<f64>() / supp_right_std.len() as f64).sqrt();
-            }
+        let left_std: Vec<f64> = self
+            .order_a_main_left_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_a_main_left_mean).powi(2))
+            .collect();
+        let right_std: Vec<f64> = self
+            .order_a_main_right_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_a_main_right_mean).powi(2))
+            .collect();
+        let supp_left_std: Vec<f64> = self
+            .order_a_supp_left_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_a_supp_left_mean).powi(2))
+            .collect();
+        let supp_right_std: Vec<f64> = self
+            .order_a_supp_right_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_a_supp_right_mean).powi(2))
+            .collect();
 
-            // order b
-            self.order_b_main_left_mean = self
-                .order_b_main_left_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_b_main_left_most_splice_sites.len() as f64;
-            self.order_b_main_right_mean = self
-                .order_b_main_right_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_b_main_right_most_splice_sites.len() as f64;
-            self.order_b_supp_left_mean = self
-                .order_b_supp_left_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_b_supp_left_most_splice_sites.len() as f64;
-            self.order_b_supp_right_mean = self
-                .order_b_supp_right_most_splice_sites
-                .iter()
-                .copied()
-                .map(|x| x as f64)
-                .sum::<f64>()
-                / self.order_b_supp_right_most_splice_sites.len() as f64;
-            let left_std: Vec<f64> = self
-                .order_b_main_left_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_b_main_left_mean).powi(2))
-                .collect();
-            let right_std: Vec<f64> = self
-                .order_b_main_right_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_b_main_right_mean).powi(2))
-                .collect();
-            let supp_left_std: Vec<f64> = self
-                .order_b_supp_left_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_b_supp_left_mean).powi(2))
-                .collect();
-            let supp_right_std: Vec<f64> = self
-                .order_b_supp_right_most_splice_sites
-                .iter()
-                .map(|&x| (x as f64 - self.order_b_supp_right_mean).powi(2))
-                .collect(); 
-            if !left_std.is_empty() {
-                self.order_b_main_left_std =
-                    (left_std.iter().sum::<f64>() / left_std.len() as f64).sqrt();
-            }
-            if !right_std.is_empty() {
-                self.order_b_main_right_std =
-                    (right_std.iter().sum::<f64>() / right_std.len() as f64).sqrt();
-            }
-            if !supp_left_std.is_empty() {
-                self.order_b_supp_left_std =
-                    (supp_left_std.iter().sum::<f64>() / supp_left_std.len() as f64).sqrt();
-            }
-            if !supp_right_std.is_empty() {
-                self.order_b_supp_right_std =
-                    (supp_right_std.iter().sum::<f64>() / supp_right_std.len() as f64).sqrt();
-            }
-
-            let mut is_good = false;
-            // if order_a_main overlaop with order_b_supp, then it is not a good fusion
-            let main_a = vec![self.order_a_main_left_mean, self.order_a_main_right_mean];
-            let main_b = vec![self.order_b_main_left_mean, self.order_b_main_right_mean];
-            let supp_a = vec![self.order_a_supp_left_mean, self.order_a_supp_right_mean];
-            let supp_b = vec![self.order_b_supp_left_mean, self.order_b_supp_right_mean];
-            if is_overlap(&main_a, &supp_b) && is_overlap(&main_b, &supp_a) {
-
-                is_good = true;
-                
-            }
-
-            is_good
-
+        if !left_std.is_empty() {
+            self.order_a_main_left_std =
+                (left_std.iter().sum::<f64>() / left_std.len() as f64).sqrt();
+        }
+        if !right_std.is_empty() {
+            self.order_a_main_right_std =
+                (right_std.iter().sum::<f64>() / right_std.len() as f64).sqrt();
+        }
+        if !supp_left_std.is_empty() {
+            self.order_a_supp_left_std =
+                (supp_left_std.iter().sum::<f64>() / supp_left_std.len() as f64).sqrt();
+        }
+        if !supp_right_std.is_empty() {
+            self.order_a_supp_right_std =
+                (supp_right_std.iter().sum::<f64>() / supp_right_std.len() as f64).sqrt();
         }
 
-        pub fn get_string(&self, index_info: &DatasetInfo) -> String {
-            let mut out_str = String::new();
-            let total_samples = index_info.get_size();
-
-            let mut merged_sample_evidence = FxHashMap::default();
-
-            for sample_evidence in self.evidence_by_sample.iter() {
-                for (sample_id, count) in sample_evidence.iter() {
-                    *merged_sample_evidence.entry(*sample_id).or_insert(0) += *count;
-                }
-            }
-
-            let mut sample_count_str = String::new();
-            for sample_id in 0..total_samples {
-                if let Some(count) = merged_sample_evidence.get(&(sample_id as u32)) {
-                    sample_count_str.push_str(&format!("{}\t", count));
-                } else {
-                    sample_count_str.push_str("0\t");
-                }
-            }
-
-            out_str.push_str(&format!(
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}\n",
-                self.gene1,
-                self.gene2,
-                self.gene_hash,
-                self.total_evidences,
-                total_samples,
-                self.gene_combination.len()> 1,
-                self.chr1,
-                self.order_a_main_left_mean as u32,
-                self.order_a_main_right_mean as u32,
-                self.chr2,
-                self.order_a_supp_left_mean as u32,
-                self.order_a_supp_right_mean as u32,
-                self.chr2,
-                self.order_b_main_left_mean as u32,
-                self.order_b_main_right_mean as u32,
-                self.chr1,
-                self.order_b_supp_left_mean as u32,
-                self.order_b_supp_right_mean as u32,
-                sample_count_str
-            ));
-
-            out_str
+        // order b
+        self.order_b_main_left_mean = self
+            .order_b_main_left_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_b_main_left_most_splice_sites.len() as f64;
+        self.order_b_main_right_mean = self
+            .order_b_main_right_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_b_main_right_most_splice_sites.len() as f64;
+        self.order_b_supp_left_mean = self
+            .order_b_supp_left_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_b_supp_left_most_splice_sites.len() as f64;
+        self.order_b_supp_right_mean = self
+            .order_b_supp_right_most_splice_sites
+            .iter()
+            .copied()
+            .map(|x| x as f64)
+            .sum::<f64>()
+            / self.order_b_supp_right_most_splice_sites.len() as f64;
+        let left_std: Vec<f64> = self
+            .order_b_main_left_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_b_main_left_mean).powi(2))
+            .collect();
+        let right_std: Vec<f64> = self
+            .order_b_main_right_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_b_main_right_mean).powi(2))
+            .collect();
+        let supp_left_std: Vec<f64> = self
+            .order_b_supp_left_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_b_supp_left_mean).powi(2))
+            .collect();
+        let supp_right_std: Vec<f64> = self
+            .order_b_supp_right_most_splice_sites
+            .iter()
+            .map(|&x| (x as f64 - self.order_b_supp_right_mean).powi(2))
+            .collect();
+        if !left_std.is_empty() {
+            self.order_b_main_left_std =
+                (left_std.iter().sum::<f64>() / left_std.len() as f64).sqrt();
         }
+        if !right_std.is_empty() {
+            self.order_b_main_right_std =
+                (right_std.iter().sum::<f64>() / right_std.len() as f64).sqrt();
+        }
+        if !supp_left_std.is_empty() {
+            self.order_b_supp_left_std =
+                (supp_left_std.iter().sum::<f64>() / supp_left_std.len() as f64).sqrt();
+        }
+        if !supp_right_std.is_empty() {
+            self.order_b_supp_right_std =
+                (supp_right_std.iter().sum::<f64>() / supp_right_std.len() as f64).sqrt();
+        }
+
+        let mut is_good = false;
+        // if order_a_main overlaop with order_b_supp, then it is not a good fusion
+        let main_a = vec![self.order_a_main_left_mean, self.order_a_main_right_mean];
+        let main_b = vec![self.order_b_main_left_mean, self.order_b_main_right_mean];
+        let supp_a = vec![self.order_a_supp_left_mean, self.order_a_supp_right_mean];
+        let supp_b = vec![self.order_b_supp_left_mean, self.order_b_supp_right_mean];
+        if is_overlap(&main_a, &supp_b) && is_overlap(&main_b, &supp_a) {
+            is_good = true;
+        }
+
+        is_good
     }
 
+    pub fn get_string(&self, index_info: &DatasetInfo) -> String {
+        let mut out_str = String::new();
+        let total_samples = index_info.get_size();
+
+        let mut merged_sample_evidence = FxHashMap::default();
+
+        for sample_evidence in self.evidence_by_sample.iter() {
+            for (sample_id, count) in sample_evidence.iter() {
+                *merged_sample_evidence.entry(*sample_id).or_insert(0) += *count;
+            }
+        }
+
+        let mut sample_count_str = String::new();
+        for sample_id in 0..total_samples {
+            if let Some(count) = merged_sample_evidence.get(&(sample_id as u32)) {
+                sample_count_str.push_str(&format!("{}\t", count));
+            } else {
+                sample_count_str.push_str("0\t");
+            }
+        }
+
+        out_str.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}\n",
+            self.gene1,
+            self.gene2,
+            self.total_evidences,
+            total_samples,
+            self.gene_combination.len() > 1,
+            self.chr1,
+            self.order_a_main_left_mean as u32,
+            self.order_a_main_right_mean as u32,
+            self.chr2,
+            self.order_a_supp_left_mean as u32,
+            self.order_a_supp_right_mean as u32,
+            self.chr2,
+            self.order_b_main_left_mean as u32,
+            self.order_b_main_right_mean as u32,
+            self.chr1,
+            self.order_b_supp_left_mean as u32,
+            self.order_b_supp_right_mean as u32,
+            sample_count_str
+        ));
+
+        out_str
+    }
+
+    pub fn get_table_header(index_info: &DatasetInfo) -> String {
+        let sample_names = index_info.get_sample_names();
+        // dbg!(&sample_names);
+        let sample_str = sample_names.join("\t");
+
+        let header = format!("geneA_name\tgeneB_name\ttotal_evidences\ttotal_samples\tis_two_strand\tAtoB_primary_start\tAtoB_primary_end\tAtoB_supp_start\tAtoB_supp_end\tBtoA_primary_start\tBtoA_primary_end\tBtoA_supp_start\tBtoA_supp_end\t{}", sample_str);
+        // dbg!(&header);
+        header
+    }
+}

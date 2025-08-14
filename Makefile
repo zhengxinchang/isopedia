@@ -3,6 +3,12 @@ SHELL := /bin/bash
 
 build:
 	cargo build --release
+	cargo build --release --target x86_64-unknown-linux-musl
+
+strip:
+	cargo strip --target x86_64-unknown-linux-musl
+	
+
 
 push:
 	cargo fmt && git add . && git commit -m "WIP" && git push

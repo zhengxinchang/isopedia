@@ -2,7 +2,6 @@ use std::io::BufRead;
 
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
-use log::debug;
 use noodles_gtf::Reader as gtfReader;
 use rust_lapper::{Interval, Lapper};
 use std::collections::HashMap;
@@ -290,7 +289,6 @@ impl GeneIntervalTree {
                     // log::debug!("No matches found for splice sites: {:?}", splice_sites);
                     return None;
                 } else {
-
                     let mut potential_maches = Vec::new();
 
                     for gene in result.iter() {
@@ -315,21 +313,18 @@ impl GeneIntervalTree {
                     } else {
                         potential_maches.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
 
-                        
                         if potential_maches.len() == 1 {
                             // unique match
                             let (gene, splice_sites) = potential_maches[0].clone();
                             // debug!("Unique match found: {}", gene.gene_name);
                             return Some((gene, splice_sites, CandidateMatchStatus::Unique));
                         } else {
-
                             return Some((
                                 potential_maches[0].0.clone(),
                                 potential_maches[0].1.clone(),
                                 CandidateMatchStatus::Ambiguous,
                             ));
                         }
-
                     }
 
                     // sort by the number of matched splice sites
@@ -340,7 +335,7 @@ impl GeneIntervalTree {
     }
 }
 
-#[derive(Debug, Clone,PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CandidateMatchStatus {
     Unique,
     Ambiguous,
