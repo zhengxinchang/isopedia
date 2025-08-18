@@ -53,3 +53,11 @@ pub fn is_overlap(a: &Vec<f64>, b: &Vec<f64>) -> bool {
     // Check if the ranges overlap
     (a_start <= b_end) && (b_start <= a_end)
 }
+
+pub fn calc_cpm(val_u32: &u32, total_u32: &u32) -> f64 {
+    if *val_u32 == 0 || *total_u32 == 0 {
+        return 0.0;
+    }
+
+    (*val_u32 as f64 / *total_u32 as f64) * 1_000_000.0
+}

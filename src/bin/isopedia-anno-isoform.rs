@@ -8,9 +8,15 @@ use std::{
 use anyhow::Result;
 use clap::{command, Parser};
 use isopedia::{
-    bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker,
-    isoform::{self, MergedIsoform}, isoformarchive::read_record_from_archive, meta::Meta,
+    bptree::BPForest,
+    constants::*,
+    dataset_info::DatasetInfo,
+    gtf::TranscriptChunker,
+    isoform::{self, MergedIsoform},
+    isoformarchive::read_record_from_archive,
+    meta::Meta,
     tmpidx::MergedIsoformOffsetPtr,
+    utils,
 };
 use log::{error, info};
 use serde::Serialize;
@@ -133,7 +139,7 @@ fn main() -> Result<()> {
     writer.write(meta.get_meta_table(Some("##")).as_bytes())?;
 
     writer.write(
-        "#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes".as_bytes()
+        "#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\thit\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes()
     )?;
 
     dataset_info.get_sample_names().iter().for_each(|x| {
@@ -142,16 +148,6 @@ fn main() -> Result<()> {
             .expect("Failed to write sample header");
     });
 
-    writer
-            .write(
-                "chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\thit\tmin_read\tpositive_count/sample_size\tattributes"
-                    .as_bytes(),
-            )?;
-    dataset_info.get_sample_names().iter().for_each(|x| {
-        writer
-            .write(format!("\t{}", x).as_bytes())
-            .expect("Failed to write sample header");
-    });
     writer.write("\n".as_bytes())?;
 
     let mut isofrom_archive = std::io::BufReader::new(
@@ -165,6 +161,8 @@ fn main() -> Result<()> {
     let mut acc_sample_evidence_arr = vec![0u32; dataset_info.get_size()];
 
     let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
+
+    const FORMAT: &str = "CPM:COUNT";
     for trans in gtf {
         iter_count += 1;
 
@@ -196,7 +194,8 @@ fn main() -> Result<()> {
             hit_count += 1;
         }
 
-        if target.len() > 0 { // have hits
+        if target.len() > 0 {
+            // have hits
             acc_pos_count.fill(0);
             acc_sample_evidence_arr.fill(0);
 
@@ -224,7 +223,6 @@ fn main() -> Result<()> {
                     }
                 });
 
-
             let confidence = isoform::MergedIsoform::get_confidence_value(
                 acc_sample_evidence_arr.clone(),
                 &dataset_info,
@@ -232,7 +230,7 @@ fn main() -> Result<()> {
 
             write!(
                 writer,
-                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t",
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t{}\t",
                 trans.chrom,
                 trans.start,
                 trans.end,
@@ -244,20 +242,24 @@ fn main() -> Result<()> {
                 &cli.min_read,
                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
                 dataset_info.get_size(),
-                trans.get_attributes()
+                trans.get_attributes(),
+                FORMAT
             )?;
 
             for (i, val) in acc_sample_evidence_arr.iter().enumerate() {
                 if i > 0 {
                     write!(writer, "\t")?;
                 }
-                write!(writer, "{}", val)?;
+
+                let cpm = utils::calc_cpm(val, &dataset_info.sample_total_evidence_vec[i]);
+
+                write!(writer, "{}:{}", cpm, val)?;
             }
             write!(writer, "\n")?;
         } else {
             write!(
                 writer,
-                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\tNA\t{}\t",
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\tNA\t{}\t{}\t",
                 trans.chrom,
                 trans.start,
                 trans.end,
@@ -266,7 +268,8 @@ fn main() -> Result<()> {
                 trans.trans_id,
                 trans.gene_id,
                 &cli.min_read,
-                trans.get_attributes()
+                trans.get_attributes(),
+                FORMAT
             )?;
             let sample_count = dataset_info.get_sample_names().len();
             for i in 0..sample_count {

@@ -48,8 +48,7 @@ chr2 \t 50795173 \t chr17 \t 61368325 \t BCAS4:BCAS3,UHR(optional)
 # Discover any potential fusions using a GTF file
 isopedia-anno-fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.txt
 
-"#
-)]
+"#)]
 struct Cli {
     /// index directory
     #[arg(short, long)]

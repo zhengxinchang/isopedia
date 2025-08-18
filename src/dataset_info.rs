@@ -12,8 +12,7 @@ pub struct DatasetInfo {
     name2idx: FxHashMap<String, u32>,
     name_vec: Vec<String>,
     path_vec: Vec<PathBuf>,
-    isoform_size: Vec<u32>,
-    total_evidence_vec: Vec<u32>,
+    pub sample_total_evidence_vec: Vec<u32>,
     pub sample_size: usize,
 }
 
@@ -23,8 +22,7 @@ impl DatasetInfo {
             name2idx: FxHashMap::default(),
             name_vec: Vec::new(),
             path_vec: Vec::new(),
-            isoform_size: Vec::new(),
-            total_evidence_vec: Vec::new(),
+            sample_total_evidence_vec: Vec::new(),
             sample_size: 0,
         }
     }
@@ -32,7 +30,6 @@ impl DatasetInfo {
     /// parse sample from tab-separated file
     pub fn parse_manifest(path: &PathBuf) -> DatasetInfo {
         let content = std::fs::read_to_string(path).unwrap();
-
         let mut meta = DatasetInfo::new();
         for line in content.lines().skip(1) {
             let fields = line
@@ -43,7 +40,7 @@ impl DatasetInfo {
             let path = PathBuf::from(&fields[0]);
             meta.add_sample(name, Some(path));
         }
-        meta.isoform_size = vec![0; meta.sample_size];
+        meta.sample_total_evidence_vec = vec![0; meta.sample_size];
         meta
     }
 
@@ -77,7 +74,7 @@ impl DatasetInfo {
     }
 
     pub fn add_sample_evidence(&mut self, idx: usize, evidence: u32) {
-        self.isoform_size[idx] += evidence;
+        self.sample_total_evidence_vec[idx] += evidence;
     }
 
     pub fn get_path_list(&self) -> Vec<PathBuf> {

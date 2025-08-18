@@ -349,7 +349,6 @@ impl FusionCluster {
         self.gene_combination.insert(gene_natural_order);
 
         if (self.gene1 == gene1) && (self.gene2 == gene2) {
-
             self.order_a_main_left_most_splice_sites.push(
                 fusion_aggr
                     .left_matched_splice_junctions

@@ -10,5 +10,5 @@ X4. add metadata looking up funciton
 X5. fusion gene batch search by providing a bed file of breakpoints
 X6. fusion gene search by provide a bed file of gene regions[discovery mode]
 7. merge different isoform.gz from replicates
-8. confident value
+X8. confident value
 9. change the constant sample size to dynamic.

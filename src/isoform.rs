@@ -425,36 +425,54 @@ impl MergedIsoform {
         let n = dataset_info.get_size();
         let mut total = 0;
         let mut sorted_evidence = Vec::new();
+        let mut evidence_frac_vec = Vec::new();
         let mut max_reads = 0;
+        let mut positive_samples: f64 = 0.0;
         for idx in 0..n {
             if evidence_arr[idx] > max_reads {
                 max_reads = evidence_arr[idx];
             }
+
+            if evidence_arr[idx] > 0 {
+                positive_samples += 1.0;
+            }
+
             sorted_evidence.push(evidence_arr[idx]);
             total += evidence_arr[idx];
+
+            if evidence_arr[idx] > 0 {
+                let frac = evidence_arr[idx] as f64
+                    / dataset_info.sample_total_evidence_vec[idx] as f64
+                    * 1000000.0;
+                evidence_frac_vec.push(frac.ln());
+            }
         }
 
-        let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
+        // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
 
         sorted_evidence.sort_unstable_by(|a, b| b.cmp(a)); // sort in descending order
-        dbg!(&sorted_evidence);
+                                                           // dbg!(&sorted_evidence);
 
         let mut tmp = 0;
         for (i, &e) in sorted_evidence.iter().enumerate() {
             tmp += (i + 1) as u32 * e;
         }
 
-        dbg!(n, tmp);
+        // dbg!(n, tmp);
         let a = 2.0f64 * (tmp as f64) / (n as f64 * total as f64);
         let b = ((n + 1) as f64) / n as f64;
 
-        dbg!(a, b);
+        // dbg!(a, b);
         let gini = a - b;
-        dbg!(gini, avg_reads, max_reads);
+        // dbg!(gini, avg_reads, max_reads);
 
-        let confidence = (1.0 - gini) * avg_reads / max_reads as f64;
-
-        confidence
+        if positive_samples == 0.0 {
+            return 0.0;
+        } else {
+            return (positive_samples / n as f64)
+                * (evidence_frac_vec.iter().sum::<f64>() / evidence_frac_vec.len() as f64).exp()
+                * (1.0 - gini);
+        }
     }
 }
 
@@ -465,9 +483,10 @@ mod tests {
 
     #[test]
     fn test_get_confidence_value() {
-        let evidence_arr = vec![1, 2, 3, 4];
+        let evidence_arr = vec![999, 0, 0, 0];
         let mut dataset_info = DatasetInfo::new();
         dataset_info.sample_size = evidence_arr.len();
+        dataset_info.sample_total_evidence_vec = vec![10000, 20000, 30000, 40000];
 
         let confidence = MergedIsoform::get_confidence_value(evidence_arr, &dataset_info);
 
