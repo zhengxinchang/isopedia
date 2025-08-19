@@ -365,7 +365,7 @@ fn main() -> Result<()> {
         let mut mywriter = MyGzWriter::new(&cli.output)?; 
 
             let mut header_str = String::from(
-                "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive_sample_count/sample_size",
+                "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size",
             );
             let sample_name = dataset_info.get_sample_names();
             for name in sample_name {
@@ -395,7 +395,7 @@ fn main() -> Result<()> {
         let mut mywriter = MyGzWriter::new(&cli.output)?;
 
         let mut header_str = String::from(
-            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive_sample_count/sample_size",
+            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size",
         );
         let sample_name = dataset_info.get_sample_names();
         for name in sample_name {
