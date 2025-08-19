@@ -5,7 +5,7 @@ use isopedia::isoformarchive::read_record_from_archive;
 use isopedia::tmpidx::Tmpindex;
 use log::error;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser, Clone, Debug)]
 #[command(name = "isopedia-tool")]
@@ -28,12 +28,26 @@ pub trait Validate {
 }
 
 #[derive(Parser, Debug, Clone)]
+#[command(after_long_help="
+
+Convert the binary index files into plain text format.
+
+Examples: 
+
+isopedia-tool inspect --idx <IDX> -t [tmpidx|archive|dbinfo] --output <OUTPUT>
+
+For the -f paramter:
+tmpidx: Inspect the temporary index files
+archive: Inspect the archive files
+dbinfo: Inspect the database information file
+
+")]
 pub struct InspectArgs {
     /// index directory
     #[arg(short, long)]
     pub idx: PathBuf,
 
-    /// type of file to be inspect can be either 'tmpidx' or 'archive' or "meta"
+    /// type of file to be inspect can be either 'tmpidx' or 'archive' or "dbinfo"
     #[arg(short = 't', long, name = "type")]
     pub type_f: String,
 
@@ -51,8 +65,8 @@ impl Validate for InspectArgs {
             is_ok = false;
         }
 
-        if self.type_f != "tmpidx" && self.type_f != "archive" && self.type_f != "meta" {
-            error!("--type: type must be either 'tmpidx' or 'archive' or 'meta'");
+        if self.type_f != "tmpidx" && self.type_f != "archive" && self.type_f != "dbinfo" {
+            error!("--type: type must be either 'tmpidx' or 'archive' or 'dbinfo'");
             is_ok = false;
         }
 
@@ -130,6 +144,10 @@ fn inspect_meta(idx: &PathBuf) {
     dbg!(&dataset_info);
 }
 
+fn merge_replicates(files:Vec<PathBuf>, output: &PathBuf) {
+
+}
+
 fn main() {
     env_logger::Builder::from_env(
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
@@ -156,7 +174,7 @@ fn main() {
                 inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
             } else if inspec_args.type_f == "archive" {
                 inspect_archive(&inspec_args.idx, &inspec_args.output);
-            } else if inspec_args.type_f == "meta" {
+            } else if inspec_args.type_f == "dbinfo" {
                 inspect_meta(&inspec_args.idx);
             }
         }
