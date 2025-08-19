@@ -139,7 +139,7 @@ fn main() -> Result<()> {
     writer.write(meta.get_meta_table(Some("##")).as_bytes())?;
 
     writer.write(
-        "#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\thit\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes()
+        "#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\tdetected\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes()
     )?;
 
     dataset_info.get_sample_names().iter().for_each(|x| {
@@ -259,7 +259,7 @@ fn main() -> Result<()> {
         } else {
             write!(
                 writer,
-                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\tNA\t{}\t{}\t",
+                "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\t0/{}\t{}\t{}\t",
                 trans.chrom,
                 trans.start,
                 trans.end,
@@ -268,6 +268,7 @@ fn main() -> Result<()> {
                 trans.trans_id,
                 trans.gene_id,
                 &cli.min_read,
+                dataset_info.get_size(),
                 trans.get_attributes(),
                 FORMAT
             )?;
@@ -276,7 +277,7 @@ fn main() -> Result<()> {
                 if i > 0 {
                     write!(writer, "\t")?;
                 }
-                write!(writer, "0")?;
+                write!(writer, "0:0")?;
             }
 
             write!(writer, "\n")?;
