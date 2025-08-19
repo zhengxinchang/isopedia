@@ -280,20 +280,21 @@ fn anno_single_fusion(
         breakpoints.1 .1.to_string(),
         breakpoints.2.to_string(),
         cli.min_read.to_string(),
-        meta.get_size().to_string(),
-        fusion_evidence_vec
+        format!("{}/{}",fusion_evidence_vec
             .iter()
             .filter(|&&x| x >= cli.min_read)
             .count()
-            .to_string(),
+            .to_string(),meta.get_size()),
+
     ];
 
     for idx in 0..meta.get_size() {
-        if fusion_evidence_vec[idx] >= cli.min_read {
-            record_parts.push(fusion_evidence_vec[idx].to_string());
-        } else {
-            record_parts.push("0".to_string());
-        }
+        // if fusion_evidence_vec[idx] >= cli.min_read {
+        //     record_parts.push(fusion_evidence_vec[idx].to_string());
+        // } else {
+        //     record_parts.push("0".to_string());
+        // }
+        record_parts.push(fusion_evidence_vec[idx].to_string());
     }
 
     let record_string = record_parts.join("\t") + "\n";
@@ -349,6 +350,7 @@ fn main() -> Result<()> {
 
     let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
 
+
     if cli.pos.is_some() {
         let pos = &cli.pos.clone().unwrap();
         let breakpoints: BreakpointType = match process_fusion_positions(pos) {
@@ -359,17 +361,19 @@ fn main() -> Result<()> {
             }
         };
 
-        let mut mywriter = MyGzWriter::new(&cli.output)?;
+        // let mut mywriter = MyGzWriter::new(&cli.output)?;
+        let mut mywriter = MyGzWriter::new(&cli.output)?; 
 
-        let mut header_str = String::from(
-            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count",
-        );
-        let sample_name = dataset_info.get_sample_names();
-        for name in sample_name {
-            header_str.push_str(&format!("\t{}", name));
-        }
-        header_str.push('\n');
-        mywriter.write_all_bytes(header_str.as_bytes())?;
+            let mut header_str = String::from(
+                "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive_sample_count/sample_size",
+            );
+            let sample_name = dataset_info.get_sample_names();
+            for name in sample_name {
+                header_str.push_str(&format!("\t{}", name));
+            }
+            header_str.push('\n');
+            mywriter.write_all_bytes(header_str.as_bytes())?;
+
 
         anno_single_fusion(
             breakpoints,
@@ -387,10 +391,11 @@ fn main() -> Result<()> {
         let bed_file = File::open(&pos_bed).context("Failed to open the provided bed file")?;
         let reader = std::io::BufReader::new(bed_file);
 
+        // not use the common writer since the header is different in gtf mode(discovery mode)
         let mut mywriter = MyGzWriter::new(&cli.output)?;
 
         let mut header_str = String::from(
-            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tsample_size\tpositive_sample_count",
+            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive_sample_count/sample_size",
         );
         let sample_name = dataset_info.get_sample_names();
         for name in sample_name {
