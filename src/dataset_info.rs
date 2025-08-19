@@ -30,7 +30,7 @@ impl DatasetInfo {
     /// parse sample from tab-separated file
     pub fn parse_manifest(path: &PathBuf) -> DatasetInfo {
         let content = std::fs::read_to_string(path).unwrap();
-        let mut meta = DatasetInfo::new();
+        let mut dbinfo = DatasetInfo::new();
         for line in content.lines().skip(1) {
             let fields = line
                 .split('\t')
@@ -38,10 +38,10 @@ impl DatasetInfo {
                 .collect::<Vec<String>>();
             let name = fields[1].clone();
             let path = PathBuf::from(&fields[0]);
-            meta.add_sample(name, Some(path));
+            dbinfo.add_sample(name, Some(path));
         }
-        meta.sample_total_evidence_vec = vec![0; meta.sample_size];
-        meta
+        dbinfo.sample_total_evidence_vec = vec![0; dbinfo.sample_size];
+        dbinfo
     }
 
     pub fn save_to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {

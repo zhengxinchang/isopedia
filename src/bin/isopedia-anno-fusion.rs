@@ -280,12 +280,15 @@ fn anno_single_fusion(
         breakpoints.1 .1.to_string(),
         breakpoints.2.to_string(),
         cli.min_read.to_string(),
-        format!("{}/{}",fusion_evidence_vec
-            .iter()
-            .filter(|&&x| x >= cli.min_read)
-            .count()
-            .to_string(),meta.get_size()),
-
+        format!(
+            "{}/{}",
+            fusion_evidence_vec
+                .iter()
+                .filter(|&&x| x >= cli.min_read)
+                .count()
+                .to_string(),
+            meta.get_size()
+        ),
     ];
 
     for idx in 0..meta.get_size() {
@@ -350,7 +353,6 @@ fn main() -> Result<()> {
 
     let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
 
-
     if cli.pos.is_some() {
         let pos = &cli.pos.clone().unwrap();
         let breakpoints: BreakpointType = match process_fusion_positions(pos) {
@@ -362,18 +364,16 @@ fn main() -> Result<()> {
         };
 
         // let mut mywriter = MyGzWriter::new(&cli.output)?;
-        let mut mywriter = MyGzWriter::new(&cli.output)?; 
+        let mut mywriter = MyGzWriter::new(&cli.output)?;
 
-            let mut header_str = String::from(
-                "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size",
-            );
-            let sample_name = dataset_info.get_sample_names();
-            for name in sample_name {
-                header_str.push_str(&format!("\t{}", name));
-            }
-            header_str.push('\n');
-            mywriter.write_all_bytes(header_str.as_bytes())?;
-
+        let mut header_str =
+            String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size");
+        let sample_name = dataset_info.get_sample_names();
+        for name in sample_name {
+            header_str.push_str(&format!("\t{}", name));
+        }
+        header_str.push('\n');
+        mywriter.write_all_bytes(header_str.as_bytes())?;
 
         anno_single_fusion(
             breakpoints,
@@ -394,9 +394,8 @@ fn main() -> Result<()> {
         // not use the common writer since the header is different in gtf mode(discovery mode)
         let mut mywriter = MyGzWriter::new(&cli.output)?;
 
-        let mut header_str = String::from(
-            "chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size",
-        );
+        let mut header_str =
+            String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size");
         let sample_name = dataset_info.get_sample_names();
         for name in sample_name {
             header_str.push_str(&format!("\t{}", name));

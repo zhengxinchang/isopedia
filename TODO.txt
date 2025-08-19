@@ -9,8 +9,8 @@ X4. add metadata looking up funciton
     
 X5. fusion gene batch search by providing a bed file of breakpoints
 X6. fusion gene search by provide a bed file of gene regions[discovery mode]
-7. merge different isoform.gz from replicates
+X7. merge different isoform.gz from replicates
 X8. confident value
 9. change the constant sample size to dynamic.
-min-read should only affect the postive count
+X10 min-read should only affect the postive count
 

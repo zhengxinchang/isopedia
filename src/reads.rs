@@ -274,7 +274,7 @@ impl SingleRead {
 // use crate::extraction::single_read::Segment;
 // use crate::extraction::single_read::Strand;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReadDiff {
     pub left: u64,
     pub right: u64,
@@ -284,7 +284,7 @@ pub struct ReadDiff {
 
 /// Aggregated isoform from single sample in extractor
 /// also used in aggregator
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AggrRead {
     pub signature: u64,
     pub chrom: String,
@@ -444,6 +444,11 @@ impl AggrRead {
             splice_junctions,
             read_diffs: read_diff.collect(),
         }
+    }
+
+    pub fn merge(&mut self, other: AggrRead) {
+        self.evidence += other.evidence;
+        self.read_diffs.extend(other.read_diffs);
     }
 }
 
