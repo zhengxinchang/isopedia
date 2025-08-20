@@ -216,10 +216,7 @@ fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-
-
-
-#[derive(Parser, Clone, Debug,Serialize,Deserialize)]
+#[derive(Parser, Clone, Debug, Serialize, Deserialize)]
 #[command(name = "isopedia-tool")]
 #[command(about = "Auxiliary tools for Isopedia")]
 #[command(author = "Xinchang Zheng", version)]
@@ -228,7 +225,7 @@ pub struct ToolCli {
     pub command: ToolsCommands,
 }
 
-#[derive(Subcommand, Clone, Debug,Serialize,Deserialize)]
+#[derive(Subcommand, Clone, Debug, Serialize, Deserialize)]
 pub enum ToolsCommands {
     #[allow(non_camel_case_types)]
     #[command(about = "Inspect index files")]
@@ -304,23 +301,17 @@ isopedia-tool merge -i <INPUT_FILE 1> <INPUT_FILE 2> -o <OUTPUT>
 At least two input files must be specified.
 ")]
 pub struct MergeArgs {
-
     /// input files that generated from isopedia-extr
     #[arg(short, long, num_args = 2..)]
     pub input_files: Vec<PathBuf>,
 
     /// output merged file in gz format
     #[arg(short, long)]
-    pub output: PathBuf,    
-
+    pub output: PathBuf,
 }
 
 impl MergeArgs {
     fn validate(&self) -> bool {
-
-
-
-
         let mut is_ok = true;
 
         if self.input_files.len() < 2 {
@@ -331,7 +322,6 @@ impl MergeArgs {
         is_ok
     }
 }
-
 
 fn greetings(args: &ToolCli) {
     println!("\nIsopedia: [Extract raw isoform singals from BAM/CRAM]\n");
@@ -362,24 +352,25 @@ fn main() {
 
     match cli.command {
         ToolsCommands::inspect(inspec_args) => {
-                        if !inspec_args.validate() {
-                            std::process::exit(1);
-                        }
-        
-                        if inspec_args.type_f == "tmpidx" {
-                            inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
-                        } else if inspec_args.type_f == "archive" {
-                            inspect_archive(&inspec_args.idx, &inspec_args.output);
-                        } else if inspec_args.type_f == "dbinfo" {
-                            inspect_meta(&inspec_args.idx);
-                        }
+            if !inspec_args.validate() {
+                std::process::exit(1);
             }
+
+            if inspec_args.type_f == "tmpidx" {
+                inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
+            } else if inspec_args.type_f == "archive" {
+                inspect_archive(&inspec_args.idx, &inspec_args.output);
+            } else if inspec_args.type_f == "dbinfo" {
+                inspect_meta(&inspec_args.idx);
+            }
+        }
         ToolsCommands::merge(merge_args) => {
             if !merge_args.validate() {
                 std::process::exit(1);
             }
 
-            merge_replicates(&merge_args.input_files, &merge_args.output).expect("Failed to merge replicates");
-        },
+            merge_replicates(&merge_args.input_files, &merge_args.output)
+                .expect("Failed to merge replicates");
+        }
     }
 }

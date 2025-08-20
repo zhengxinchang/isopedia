@@ -15,6 +15,7 @@ use isopedia::{
     reads::{AggrRead, SingleRead},
     writer::MyGzWriter,
 };
+use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -142,7 +143,7 @@ fn main() {
     let bam_path = &cli.bam;
     let mut bam_reader = bam::Reader::from_path(bam_path).expect("Failed to open BAM file");
 
-    if &cli.bam.ends_with(".cram") & &cli.reference.is_some() {
+    if (&cli.bam.ends_with(".cram")) & (&cli.reference.is_some()) {
         bam_reader
             .set_reference(
                 cli.reference
@@ -179,7 +180,10 @@ fn main() {
         }
 
         if total_count % batch_size == 0 {
-            info!("Processing {} records", total_count);
+            info!(
+                "Processing {} records",
+                total_count.to_formatted_string(&Locale::en)
+            );
             // batches += 1;
         }
 
@@ -341,10 +345,10 @@ fn main() {
             .write_all_bytes(agg_isoform.to_record().as_bytes())
             .expect("can not write record...");
     }
-    info!("Total records processed: {}", total_count);
+    info!("Total records processed: {}", total_count.to_formatted_string(&Locale::en));
 
-    info!("Total valid records: {}", n_record);
+    info!("Total valid records: {}", n_record.to_formatted_string(&Locale::en));
     // info!("Total records : {}", n_record);
-    info!("Total records skipped: {}", skipped_records);
+    info!("Total records skipped: {}", skipped_records.to_formatted_string(&Locale::en));
     info!("Finished");
 }

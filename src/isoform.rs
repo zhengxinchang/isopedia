@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::{io::Read, vec};
 
 use flate2::bufread::GzEncoder;
 use rustc_hash::FxHashMap;
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::{
-    constants::MAX_SAMPLE_SIZE,
+    // constants::MAX_SAMPLE_SIZE,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     reads::{AggrRead, Segment, Strand},
@@ -32,13 +32,11 @@ pub struct MergedIsoform {
     pub signature: u64,
     pub total_evidence: u32,
     pub sample_size: u32,
-    #[serde_as(as = "[_; 256]")]
     // Records the number of reads (evidence) from each sample that support the merged isoform.
     // the evidence number is also the size of read_diffs_slim_vec for this sample.
-    pub sample_evidence_arr: [u32; MAX_SAMPLE_SIZE],
-    #[serde_as(as = "[_; 256]")]
+    pub sample_evidence_arr: Vec<u32>,
     // Stores the starting index of each sample’s read-level differences (ReadDiffSlim) within the shared isoform_diffs_slim_vec array.
-    pub sample_offset_arr: [u32; MAX_SAMPLE_SIZE],
+    pub sample_offset_arr: Vec<u32>,
     pub chrom: String,
     pub rec_type: RecordType, // indicate the status of the aggr isoform, also reserved for SV.
     pub splice_junctions_vec: Vec<(u64, u64)>,
@@ -72,8 +70,8 @@ impl MergedIsoform {
             signature: aggr_isofrom.signature,
             total_evidence: aggr_isofrom.evidence,
             sample_size: sample_size as u32, // the number of samples
-            sample_evidence_arr: [0; MAX_SAMPLE_SIZE],
-            sample_offset_arr: [0; MAX_SAMPLE_SIZE],
+            sample_evidence_arr: vec![0; sample_size],
+            sample_offset_arr: vec![0; sample_size],
             chrom: aggr_isofrom.chrom.clone(),
             rec_type: RecordType::UnK,
             splice_junctions_vec: Vec::new(),
@@ -310,8 +308,14 @@ impl MergedIsoform {
         }
     }
 
-    pub fn find_fusion_by_breakpoints(&self, chrom: &str, pos: u64, flank: u64) -> Vec<u32> {
-        let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
+    pub fn find_fusion_by_breakpoints(
+        &self,
+        chrom: &str,
+        pos: u64,
+        flank: u64,
+        dbinfo: &DatasetInfo,
+    ) -> Vec<u32> {
+        let mut fusion_evidence_vec = vec![0u32; dbinfo.get_size()];
 
         // for each sampple
         for (idx, (offset, size)) in self

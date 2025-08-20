@@ -206,7 +206,7 @@ fn anno_single_fusion(
     forest: &mut BPForest,
     isofrom_archive: &mut std::io::BufReader<File>,
     archive_buf: &mut Vec<u8>,
-    meta: &DatasetInfo,
+    dbinfo: &DatasetInfo,
 ) -> Result<()> {
     info!(
         "Processing breakpoints: {}:{}-{}:{}",
@@ -234,7 +234,7 @@ fn anno_single_fusion(
         );
     }
 
-    let mut fusion_evidence_vec = vec![0u32; MAX_SAMPLE_SIZE];
+    let mut fusion_evidence_vec = vec![0u32; dbinfo.get_size()];
 
     // process the left targets
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
@@ -245,6 +245,7 @@ fn anno_single_fusion(
             &breakpoints.1 .0,
             breakpoints.1 .1,
             cli.flank,
+            &dbinfo,
         );
         // dbg!(&evidence_vec);
 
@@ -264,6 +265,7 @@ fn anno_single_fusion(
             &breakpoints.0 .0,
             breakpoints.0 .1,
             cli.flank,
+            &dbinfo,
         );
 
         fusion_evidence_vec = fusion_evidence_vec
@@ -287,11 +289,11 @@ fn anno_single_fusion(
                 .filter(|&&x| x >= cli.min_read)
                 .count()
                 .to_string(),
-            meta.get_size()
+            dbinfo.get_size()
         ),
     ];
 
-    for idx in 0..meta.get_size() {
+    for idx in 0..dbinfo.get_size() {
         // if fusion_evidence_vec[idx] >= cli.min_read {
         //     record_parts.push(fusion_evidence_vec[idx].to_string());
         // } else {

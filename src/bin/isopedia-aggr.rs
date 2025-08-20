@@ -12,6 +12,7 @@ use isopedia::{
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
 };
 use log::{error, info};
+use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -186,13 +187,6 @@ fn main() -> Result<()> {
     let mut dataset_info = DatasetInfo::parse_manifest(&cli.input);
 
     let file_list = dataset_info.get_path_list();
-    if file_list.len() > MAX_SAMPLE_SIZE {
-        error!(
-            "The number of samples is larger than the maximum number of samples allowed: {}",
-            MAX_SAMPLE_SIZE
-        );
-        std::process::exit(1);
-    }
 
     let mut chroms = ChromMapping::new();
     info!("Reading files...");
@@ -323,7 +317,7 @@ fn main() -> Result<()> {
             }
 
             batches += 1;
-            info!("Processed: {} records", batch_size * batches);
+            info!("Processed: {} records", (batch_size * batches).to_formatted_string(&Locale::en));
             curr_batch = 0;
             for sig in need_deleted.iter() {
                 merged_map.remove(sig);
@@ -378,7 +372,7 @@ fn main() -> Result<()> {
     }
     info!(
         "Processed: {} records",
-        (batch_size * batches + 1) + curr_batch
+        (batch_size * batches + 1 + curr_batch).to_formatted_string(&Locale::en)
     );
 
     info!(

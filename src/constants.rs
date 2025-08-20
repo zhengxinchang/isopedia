@@ -11,4 +11,4 @@ pub type NodeIDType = u64;
 pub type AddrType = u64;
 pub const LRU_CACHE_SIZE: usize = 100000;
 pub const MAGIC: u64 = 9236;
-pub const MAX_SAMPLE_SIZE: usize = 256;
+// pub const MAX_SAMPLE_SIZE: usize = 256;

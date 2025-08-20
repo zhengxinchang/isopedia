@@ -19,6 +19,7 @@ use isopedia::{
     utils,
 };
 use log::{error, info};
+use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
@@ -168,7 +169,7 @@ fn main() -> Result<()> {
 
         if iter_count == 100000 {
             batch += 1;
-            info!("Processed {} transcripts", iter_count * batch);
+            info!("Processed {} transcripts", (batch * 100000).to_formatted_string(&Locale::en));
             iter_count = 0;
         }
 
@@ -284,7 +285,7 @@ fn main() -> Result<()> {
         }
     }
     let total = hit_count + miss_count;
-    info!("Processed {} transcripts", 100000 * batch + iter_count);
+    info!("Processed {} transcripts", (100000 * batch + iter_count).to_formatted_string(&Locale::en));
     info!("Sample-wide stats: ");
     info!("> Sample\thit\tmiss\tpct");
     for i in 0..dataset_info.get_size() {
@@ -298,9 +299,9 @@ fn main() -> Result<()> {
     }
     info!(
         "Index-wide stats: hit: {}, miss: {}, total: {}, pct: {:.2}%",
-        hit_count,
-        miss_count,
-        hit_count + miss_count,
+        hit_count.to_formatted_string(&Locale::en),
+        miss_count.to_formatted_string(&Locale::en),
+        (hit_count + miss_count).to_formatted_string(&Locale::en),
         hit_count as f64 / (hit_count + miss_count) as f64 * 100f64
     );
 
