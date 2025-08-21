@@ -27,11 +27,11 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com,Xinchang.Zheng@bcm.edu>
 #[clap(after_long_help = "Exmaple:
 
 The input file example(tab-separated)
-(required)                   (reqired) 
---------------------------- ----------
-path                        name 
-/path/to/sample1.isoform.gz sample1
-/path/to/sample2.isoform.gz sample2
+(required)  (required)
+----------  ---------------------------
+name        path
+sample1     /path/to/sample1.isoform.gz
+sample2     /path/to/sample2.isoform.gz
 
 Run aggregation:
 
@@ -86,35 +86,35 @@ impl Cli {
                 }
 
                 if idx > 0 {
-                    if !PathBuf::from(fields[0]).exists() {
+                    if !PathBuf::from(fields[1]).exists() {
                         error!(
-                            "--input: line {}: file {} does not exist in the manifest file.",
+                            "--input: line {}: file {} does not exist, use absolute path",
                             idx + 1,
                             fields[0]
                         );
                         is_ok = false;
                     }
 
-                    if uniq_name.contains(fields[1]) {
+                    if uniq_name.contains(fields[0]) {
                         error!(
                             "--input: line {}: sample name {} is duplicated.",
+                            idx + 1,
+                            fields[0]
+                        );
+                        is_ok = false;
+                    } else {
+                        uniq_name.insert(fields[0]);
+                    }
+
+                    if uniq_path.contains(fields[1]) {
+                        error!(
+                            "--input: line {}: sample path {} is duplicated.",
                             idx + 1,
                             fields[1]
                         );
                         is_ok = false;
                     } else {
-                        uniq_name.insert(fields[1]);
-                    }
-
-                    if uniq_path.contains(fields[0]) {
-                        error!(
-                            "--input: line {}: sample path {} is duplicated.",
-                            idx + 1,
-                            fields[0]
-                        );
-                        is_ok = false;
-                    } else {
-                        uniq_path.insert(fields[0]);
+                        uniq_path.insert(fields[1]);
                     }
                 }
             }
@@ -184,7 +184,7 @@ fn main() -> Result<()> {
     cli.validate();
     greetings(&cli);
 
-    let mut dataset_info = DatasetInfo::parse_manifest(&cli.input);
+    let mut dataset_info = DatasetInfo::parse_manifest(&cli.input)?;
 
     let file_list = dataset_info.get_path_list();
 

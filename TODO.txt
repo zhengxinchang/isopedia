@@ -13,4 +13,9 @@ X7. merge different isoform.gz from replicates
 X8. confident value
 X9. change the constant sample size to dynamic.
 X10 min-read should only affect the postive count
+X11 change gini to depend on CPM 
+
+build index gencode
+build index sg-nex
+build index sra 
 

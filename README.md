@@ -26,9 +26,6 @@ isopeida consists of multiple binaries that have prefix isopedia-*. This naming 
 
 **Download prebuild index and run**
 ```
-# download index and uncompress it
-wget xxx -O index.tar.gz
-tar xzvf index.tar.gz
 
 sopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
 
@@ -37,27 +34,44 @@ isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 
 **Build your own index**
 
+
+Isopedia supports building local index in your own datasets. prerequests are listed below:
+
+1. latest isopedia binaries
+2. A set of mapped bam files(sorted bam are note required)
+3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format
+
+
+<details>
+
+<summary>
+You can find example files and commands at here [click to expand]
+</summary>
+
 ```
+# make sure isopedia in your $PATH or use absolute path to the binaries.
+
+# download the toy_ex 
+git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
+
 # extract isoform signals on each bam individually
-isopedia-extr -b in.bam -o out.isoform.gz
+isopedia-extr -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
+isopedia-extr -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 
-# make a manifest.txt(tab-seprated) of isoform.gz files such as:
-# path                               sample
-# path/to/pb.isoform.gz              pb-bam
-# path/to/ont.isoform.gz             ont-bam
+# make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
 
-# aggregate
-isopedia-aggr  -i manifest.txt -o lr_idx/
+# aggregate, only first two column will be read in this step.
+isopedia-aggr  -i manifest.tsv -o index/
 
-# build index
-isopedia-idx  -i lr_idx/
+# build index. provide the same manifest file, the rest of meta columns will be read.
+isopedia-idx  -i index/ -m manifest.tsv 
 
-# annoate isoform by provide a GTF file
-isopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
+# test your index by run a small annotation task.
+isopedia-anno-isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.tsv
 
-# annotate fusion by provide breapoint string
-isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 ```
+</details>
+
 
 
 # How it works
@@ -68,21 +82,6 @@ isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 
 
 # Usage
-
-```
-Usage: isopedia <COMMAND>
-
-Commands:
-  extract  Extract isoform signals from Alignment file(BAM/CRAM)
-  aggr     Aggregate and merge signals from multiple samples into a unified file
-  idx      Create searchable indices
-  search   Search and retrieve signals across indexed samples
-  help     Print this message or the help of the given subcommand(s)
-
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
-```
 
 
 There are four main steps to use isopedia:
@@ -97,14 +96,17 @@ There are four main steps to use isopedia:
 Extract isoform signals from Alignment file(BAM/CRAM)
 
 ```
-Usage: isopedia extract [OPTIONS] --bam <BAM> --output <OUTPUT>
+Usage: isopedia-extr [OPTIONS] --bam <BAM> --output <OUTPUT>
 
 Options:
   -b, --bam <BAM>              Input file in BAM/CRAM format
-  -r, --reference <REFERENCE>  Reference file for CRAMs
-  -o, --output <OUTPUT>        Output
+  -r, --reference <REFERENCE>  Reference file for CRAMs. Must provide for CRAM format input
+  -o, --output <OUTPUT>        Name of the output signal file
       --mapq <MAPQ>            Minimal mapping quality of reads [default: 5]
+      --use-secondary          Include secondary reads in the analysis
+      --debug                  Debug mode
   -h, --help                   Print help
+  -V, --version                Print version
 
 ```
 Please note that if the input file is in CRAM format, you need to provide the reference file for CRAMs.

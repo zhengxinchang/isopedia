@@ -6,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
     vec,
 };
+use anyhow::Result;
+
 #[derive(Serialize, Deserialize, Debug)]
 
 pub struct DatasetInfo {
@@ -28,20 +30,25 @@ impl DatasetInfo {
     }
 
     /// parse sample from tab-separated file
-    pub fn parse_manifest(path: &PathBuf) -> DatasetInfo {
-        let content = std::fs::read_to_string(path).unwrap();
+    pub fn parse_manifest(path: &PathBuf) -> Result<DatasetInfo> {
+        let content = std::fs::read_to_string(path)?;
         let mut dbinfo = DatasetInfo::new();
         for line in content.lines().skip(1) {
             let fields = line
                 .split('\t')
                 .map(|x| x.to_string())
                 .collect::<Vec<String>>();
-            let name = fields[1].clone();
-            let path = PathBuf::from(&fields[0]);
+
+            if fields.len() < 2 {
+                return Err(anyhow::anyhow!("Invalid line in manifest: {}", line));
+            }
+            let name = fields[0].clone();
+            let path = PathBuf::from(&fields[1]);
             dbinfo.add_sample(name, Some(path));
         }
         dbinfo.sample_total_evidence_vec = vec![0; dbinfo.sample_size];
-        dbinfo
+        Ok( dbinfo )
+
     }
 
     pub fn save_to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {

@@ -99,6 +99,7 @@ fn main() -> Result<()> {
 
     let chrom_map = ChromMapping::decode(&chrom_bytes);
 
+    info!("Loading...");
     let mut tmpidx = Tmpindex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
 
     for chrom_id in chrom_map.get_chrom_idxs() {
