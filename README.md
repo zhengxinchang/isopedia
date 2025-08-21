@@ -42,11 +42,11 @@ isopeida consists of multiple binaries that have prefix isopedia-*. This naming 
 ```bash
 isopedia-anno-isoform -i index/ -g query.gtf -o isoform.anno.tsv
 
-isopedia-anno-fusion -i index/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
+isopedia-anno-fusion  -i index/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 
-isopedia-anno-fusion -i index/ -P fusion_query.bed -o fusion.anno.tsv
+isopedia-anno-fusion  -i index/ -P fusion_query.bed -o fusion.anno.tsv
 
-isopedia-anno-fusion -i index/ -g gene.gtf -o fusion.discovery.tsv
+isopedia-anno-fusion  -i index/ -g gene.gtf -o fusion.discovery.tsv
 ```
 
 **Build your own index**
