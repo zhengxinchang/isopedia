@@ -4,6 +4,20 @@
 
 Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
 
+<details>
+<summary>Table of Content</summary>
+
+- [Quick Q&A](#quick-qa)
+- [Quick Start](#quick-start)
+- [How it works](#how-it-works)
+- [Usage](#usage)
+  - [Annotate (search) isoforms/transcripts](#annotate-search-isoformstranscripts)
+  - [Annotate (search) fusion genes](#annotate-search-fusion-genes)
+  - [Find potential fusion genes](#find-potential-fusion-genes)
+- [Installation](#installation)
+</details>
+
+
 # Quick Q&A:
 
 **Q1: What gap does Isopedia aim to fill?**
@@ -26,13 +40,13 @@ isopeida consists of multiple binaries that have prefix isopedia-*. This naming 
 
 **Download prebuild index and run**
 ```bash
-sopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
+isopedia-anno-isoform -i index/ -g query.gtf -o isoform.anno.tsv
 
-isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
+isopedia-anno-fusion -i index/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 
-isopedia-anno-fusion -i lr_idx/ -P fuison_query.bed -o fusion.anno.tsv
+isopedia-anno-fusion -i index/ -P fusion_query.bed -o fusion.anno.tsv
 
-isopedia-anno-fusion -i lr_idx/ -g gene.gtf -o fusion.discovery.tsv
+isopedia-anno-fusion -i index/ -g gene.gtf -o fusion.discovery.tsv
 ```
 
 **Build your own index**
@@ -82,11 +96,11 @@ isopedia-anno-isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.t
 ![how-it-works](./img/how-it-works.png)
 
 
-# Usage for annotation related commands
+# Usage
 
-## Annotate(search) isoforms/transcirpts
+## Annotate (search) isoforms/transcripts
 
-### Porpuse:
+### Purpose:
 
 search transcripts from input gtf file and return how many samples in the index have evidence. 
 
@@ -192,9 +206,9 @@ $$G = 2 \frac{\sum_{i=1}^{n} i*CPM_{i}}{n \sum_{i=1}^{n} CPM_{i} } - \frac{n+1}{
 </details>
 
 
-## Annotate(search) fusion genes 
+## Annotate (search) fusion genes
 
-### Porpuse:
+### Purpose:
 
 search fusion from the index and report evidence.
 
@@ -256,14 +270,63 @@ Options:
 </details>
 
 
+### Output
+
+| Column name              | Description                                |
+|---------------------------|--------------------------------------------|
+| chr1                      | Chromosome of the first breakpoint         |
+| pos1                      | Position of the first breakpoint           |
+| chr2                      | Chromosome of the second breakpoint        |
+| pos2                      | Position of the second breakpoint          |
+| id                        | Event or transcript ID                     |
+| min_read                  | Minimum number of reads required           |
+| sample_size               | Total number of samples considered         |
+| positive_sample_count     | Number of positive samples                 |
+| sample1                      | Value/status in sample1                |
+|...|...|
+| sampleN                       | Value/status in sampleN                 |
+
+
+
 ## Find potential fusion genes
+
+### Purpose:
+
+search fusion from the index and report evidence.
+
+### Example:
 
 ```bash
 
+isopedia-anno-fusion -i index/  -G gene.gtf -o fusion.discovery.out.gz
 ```
 
-# Usage for building index
+key parameters:
 
+`--gene-gtf(-G)` a gtf file that has gene records. the rest of feature will be ignored.
+
+### Output
+
+
+| Column name               | Description                                             |
+|----------------------------|---------------------------------------------------------|
+| gene1_name                 | Name of gene 1                                         |
+| gene1_id                   | ID of gene 1                                           |
+| gene2_name                 | Name of gene 2                                         |
+| gene2_id                   | ID of gene 2                                           |
+| chr1                       | Chromosome of gene 1                                   |
+| start1                     | Consensus start position for gene 1 mapped region                              |
+| end1                       | Consensus end position for gene 1 mapped region                              |
+| chr2                       | Chromosome of gene 2                                   |
+| start2                     | Consensus start position for gene 2 mapped region                              |
+| end2                       | Consensus end position for gene 2 mapped region                              |
+| total_evidences            | Total number of supporting evidences                   |
+| total_samples              | Total number of samples supporting the event           |
+| splice_junctions_count1    | Number of splice junctions supporting gene 1           |
+| splice_junctions_count2    | Number of splice junctions supporting gene 2           |
+| Sample1                       | Number of supporting reads in sample1                           |
+|...|...|
+| SampleN                    | Number of supporting reads in sampleN                            |
 
 
 
@@ -281,7 +344,3 @@ https://github.com/zhengxinchang/isopedia/releases
 git clone https://github.com/zhengxinchang/isopedia.git
 cd isopedia
 cargo build --release
-
-
-
-# Roadmap
