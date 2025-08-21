@@ -25,11 +25,14 @@ isopeida consists of multiple binaries that have prefix isopedia-*. This naming 
 
 
 **Download prebuild index and run**
-```
-
+```bash
 sopedia-anno-isoform -i lr_idx/ -g query.gtf -o isoform.anno.tsv
 
 isopedia-anno-fusion -i lr_idx/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
+
+isopedia-anno-fusion -i lr_idx/ -P fuison_query.bed -o fusion.anno.tsv
+
+isopedia-anno-fusion -i lr_idx/ -g gene.gtf -o fusion.discovery.tsv
 ```
 
 **Build your own index**
@@ -48,7 +51,7 @@ Isopedia supports building local index in your own datasets. prerequests are lis
 You can find example files and commands at here [click to expand]
 </summary>
 
-```
+```bash
 # make sure isopedia in your $PATH or use absolute path to the binaries.
 
 # download the toy_ex 
@@ -73,144 +76,197 @@ isopedia-anno-isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.t
 </details>
 
 
-
 # How it works
 
 
 ![how-it-works](./img/how-it-works.png)
 
 
+# Usage for annotation related commands
 
-# Usage
+## Annotate(search) isoforms/transcirpts
 
+### Porpuse:
 
-There are four main steps to use isopedia:
+search transcripts from input gtf file and return how many samples in the index have evidence. 
 
-1. Extract isoform raw signal from long-read full-length transcriptome datasets
-2. Aggregate isoform raw signal from multiple samples for building index
-3. Build index on aggregated data
-4. Annotate the population frequency of isoform in the population
+### Example:
 
-## Extract singals
-
-Extract isoform signals from Alignment file(BAM/CRAM)
-
+```bash
+isopedia-anno-isoform -i index/ -g query.gtf -f 15 -o out.tsv.gz
 ```
-Usage: isopedia-extr [OPTIONS] --bam <BAM> --output <OUTPUT>
+
+key parameters:
+
+`--idxdir(-i)` path to index file
+
+`--gtf(-g)` path to gtf that to be annotate
+
+`--min-read(-m)` minimal support read in each sample to define a postive sample
+
+`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+
+<details>
+<summary>
+All parameters:
+</summary>
+
+```bash
+Usage: isopedia-anno-isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF>
 
 Options:
-  -b, --bam <BAM>              Input file in BAM/CRAM format
-  -r, --reference <REFERENCE>  Reference file for CRAMs. Must provide for CRAM format input
-  -o, --output <OUTPUT>        Name of the output signal file
-      --mapq <MAPQ>            Minimal mapping quality of reads [default: 5]
-      --use-secondary          Include secondary reads in the analysis
-      --debug                  Debug mode
-  -h, --help                   Print help
-  -V, --version                Print version
+  -i, --idxdir <IDXDIR>
+          index directory
 
-```
-Please note that if the input file is in CRAM format, you need to provide the reference file for CRAMs.
+  -g, --gtf <GTF>
+          gtf file
 
-**Example**
+  -f, --flank <FLANK>
+          flank size for search, before and after the position
+          
+          [default: 10]
 
-isopedia extract -b sampleA.mapped.bam -o sampleA.isoform.raw.txt
+  -m, --min-read <MIN_READ>
+          minimal reads to define a positive sample
+          
+          [default: 1]
 
-
-## Aggregate signals
-
-Aggregate and merge signals from multiple samples into a unified file
-
-```
-Usage: isopedia aggr --input <INPUT> --outdir <OUTDIR>
-
-Options:
-  -i, --input <INPUT>
-          Input manifest(tabs-separated) file.
-          Frist 2 cols are required: sample path and sample name.
-          The rest of cols are optional and will be used as sample meta.
-          First row is header.
-
-  -o, --outdir <OUTDIR>
-          Output index directory
+  -o, --output <OUTPUT>
+          output file for search results
 
   -h, --help
           Print help (see a summary with '-h')
 
-```
-**Example**
-
-The input file example(tab-separated)
-(reqired)            (reqired)  (optional) (optional) ...
--------------------- ---------- ---------- ----------
-path                 name       meta1      meta2     <- header
-/path/to/sample1.bam sample1    value1     value2
-/path/to/sample2.bam sample2    value1     value2
-
-Run aggregation:
-
-isopedia aggr --input input.tsv --outdir index_dir
-
-
-## Build index
-
-Create searchable indices
+  -V, --version
+          Print version
 
 ```
-Usage: isopedia idx --idxdir <IDXDIR>
 
-Options:
-  -i, --idxdir <IDXDIR>  
-  -h, --help             Print help
-```
-
-**Example**
-
-isopedia idx -i idx/
+</details>
 
 
+### Output
 
-
-## Search 
-
-Search and retrieve signals across indexed samples
-
-```
-Usage: isopedia search [OPTIONS] --idxdir <IDXDIR>
-
-Options:
-  -i, --idxdir <IDXDIR>      index directory
-  -p, --pos <POS>            positions to be search(-p chr:pos * N)
-  -g, --gtf <GTF>            gtf file
-  -f, --flank <FLANK>        flank size for search, before and after the position [default: 2]
-  -m, --min-read <MIN_READ>  minimal reads to define a positive sample [default: 1]
-  -o, --output <OUTPUT>      output file for search results
-  -h, --help                 Print help
-```
-
-
-
-**Example**
-
-isopedia search -i idx/ -g gencode.v47.basic.annotation.gtf -o gencode.report.txt
-
-
-# Output
 
 The output of the search command is a tab-separated file with the following columns:
 
-| Column name                  | Description                              |
-|------------------------------|------------------------------------------|
-| chrom                        | Chromosome                               |
-| start                        | Start position                           |
-| end                          | End position                             |
-| trans_id                     | Transcript ID                            |
-| gene_id                      | Gene ID                                  |
-| hit                          | How many samples support this transcript |
-| min_read                     | Minimal reads to define a positive sample|
-| positive_count/sample_size   | Positive count/sample size               |
-| sample1                      | Evidence of sample1 for this transcript  |
-| .......                      | ......                                   |
-| sampleN                      | Evidence of sampleN for this transcript  |
+| Column name               | Description                                                                 |
+|----------------------------|-----------------------------------------------------------------------------|
+| chrom                      | Chromosome                                                                 |
+| start                      | Start position of the query transcript                                      |
+| end                        | End position of the query transcript                                        |
+| length                     | Length of the query transcript                                              |
+| exon_count                 | Number of exons in the query transcript                                     |
+| trans_id                   | Transcript ID                                                              |
+| gene_id                    | Gene ID                                                                    |
+| confidence                  | Confidence value for detecting the query transcript in the index            |
+| detected     | Whether at least one sample supports this transcript with ≥ `--min-read` reads |
+| min_read                   | Minimum number of reads to define a positive sample                        |
+| positive_count/sample_size  | Positive count / sample size                                                |
+| attributes                 | Original attributes of the transcript from the input GTF file               |
+| FORMAT                     | Format of the values in each sample column                                  |
+| sample1                    | Values                                                                     |
+| …                          | …                                                                           |
+| sampleN                    | Values                                                                     |
+
+
+There are a few columns can be used to filter the results.
+
+`detected` this binary value indicates if at least one sample has evidence to support the query transcirpt. it can be used to quickly filterout transcirpts without evidence.
+
+`positive_count/sample_size` this value is a combination of two values. it indicates how many samples have engouth evidence(defined by `--min-read`). it can be used to quckly filter the transcirpts that have at least several samples in the index.
+
+`confidence` a value that summarize the confidence of observing a transcript in the entire index
+
+<details>
+
+$$C = \frac{k}{n}* (\prod_{i}^{n}CPM_{i})^{1/n} *G$$
+
+where $n$ is the total number of samples in the index. $k$ is the sample number that found evidence(at least 1 support read) for a query. $CPM_{i}$ is the count per million value of the transcript in the sample $i$, which is defined as:
+$$CPM_{i}=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample }i} * 1,000,000$$
+$G$ is the GINI coefficient in positive samples$(i=0..k)$:
+
+$$G = 2 \frac{\sum_{i=1}^{n} i*CPM_{i}}{n \sum_{i=1}^{n} CPM_{i} } - \frac{n+1}{n}$$
+
+
+</details>
+
+
+## Annotate(search) fusion genes 
+
+### Porpuse:
+
+search fusion from the index and report evidence.
+
+### Example:
+
+```bash
+# query a single fusion
+isopedia-anno-fusion -i index/ -f 10 -p chr1:pos1,chr2:pos2 -o fusion.anno.bed.gz
+
+# query multiple fusions at the same time
+isopedia-anno-fusion -i index/ -f 10 -P fusion_breakpoints.bed -o fusion_all.anno.bed.gz
+```
+
+<details>
+
+<summary>
+All parameters:
+</summary>
+
+```bash
+
+Usage: isopedia-anno-fusion [OPTIONS] --idxdir <IDXDIR> --output <OUTPUT>
+
+Options:
+  -i, --idxdir <IDXDIR>
+          index directory
+
+  -p, --pos <POS>
+          two breakpoints for gene fusion to be search(-p chr1:pos1,chr2:pos2)
+
+  -P, --pos-bed <POS_BED>
+          bed file that has the breakpoints for gene fusions. First four columns are chr1, pos1, chr2, pos2, and starts from the fifth column is the fusion id
+
+  -G, --gene-gtf <GENE_GTF>
+          bed file that has the start-end positions of the genes, used to find any possible gene fusions within the provided gene regions
+
+  -f, --flank <FLANK>
+          flank size for search, before and after the position
+          
+          [default: 10]
+
+  -m, --min-read <MIN_READ>
+          minimal reads to define a positive sample
+          
+          [default: 1]
+
+  -o, --output <OUTPUT>
+          output file for search results
+
+      --debug
+          debug mode
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+```
+</details>
+
+
+## Find potential fusion genes
+
+```bash
+
+```
+
+# Usage for building index
+
+
+
+
 
 # Installation
 
