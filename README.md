@@ -341,6 +341,12 @@ https://github.com/zhengxinchang/isopedia/releases
 
 ## From source code
 
+
+Rust, cargo, and musl are required for building the project from source.
+
+```bash
 git clone https://github.com/zhengxinchang/isopedia.git
 cd isopedia
 cargo build --release
+cargo build --release --target x86_64-unknown-linux-musl
+```
