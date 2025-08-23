@@ -189,7 +189,7 @@ fn main() -> Result<()> {
     let file_list = dataset_info.get_path_list();
 
     let mut chroms = ChromMapping::new();
-    info!("Reading files...");
+    info!("Reading {} files...", file_list.len());
 
     // init the file reader for each sample
     let mut file_readers: Vec<SingleSampleReader> = file_list

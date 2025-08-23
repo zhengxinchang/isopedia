@@ -78,7 +78,7 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com,Xinchang.Zheng@bcm.edu>
 ", long_about = None)]
 struct Cli {
     /// Input file in BAM/CRAM format
-    #[arg(short, long)]
+    #[arg(short = 'i', long = "bam")]
     pub bam: PathBuf,
 
     /// Reference file for CRAMs. Must provide for CRAM format input

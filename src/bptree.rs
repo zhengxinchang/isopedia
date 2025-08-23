@@ -2,10 +2,8 @@
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
-
 use crate::tmpidx::MergedIsoformOffsetGroup;
 use crate::tmpidx::MergedIsoformOffsetPtr;
-
 use crate::tmpidx::Tmpindex;
 use ahash::HashSet;
 use memmap2::Mmap;
@@ -16,7 +14,6 @@ use zerocopy::IntoBytes;
 use zerocopy_derive::FromBytes;
 use zerocopy_derive::Immutable;
 use zerocopy_derive::IntoBytes;
-
 use lru::LruCache;
 use std;
 use std::io::Write;

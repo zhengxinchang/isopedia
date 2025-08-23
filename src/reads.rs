@@ -484,28 +484,34 @@ impl SingleSampleReader {
     }
 
     pub fn next_line_str(&mut self) -> Option<String> {
-        let bytes = self.reader.read_line(&mut self.curr_rec_string).unwrap();
-        if bytes == 0 {
-            return None;
+        // throw a error message if read line failed
+        let bytes = self.reader.read_line(&mut self.curr_rec_string);
+        match bytes {
+            Ok(0) => None,
+            Ok(_) => Some(self.curr_rec_string.clone()),
+            Err(e) => panic!("Failed to read line from file {}: {} ", self.file_name, e),
         }
-        Some(self.curr_rec_string.clone())
     }
 
     pub fn next_rec(&mut self) -> Option<AggrRead> {
-        let bytes = self.reader.read_line(&mut self.curr_rec_string).unwrap();
-        if bytes == 0 {
-            return None;
+        let bytes = self.reader.read_line(&mut self.curr_rec_string);
+        match bytes {
+            Ok(0) => None,
+            Ok(_) => {
+                if self.curr_rec_string.len() == 0 {
+                    // dbg!("empty string");
+                    None
+                } else {
+                    let agg_isoform = AggrRead::from_string(&self.curr_rec_string);
+                    self.curr_rec_string.clear();
+                    Some(agg_isoform)
+                }
+            }
+            Err(e) => panic!("Failed to read line from file {}: {}", self.file_name, e),
         }
-        if self.curr_rec_string.len() == 0 {
-            // dbg!("empty string");
-            return None;
-        }
-        // dbg!(&self.curr_rec_string);
-        let agg_isoform = AggrRead::from_string(&self.curr_rec_string);
-        self.curr_rec_string.clear();
-        Some(agg_isoform)
     }
 }
+
 
 impl Iterator for SingleSampleReader {
     type Item = AggrRead;
