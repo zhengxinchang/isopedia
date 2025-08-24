@@ -401,6 +401,6 @@ fn main() -> Result<()> {
 
     dataset_info.save_to_file(&cli.outdir.join(DATASET_INFO_FILE_NAME))?;
 
-    info!("Fnished");
+    info!("Finished");
     Ok(())
 }

@@ -145,7 +145,7 @@ fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
         let chroms = buf.trim().split('\t').collect::<Vec<&str>>();
         for chrom in chroms {
             if !chrom_set.contains(chrom) {
-                warn!("Chromosome {} is not present in all input files, it maybe a wrong merging, ignore it if you know what you are doing...", chrom);
+                warn!("Chromosome {} is not present in all input files, this might happen in non-main contigs, please be careful if you see this message for any main chromosomes.", chrom);
             }
             chrom_set.insert(chrom.to_string());
         }
