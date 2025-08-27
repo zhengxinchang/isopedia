@@ -16,12 +16,13 @@ use isopedia::{
     fusion::{FusionAggrReads, FusionCluster},
     gene_index::GeneIntervalTree,
     isoform::MergedIsoform,
-    isoformarchive::{self, read_record_from_archive},
+    isoformarchive::{self, read_record_from_mmap},
     utils,
     writer::MyGzWriter,
 };
 
 use log::{debug, error, info, warn};
+use memmap2::{Advice, Mmap};
 use noodles_gtf::io::Reader as gtfReader;
 use serde::Serialize;
 
@@ -204,7 +205,7 @@ fn anno_single_fusion(
     mywriter: &mut MyGzWriter,
     cli: &Cli,
     forest: &mut BPForest,
-    isofrom_archive: &mut std::io::BufReader<File>,
+    archive_mmap: &Mmap,
     archive_buf: &mut Vec<u8>,
     dbinfo: &DatasetInfo,
 ) -> Result<()> {
@@ -240,7 +241,7 @@ fn anno_single_fusion(
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
         let merged_isoform =
-            isoformarchive::read_record_from_archive(isofrom_archive, &target, archive_buf);
+            isoformarchive::read_record_from_mmap(archive_mmap, &target, archive_buf);
         let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
             &breakpoints.1 .0,
             breakpoints.1 .1,
@@ -260,7 +261,7 @@ fn anno_single_fusion(
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
         let merged_isoform: isopedia::isoform::MergedIsoform =
-            isoformarchive::read_record_from_archive(isofrom_archive, &target, archive_buf);
+            isoformarchive::read_record_from_mmap(&archive_mmap, &target, archive_buf);
         let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
             &breakpoints.0 .0,
             breakpoints.0 .1,
@@ -348,10 +349,16 @@ fn main() -> Result<()> {
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
-    let mut isofrom_archive = std::io::BufReader::new(
-        std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-            .context("Failed to open merged file")?,
-    );
+    // let mut isofrom_archive = std::io::BufReader::new(
+    //     std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+    //         .context("Failed to open merged file")?,
+    // );
+
+    let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+        .context("Failed to open merged file for mmap")?;
+
+    let archive_mmap = unsafe { Mmap::map(&archive_file_handle).context("Failed to map merged file")? };
+    archive_mmap.advise(Advice::Random).context("Failed to set mmap advice")?;
 
     let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
 
@@ -382,7 +389,7 @@ fn main() -> Result<()> {
             &mut mywriter,
             &cli,
             &mut forest,
-            &mut isofrom_archive,
+            &archive_mmap,
             &mut archive_buf,
             &dataset_info,
         )?;
@@ -414,7 +421,7 @@ fn main() -> Result<()> {
                 &mut mywriter,
                 &cli,
                 &mut forest,
-                &mut isofrom_archive,
+                &archive_mmap,
                 &mut archive_buf,
                 &dataset_info,
             )?;
@@ -474,7 +481,7 @@ fn main() -> Result<()> {
 
                 for rec_ptr in targets {
                     let isoform: MergedIsoform =
-                        read_record_from_archive(&mut isofrom_archive, &rec_ptr, &mut archive_buf);
+                        read_record_from_mmap(&archive_mmap, &rec_ptr, &mut archive_buf);
 
                     let candidates = isoform.to_fusion_candidates();
 

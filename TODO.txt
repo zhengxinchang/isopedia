@@ -19,5 +19,7 @@ build index gencode
 build index sg-nex
 build index sra 
 replace randam read with mmap
-
-
+Subset results
+Gff output
+Improve readme and release
+add search SJ addtional to input GTF

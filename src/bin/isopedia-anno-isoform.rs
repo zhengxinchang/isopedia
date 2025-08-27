@@ -3,6 +3,7 @@ use std::{
     io::{BufReader, BufWriter},
     path::PathBuf,
     vec,
+    fs::File,
 };
 
 use anyhow::Result;
@@ -13,12 +14,13 @@ use isopedia::{
     dataset_info::DatasetInfo,
     gtf::TranscriptChunker,
     isoform::{self, MergedIsoform},
-    isoformarchive::read_record_from_archive,
+    isoformarchive::{read_record_from_mmap},
     meta::Meta,
     tmpidx::MergedIsoformOffsetPtr,
     utils,
 };
 use log::{error, info};
+use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 
@@ -151,10 +153,20 @@ fn main() -> Result<()> {
 
     writer.write("\n".as_bytes())?;
 
-    let mut isofrom_archive = std::io::BufReader::new(
-        std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-            .expect("Can not open aggregated records file...exit"),
-    );
+    // let mut isofrom_archive = std::io::BufReader::new(
+    //     std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+    //         .expect("Can not open aggregated records file...exit"),
+    // );
+
+
+
+    let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+        .expect("Can not open aggregated records file...");
+
+    let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
+
+    archive_mmap.advise(memmap2::Advice::Random).expect("Failed to set mmap advice");
+
 
     let mut iter_count = 0;
     let mut batch = 0;
@@ -202,7 +214,7 @@ fn main() -> Result<()> {
 
             for offset in &target {
                 let record: MergedIsoform =
-                    read_record_from_archive(&mut isofrom_archive, offset, &mut archive_buf);
+                    read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
 
                 acc_pos_count
                     .iter_mut()

@@ -2,13 +2,16 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use isopedia::chromosome::ChromMapping;
 use isopedia::constants::*;
-use isopedia::isoformarchive::read_record_from_archive;
+use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::reads::AggrRead;
 use isopedia::tmpidx::Tmpindex;
 use isopedia::writer::MyGzWriter;
 use log::{error, info, warn};
+use memmap2::Mmap;
+// use noodles_fasta::fai::read;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
@@ -49,10 +52,16 @@ pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
     let writer = std::fs::File::create(output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
 
-    let mut aggr_reader = std::io::BufReader::new(
-        std::fs::File::open(idx.join(MERGED_FILE_NAME))
-            .expect("Can not open aggregated records file...exit"),
-    );
+    // let mut aggr_reader = std::io::BufReader::new(
+    //     std::fs::File::open(idx.join(MERGED_FILE_NAME))
+    //         .expect("Can not open aggregated records file...exit"),
+    // );
+
+    let archive_file_handler = File::open(idx.join(MERGED_FILE_NAME))
+        .expect("Can not open aggregated records file...");
+    let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
+
+    archive_mmap.advise(memmap2::Advice::Sequential).expect("Failed to set mmap advice");
 
     for chrom_id in chromamp.get_chrom_idxs() {
         // let chrom_name = chromamp.get_chrom_name(chrom_id);
@@ -64,7 +73,7 @@ pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
             for record_grp in block {
                 for record_ptr in record_grp.record_ptr_vec {
                     let rec =
-                        read_record_from_archive(&mut aggr_reader, &record_ptr, &mut archive_buf);
+                        read_record_from_mmap(&archive_mmap, &record_ptr, &mut archive_buf);
                     if processed_signautres.contains(&rec.signature) {
                         continue;
                     }

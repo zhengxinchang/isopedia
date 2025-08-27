@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{BufReader, BufWriter, Read, Seek, Write},
+    io::{BufWriter, Write},
     path::Path,
 };
 
@@ -29,21 +29,31 @@ impl IsoformArchive {
     }
 }
 
-pub fn read_record_from_archive(
-    reader: &mut BufReader<File>,
-    record_ptr: &MergedIsoformOffsetPtr,
+// pub fn read_record_from_archive(
+//     reader: &mut BufReader<File>,
+//     record_ptr: &MergedIsoformOffsetPtr,
+//     buf: &mut Vec<u8>,
+// ) -> MergedIsoform {
+//     buf.clear();
+
+//     reader
+//         .seek(std::io::SeekFrom::Start(record_ptr.offset))
+//         .expect("Failed to seek in archive file");
+
+//     reader
+//         .take(record_ptr.length as u64)
+//         .read_to_end(buf)
+//         .expect("Failed to read record from archive file");
+// }
+
+pub fn read_record_from_mmap(
+    mmap: &[u8],
+    offset: &MergedIsoformOffsetPtr,
     buf: &mut Vec<u8>,
 ) -> MergedIsoform {
+    let start = offset.offset as usize;
+    let end = start + offset.length as usize;
     buf.clear();
-
-    reader
-        .seek(std::io::SeekFrom::Start(record_ptr.offset))
-        .expect("Failed to seek in archive file");
-
-    reader
-        .take(record_ptr.length as u64)
-        .read_to_end(buf)
-        .expect("Failed to read record from archive file");
-
+    buf.extend_from_slice(&mmap[start..end]);
     MergedIsoform::gz_decode(buf).expect("Failed to decode gzipped record")
 }

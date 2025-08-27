@@ -504,38 +504,38 @@ impl Cache {
         Some(node)
     }
 
-    pub fn get_node(&mut self, node_id: u64) -> Option<Node> {
-        if let Some(node) = self.lru.get(&node_id) {
-            // println!("hit");
-            return Some(node.clone());
-        }
+    // pub fn get_node(&mut self, node_id: u64) -> Option<Node> {
+    //     if let Some(node) = self.lru.get(&node_id) {
+    //         // println!("hit");
+    //         return Some(node.clone());
+    //     }
 
-        if node_id > self.header.total_nodes {
-            return None;
-        }
+    //     if node_id > self.header.total_nodes {
+    //         return None;
+    //     }
 
-        self.file
-            .seek(std::io::SeekFrom::Start(node_id * 4096))
-            .unwrap();
+    //     self.file
+    //         .seek(std::io::SeekFrom::Start(node_id * 4096))
+    //         .unwrap();
 
-        let mut node_header_bytes = [0; 4096];
-        self.file.read_exact(&mut node_header_bytes).unwrap();
-        let mut node = Node::load_header_from_bytes(&node_header_bytes);
-        self.file
-            .seek(std::io::SeekFrom::Start(node.header.payload_offset))
-            .unwrap();
-        let mut node_data_bytes = vec![0; node.header.payload_size as usize];
-        self.file.read_exact(&mut node_data_bytes).unwrap();
-        // println!("{:?}", &node.header.record_range);
-        node_data_bytes
-            .chunks(std::mem::size_of::<MergedIsoformOffsetPtr>())
-            .for_each(|chunk| {
-                let record = MergedIsoformOffsetPtr::from_bytes(&chunk);
-                node.data.merge_isoform_offset_vec.push(record);
-            });
-        self.lru.put(node_id, node.clone());
-        Some(node)
-    }
+    //     let mut node_header_bytes = [0; 4096];
+    //     self.file.read_exact(&mut node_header_bytes).unwrap();
+    //     let mut node = Node::load_header_from_bytes(&node_header_bytes);
+    //     self.file
+    //         .seek(std::io::SeekFrom::Start(node.header.payload_offset))
+    //         .unwrap();
+    //     let mut node_data_bytes = vec![0; node.header.payload_size as usize];
+    //     self.file.read_exact(&mut node_data_bytes).unwrap();
+    //     // println!("{:?}", &node.header.record_range);
+    //     node_data_bytes
+    //         .chunks(std::mem::size_of::<MergedIsoformOffsetPtr>())
+    //         .for_each(|chunk| {
+    //             let record = MergedIsoformOffsetPtr::from_bytes(&chunk);
+    //             node.data.merge_isoform_offset_vec.push(record);
+    //         });
+    //     self.lru.put(node_id, node.clone());
+    //     Some(node)
+    // }
 
     pub fn get_root_node(&mut self) -> Node {
         self.get_node2(self.header.root_node_id).unwrap()
