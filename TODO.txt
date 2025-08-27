@@ -18,4 +18,6 @@ X11 change gini to depend on CPM
 build index gencode
 build index sg-nex
 build index sra 
+replace randam read with mmap
+
 
