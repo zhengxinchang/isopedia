@@ -6,24 +6,25 @@ use crate::tmpidx::MergedIsoformOffsetGroup;
 use crate::tmpidx::MergedIsoformOffsetPtr;
 use crate::tmpidx::Tmpindex;
 use ahash::HashSet;
+use lru::LruCache;
 use memmap2::Mmap;
 use rustc_hash::FxHashMap;
+use std;
 use std::fmt::Debug;
+use std::io::Write;
+use std::num::NonZeroUsize;
+use std::os::unix::fs::FileExt;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::{
+    fs::File,
+    io::{self, Read, Seek},
+};
 use zerocopy::FromBytes;
 use zerocopy::IntoBytes;
 use zerocopy_derive::FromBytes;
 use zerocopy_derive::Immutable;
 use zerocopy_derive::IntoBytes;
-use lru::LruCache;
-use std;
-use std::io::Write;
-use std::num::NonZeroUsize;
-use std::os::unix::fs::FileExt;
-use std::path::PathBuf;
-use std::{
-    fs::File,
-    io::{self, Read, Seek},
-};
 
 /// within the node header, used to store the offset and length of the isoform offsets in
 /// node payload. the reason why use it beacuse node header is fixed size.
@@ -379,7 +380,7 @@ pub struct Cache {
     pub header: CacheHeader,
     pub file: File,
     pub mmap: Option<memmap2::Mmap>,
-    pub lru: LruCache<u64, Node>,
+    pub lru: LruCache<u64, Arc<Node>>,
 }
 
 impl Cache {
@@ -482,10 +483,36 @@ impl Cache {
         })
     }
 
-    pub fn get_node2(&mut self, node_id: u64) -> Option<Node> {
+    // pub fn get_node2(&mut self, node_id: u64) -> Option<&Arc<Node>> {
+
+    //     if self.lru.get(&node_id).is_some() {
+    //         return self.lru.get(&node_id)
+    //     }
+
+    //     let mmap = self.mmap.as_ref().expect("Cache not mmap’d");
+    //     if node_id == 0 || node_id > self.header.total_nodes {
+    //         return None;
+    //     }
+
+    //     let off = (node_id * 4096) as usize;
+    //     let hdr_slice = &mmap[off..off + 4096];
+    //     let mut node = Node::load_header_from_bytes(hdr_slice);
+
+    //     let po = node.header.payload_offset as usize;
+    //     let ps = node.header.payload_size as usize;
+    //     let data_slice = &mmap[po..po + ps];
+    //     node.load_record_pointers_from_bytes(data_slice);
+
+    //     self.lru.put(node_id, Arc::new(node.clone()))
+
+    // }
+
+    pub fn get_node2(&mut self, node_id: u64) -> Option<Arc<Node>> {
         if let Some(n) = self.lru.get(&node_id) {
-            return Some(n.clone());
+            // 命中缓存，克隆 Arc 返回
+            return Some(Arc::clone(n));
         }
+
         let mmap = self.mmap.as_ref().expect("Cache not mmap’d");
         if node_id == 0 || node_id > self.header.total_nodes {
             return None;
@@ -500,8 +527,11 @@ impl Cache {
         let data_slice = &mmap[po..po + ps];
         node.load_record_pointers_from_bytes(data_slice);
 
-        self.lru.put(node_id, node.clone());
-        Some(node)
+        // 放入缓存
+        let arc_node = Arc::new(node);
+        self.lru.put(node_id, Arc::clone(&arc_node));
+
+        Some(arc_node)
     }
 
     // pub fn get_node(&mut self, node_id: u64) -> Option<Node> {
@@ -537,7 +567,7 @@ impl Cache {
     //     Some(node)
     // }
 
-    pub fn get_root_node(&mut self) -> Node {
+    pub fn get_root_node(&mut self) -> Arc<Node> {
         self.get_node2(self.header.root_node_id).unwrap()
     }
 
@@ -866,6 +896,8 @@ impl BPTree {
         // span the range in the leaf node
 
         let mut results = Vec::new();
+        // results.reserve(estimated_size); 
+
         loop {
             let keys = &node.header.keys[..node.header.num_keys as usize];
             for (nk, k) in keys.iter().enumerate() {
@@ -951,12 +983,15 @@ impl BPForest {
             }
         };
 
-        let tree: &mut BPTree = match self.trees_by_chrom.get_mut(&chrom_id) {
-            Some(t) => {
-                t //expected &mut BPTree, found &BPTree
-            }
-            None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
-        };
+        // let tree: &mut BPTree = match self.trees_by_chrom.get_mut(&chrom_id) {
+        //     Some(t) => {
+        //         t //expected &mut BPTree, found &BPTree
+        //     }
+        //     None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
+        // };
+        let tree: &mut BPTree = self.trees_by_chrom.entry(chrom_id)
+    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id));
+
 
         // dbg!("aaa");
         tree.single_pos_search(pos)
@@ -975,12 +1010,15 @@ impl BPForest {
             }
         };
 
-        let tree: &mut BPTree = match self.trees_by_chrom.get_mut(&chrom_id) {
-            Some(t) => {
-                t //expected &mut BPTree, found &BPTree
-            }
-            None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
-        };
+        // let tree: &mut BPTree = match self.trees_by_chrom.get_mut(&chrom_id) {
+        //     Some(t) => {
+        //         t //expected &mut BPTree, found &BPTree
+        //     }
+        //     None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
+        // };
+        let tree: &mut BPTree = self.trees_by_chrom.entry(chrom_id)
+    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id));
+
 
         tree.range_search2(pos, flank)
     }
@@ -999,7 +1037,7 @@ impl BPForest {
             .collect();
 
         if min_match == 0 || min_match >= positions.len() {
-            return Some(find_common(&res_vec));
+            return Some(find_common(res_vec));
         } else {
             return Some(find_partial_common(&res_vec, min_match));
         }
@@ -1022,7 +1060,7 @@ impl BPForest {
         // dbg!(&res_vec);
 
         if min_match == 0 || min_match >= positions.len() {
-            Some(find_common(&res_vec))
+            Some(find_common(res_vec))
         } else {
             Some(find_partial_common(&res_vec, min_match))
         }
@@ -1054,38 +1092,38 @@ impl BPForest {
     }
 }
 
-pub fn find_common(vecs: &[Vec<MergedIsoformOffsetPtr>]) -> Vec<MergedIsoformOffsetPtr> {
-    if vecs.is_empty() {
-        return vec![];
-    }
+// pub fn find_common(vecs: &[Vec<MergedIsoformOffsetPtr>]) -> Vec<MergedIsoformOffsetPtr> {
+//     if vecs.is_empty() {
+//         return vec![];
+//     }
 
-    // 选择最短的向量作为基准,减少初始HashSet大小
-    let shortest_vec_idx = vecs
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, vec)| vec.len())
-        .map(|(i, _)| i)
-        .unwrap_or(0);
+//     // 选择最短的向量作为基准,减少初始HashSet大小
+//     let shortest_vec_idx = vecs
+//         .iter()
+//         .enumerate()
+//         .min_by_key(|(_, vec)| vec.len())
+//         .map(|(i, _)| i)
+//         .unwrap_or(0);
 
-    let mut result: HashSet<_> = vecs[shortest_vec_idx].iter().cloned().collect();
+//     let mut result: HashSet<_> = vecs[shortest_vec_idx].iter().cloned().collect();
 
-    // 遍历其他向量
-    for (i, vec) in vecs.iter().enumerate() {
-        if i == shortest_vec_idx {
-            continue;
-        }
-        // 使用Vec直接构建临时HashSet,避免多次clone
-        let vec_set: HashSet<_> = vec.iter().cloned().collect();
-        result.retain(|item| vec_set.contains(item));
+//     // 遍历其他向量
+//     for (i, vec) in vecs.iter().enumerate() {
+//         if i == shortest_vec_idx {
+//             continue;
+//         }
+//         // 使用Vec直接构建临时HashSet,避免多次clone
+//         let vec_set: HashSet<_> = vec.iter().cloned().collect();
+//         result.retain(|item| vec_set.contains(item));
 
-        // 如果result为空,提前返回
-        if result.is_empty() {
-            return vec![];
-        }
-    }
+//         // 如果result为空,提前返回
+//         if result.is_empty() {
+//             return vec![];
+//         }
+//     }
 
-    result.into_iter().collect()
-}
+//     result.into_iter().collect()
+// }
 
 /// find the common elements in the vecs, if one element appears in at least min_match vecs, it is considered as common
 /// min_match is set to 2 incase the mono exon isoforms
@@ -1107,4 +1145,46 @@ pub fn find_partial_common(
         .filter(|&(_, count)| count >= min_match)
         .map(|(item, _)| item)
         .collect()
+}
+
+
+
+pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOffsetPtr> {
+    if vecs.is_empty() {
+        return vec![];
+    }
+
+    // 先对每个 vec 排序
+    for v in &mut vecs {
+        v.sort();
+        v.dedup(); // 避免重复
+    }
+
+    // 从第一个 vec 开始交集
+    let mut result = vecs[0].clone();
+    for v in vecs.iter().skip(1) {
+        result = intersect_sorted(&result, v);
+        if result.is_empty() {
+            break;
+        }
+    }
+    result
+}
+
+fn intersect_sorted<T: Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
+    let mut i = 0;
+    let mut j = 0;
+    let mut result = Vec::new();
+    while i < a.len() && j < b.len() {
+        match a[i].cmp(&b[j]) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => {
+                result.push(a[i].clone());
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+    result
 }

@@ -14,10 +14,10 @@ use isopedia::{
     dataset_info::DatasetInfo,
     gtf::TranscriptChunker,
     isoform::{self, MergedIsoform},
-    isoformarchive::{read_record_from_mmap},
+    isoformarchive::read_record_from_mmap,
     meta::Meta,
     tmpidx::MergedIsoformOffsetPtr,
-    utils,
+    utils::{self, warmup},
 };
 use log::{error, info};
 use memmap2::Mmap;
@@ -157,17 +157,23 @@ fn main() -> Result<()> {
     //     std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
     //         .expect("Can not open aggregated records file...exit"),
     // );
+    info!("Warmup index file");
+    let four_gb: usize = 4 * 1024 * 1024 * 1024;
 
+    
 
+    warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), four_gb)?;
 
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .expect("Can not open aggregated records file...");
 
+    info!("Loading index file");
+
     let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
 
-    archive_mmap.advise(memmap2::Advice::Random).expect("Failed to set mmap advice");
+    archive_mmap.advise(memmap2::Advice::Sequential).expect("Failed to set mmap advice");
 
-
+    info!("Start to process transcripts");
     let mut iter_count = 0;
     let mut batch = 0;
     let mut acc_pos_count = vec![0u32; dataset_info.get_size()];
@@ -179,9 +185,9 @@ fn main() -> Result<()> {
     for trans in gtf {
         iter_count += 1;
 
-        if iter_count == 100000 {
+        if iter_count == 10_000 {
             batch += 1;
-            info!("Processed {} transcripts", (batch * 100000).to_formatted_string(&Locale::en));
+            info!("Processed {} transcripts", (batch * 10_000).to_formatted_string(&Locale::en));
             iter_count = 0;
         }
 

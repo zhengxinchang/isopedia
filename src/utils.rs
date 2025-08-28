@@ -1,5 +1,6 @@
 use ahash::RandomState;
-use std::hash::Hash;
+use std::{fs::File, hash::Hash, io::Read, path::Path};
+use anyhow::Result;
 
 pub fn pack_u32(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | (low as u64)
@@ -60,4 +61,20 @@ pub fn calc_cpm(val_u32: &u32, total_u32: &u32) -> f64 {
     }
 
     (*val_u32 as f64 / *total_u32 as f64) * 1_000_000.0
+}
+
+
+pub fn warmup(path: &Path, max_bytes: usize) -> Result<()> {
+    let mut f = File::open(path)?;
+    let mut buf = [0u8; 8 * 1024];
+    let mut total_read = 0usize;
+
+    while total_read < max_bytes {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break; // EOF
+        }
+        total_read += n;
+    }
+    Ok(())
 }

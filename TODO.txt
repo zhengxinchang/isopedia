@@ -23,3 +23,8 @@ Subset results
 Gff output
 Improve readme and release
 add search SJ addtional to input GTF
+--cach-size in GB for preheat memmap2
+--lru size also included.
+warmup size need to be adjusted
+
+
