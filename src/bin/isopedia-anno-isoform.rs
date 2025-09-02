@@ -17,7 +17,7 @@ use isopedia::{
     isoformarchive::read_record_from_mmap,
     meta::Meta,
     tmpidx::MergedIsoformOffsetPtr,
-    utils::{self, warmup},
+    utils::{self, get_total_memory_bytes, warmup},
 };
 use log::{error, info};
 use memmap2::Mmap;
@@ -53,10 +53,20 @@ struct Cli {
     /// output file for search results
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+
+    /// memory size for warming up, in Gigabytes, example: 1GB
+    #[arg(short, long, default_value_t = 4)]
+    pub warmup_mem: usize,
+
+    /// number of cached nodes for each tree in maximal
+    #[arg(short, long, default_value_t = 1024)]
+    pub max_cached_nodes: usize,
+
 }
 
 impl Cli {
     fn validate(&self) {
+
         let mut is_ok = true;
         if !self.idxdir.exists() {
             error!(
@@ -87,6 +97,29 @@ impl Cli {
         if !self.gtf.exists() {
             error!("--gtf: gtf file {} does not exist", self.gtf.display());
             is_ok = false;
+        }
+
+        let max_mem_bytes = match get_total_memory_bytes() {
+            Some(bytes) => bytes,
+            None => {
+                error!("Failed to get total memory bytes");
+                std::process::exit(1);
+            }
+        };
+
+        if self.warmup_mem == 0 {
+            error!("--warmup-mem: must be greater than 0");
+            is_ok = false;
+        } else {
+            let warmup_bytes = (self.warmup_mem as u64) * 1024 * 1024 * 1024;
+            if warmup_bytes > max_mem_bytes  {
+                error!(
+                    "--warmup-mem: {} GB larger than system memory, please set it to less than {} GB",
+                    self.warmup_mem,
+                    max_mem_bytes / (1024 * 1024 * 1024)
+                );
+                is_ok = false;
+            }
         }
 
         if is_ok != true {
@@ -153,21 +186,17 @@ fn main() -> Result<()> {
 
     writer.write("\n".as_bytes())?;
 
-    // let mut isofrom_archive = std::io::BufReader::new(
-    //     std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-    //         .expect("Can not open aggregated records file...exit"),
-    // );
+
     info!("Warmup index file");
-    let four_gb: usize = 4 * 1024 * 1024 * 1024;
+    let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
+    warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
 
-    
 
-    warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), four_gb)?;
-
+    info!("Loading index file");
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .expect("Can not open aggregated records file...");
 
-    info!("Loading index file");
+
 
     let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
 

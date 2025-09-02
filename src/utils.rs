@@ -1,6 +1,7 @@
 use ahash::RandomState;
-use std::{fs::File, hash::Hash, io::Read, path::Path};
+use std::{fs::File, hash::Hash, io::Read, path::{self, Path}};
 use anyhow::Result;
+use std::fs;
 
 pub fn pack_u32(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | (low as u64)
@@ -63,9 +64,13 @@ pub fn calc_cpm(val_u32: &u32, total_u32: &u32) -> f64 {
     (*val_u32 as f64 / *total_u32 as f64) * 1_000_000.0
 }
 
-
+/// Warming up the archive file by reading a portion of the file.
+/// Current function only read the first max_bytes, but can be improved by
+/// reading the file with imputation strategies
 pub fn warmup(path: &Path, max_bytes: usize) -> Result<()> {
     let mut f = File::open(path)?;
+    // let file_size = get_file_size(path)?;
+
     let mut buf = [0u8; 8 * 1024];
     let mut total_read = 0usize;
 
@@ -77,4 +82,28 @@ pub fn warmup(path: &Path, max_bytes: usize) -> Result<()> {
         total_read += n;
     }
     Ok(())
+}
+
+
+pub fn get_total_memory_bytes() -> Option<u64> {
+    if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
+        for line in meminfo.lines() {
+            if line.starts_with("MemTotal:") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    if let Ok(kb) = parts[1].parse::<u64>() {
+                        return Some(kb * 1024); 
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+
+fn get_file_size(path: &Path) -> Result<u64> {
+    let f = File::open(path)?;
+    let metadata = f.metadata()?;
+    Ok(metadata.len())
 }
