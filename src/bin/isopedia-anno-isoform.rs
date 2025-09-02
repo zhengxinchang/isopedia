@@ -132,9 +132,9 @@ impl Cli {
 }
 
 fn greetings(args: &Cli) {
-    println!("\nIsopedia: [Annotate provided gtf file]\n");
+    eprintln!("\nIsopedia: [Annotate provided gtf file]\n");
     match serde_json::to_string_pretty(&args) {
-        Ok(json) => println!("Parsed arguments:\n{}", json),
+        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),
     }
 }

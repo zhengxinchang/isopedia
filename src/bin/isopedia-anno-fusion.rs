@@ -195,9 +195,9 @@ fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64))>
 }
 
 fn greetings(args: &Cli) {
-    println!("\nIsopedia: [Search provided gene fusion]\n");
+    eprintln!("\nIsopedia: [Search provided gene fusion]\n");
     match serde_json::to_string_pretty(&args) {
-        Ok(json) => println!("Parsed arguments:\n{}", json),
+        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),
     }
 }
