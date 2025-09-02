@@ -59,8 +59,8 @@ struct Cli {
     pub warmup_mem: usize,
 
     /// number of cached nodes for each tree in maximal
-    #[arg(short, long, default_value_t = 1024)]
-    pub max_cached_nodes: usize,
+    #[arg(short='c', long="cached_nodes", default_value_t = 100_000)]
+    pub lru_size: usize,
 
 }
 
@@ -222,7 +222,7 @@ fn main() -> Result<()> {
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
-        let res = forest.search_all_match(&queries, cli.flank);
+        let res = forest.search_all_match(&queries, cli.flank, cli.lru_size);
 
         if res.is_none() {
             // error!("No results found for queries: {:?}", queries);

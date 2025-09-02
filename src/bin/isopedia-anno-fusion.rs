@@ -82,6 +82,10 @@ struct Cli {
     /// debug mode
     #[arg(long, default_value_t = false)]
     pub debug: bool,
+
+    /// number of cached nodes for each tree in maximal
+    #[arg(short='c', long="cached_nodes", default_value_t = 1_000_000)]
+    pub lru_size: usize,
 }
 
 impl Cli {
@@ -213,8 +217,8 @@ fn anno_single_fusion(
         "Processing breakpoints: {}:{}-{}:{}",
         breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
     );
-    let left_target = forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank);
-    let right_target = forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank);
+    let left_target = forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
+    let right_target = forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
 
     if left_target.is_none() || right_target.is_none() {
         if cli.debug {
@@ -465,7 +469,7 @@ fn main() -> Result<()> {
                     .map(|x| (chromosome.clone(), *x))
                     .collect::<Vec<(String, u64)>>();
 
-                let target = forest.search_partial_match(&quried_positions, cli.flank, 1);
+                let target = forest.search_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
 
                 if target.is_none() {
                     skipped_genes += 1;

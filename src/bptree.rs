@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::{
     fs::File,
-    io::{self, Read, Seek},
+    io::{self, Read},
 };
 use zerocopy::FromBytes;
 use zerocopy::IntoBytes;
@@ -412,12 +412,13 @@ impl Cache {
     }
 
     pub fn build_cache(header: CacheHeader, file_path: &PathBuf) -> Cache {
+        let place_holder_lru_size = 10usize;
         let file = File::create(file_path).unwrap();
         Cache {
             header,
             file,
             mmap: None,
-            lru: LruCache::new(NonZeroUsize::new(LRU_CACHE_SIZE).unwrap()),
+            lru: LruCache::new(NonZeroUsize::new(place_holder_lru_size).unwrap()),
         }
     }
 
@@ -449,7 +450,7 @@ impl Cache {
             .unwrap();
     }
 
-    pub fn from_disk(file_path: &str) -> Cache {
+    pub fn from_disk(file_path: &str,lru_size: usize) -> Cache {
         let mut file: File = File::open(file_path).unwrap();
         let mut header_bytes = [0; 4096];
         file.read_exact(&mut header_bytes).unwrap();
@@ -467,11 +468,11 @@ impl Cache {
             header,
             file,
             mmap: None,
-            lru: LruCache::new(NonZeroUsize::new(LRU_CACHE_SIZE).unwrap()),
+            lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
         }
     }
 
-    pub fn from_disk_mmap(idx_path: &str) -> io::Result<Cache> {
+    pub fn from_disk_mmap(idx_path: &str, lru_size: usize) -> io::Result<Cache> {
         let file = File::options().read(true).write(true).open(idx_path)?;
         let mmap = unsafe { Mmap::map(&file)? };
         let header = CacheHeader::from_bytes(&mmap[0..4096])?;
@@ -479,7 +480,7 @@ impl Cache {
             header,
             file,
             mmap: Some(mmap),
-            lru: LruCache::new(NonZeroUsize::new(LRU_CACHE_SIZE).unwrap()),
+            lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
         })
     }
 
@@ -614,12 +615,13 @@ impl BPTree {
         }
     }
 
-    pub fn from_disk(idx_path: &PathBuf, chrom_id: u16) -> BPTree {
+    pub fn from_disk(idx_path: &PathBuf, chrom_id: u16,lru_size:usize) -> BPTree {
         let cache = Cache::from_disk_mmap(
             idx_path
                 .join(format!("bptree_{}.idx", chrom_id))
                 .to_str()
                 .unwrap(),
+            lru_size
         )
         .expect("Can not open cache file");
         BPTree {
@@ -975,6 +977,7 @@ impl BPForest {
         &mut self,
         chrom_name: &str,
         pos: u64,
+        lru_size: usize,
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
@@ -982,15 +985,8 @@ impl BPForest {
                 return None;
             }
         };
-
-        // let tree: &mut BPTree = match self.trees_by_chrom.get_mut(&chrom_id) {
-        //     Some(t) => {
-        //         t //expected &mut BPTree, found &BPTree
-        //     }
-        //     None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
-        // };
         let tree: &mut BPTree = self.trees_by_chrom.entry(chrom_id)
-    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id));
+    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id,lru_size));
 
 
         // dbg!("aaa");
@@ -1002,6 +998,7 @@ impl BPForest {
         chrom_name: &str,
         pos: u64,
         flank: u64,
+        lru_size: usize,
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
@@ -1010,14 +1007,9 @@ impl BPForest {
             }
         };
 
-        // let tree: &mut BPTree = match self.trees_by_chrom.get_mut(&chrom_id) {
-        //     Some(t) => {
-        //         t //expected &mut BPTree, found &BPTree
-        //     }
-        //     None => &mut BPTree::from_disk(&self.index_dir.clone(), chrom_id),
-        // };
+
         let tree: &mut BPTree = self.trees_by_chrom.entry(chrom_id)
-    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id));
+    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id,lru_size));
 
 
         tree.range_search2(pos, flank)
@@ -1027,11 +1019,12 @@ impl BPForest {
         &mut self,
         positions: &Vec<(String, u64)>,
         min_match: usize,
+        lru_size: usize,
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone())
+                self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(),lru_size)
                     .unwrap_or_else(|| vec![])
             })
             .collect();
@@ -1048,11 +1041,12 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
+        lru_size: usize
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search_one_range(&chrom_name.to_ascii_uppercase(), pos.clone(), flank)
+                self.search_one_range(&chrom_name.to_ascii_uppercase(), pos.clone(), flank,lru_size)
                     .unwrap_or_else(|| vec![])
             })
             .collect();
@@ -1070,11 +1064,12 @@ impl BPForest {
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
+        lru_size: usize
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         if flank == 0 {
-            self.search_multi_exact(positions, 0)
+            self.search_multi_exact(positions, 0, lru_size)
         } else {
-            self.search_multi_range(positions, flank, 0)
+            self.search_multi_range(positions, flank, 0, lru_size)
         }
     }
 
@@ -1083,11 +1078,12 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
+        lru_size: usize
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         if flank == 0 {
-            self.search_multi_exact(positions, min_match)
+            self.search_multi_exact(positions, min_match, lru_size)
         } else {
-            self.search_multi_range(positions, flank, min_match)
+            self.search_multi_range(positions, flank, min_match, lru_size)
         }
     }
 }

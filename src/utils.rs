@@ -1,5 +1,5 @@
 use ahash::RandomState;
-use std::{fs::File, hash::Hash, io::Read, path::{self, Path}};
+use std::{fs::File, hash::Hash, io::Read, path::{ Path}};
 use anyhow::Result;
 use std::fs;
 
@@ -101,7 +101,7 @@ pub fn get_total_memory_bytes() -> Option<u64> {
     None
 }
 
-
+#[allow(dead_code)]
 fn get_file_size(path: &Path) -> Result<u64> {
     let f = File::open(path)?;
     let metadata = f.metadata()?;
