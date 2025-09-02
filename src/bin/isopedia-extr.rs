@@ -345,10 +345,19 @@ fn main() {
             .write_all_bytes(agg_isoform.to_record().as_bytes())
             .expect("can not write record...");
     }
-    info!("Total records processed: {}", total_count.to_formatted_string(&Locale::en));
+    info!(
+        "Total records processed: {}",
+        total_count.to_formatted_string(&Locale::en)
+    );
 
-    info!("Total valid records: {}", n_record.to_formatted_string(&Locale::en));
+    info!(
+        "Total valid records: {}",
+        n_record.to_formatted_string(&Locale::en)
+    );
     // info!("Total records : {}", n_record);
-    info!("Total records skipped: {}", skipped_records.to_formatted_string(&Locale::en));
+    info!(
+        "Total records skipped: {}",
+        skipped_records.to_formatted_string(&Locale::en)
+    );
     info!("Finished");
 }

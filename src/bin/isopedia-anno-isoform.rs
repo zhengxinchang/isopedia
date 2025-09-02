@@ -1,9 +1,9 @@
 use std::{
     env,
+    fs::File,
     io::{BufReader, BufWriter},
     path::PathBuf,
     vec,
-    fs::File,
 };
 
 use anyhow::Result;
@@ -61,14 +61,12 @@ struct Cli {
     pub warmup_mem: usize,
 
     /// Maximum number of cached nodes per tree
-    #[arg(short='c', long="cached_nodes", default_value_t = 100_000)]
+    #[arg(short = 'c', long = "cached_nodes", default_value_t = 100_000)]
     pub lru_size: usize,
 }
 
-
 impl Cli {
     fn validate(&self) {
-
         let mut is_ok = true;
         if !self.idxdir.exists() {
             error!(
@@ -114,7 +112,7 @@ impl Cli {
             is_ok = false;
         } else {
             let warmup_bytes = (self.warmup_mem as u64) * 1024 * 1024 * 1024;
-            if warmup_bytes > max_mem_bytes  {
+            if warmup_bytes > max_mem_bytes {
                 error!(
                     "--warmup-mem: {} GB larger than system memory, please set it to less than {} GB",
                     self.warmup_mem,
@@ -188,21 +186,19 @@ fn main() -> Result<()> {
 
     writer.write("\n".as_bytes())?;
 
-
     info!("Warmup index file");
     let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
     warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
-
 
     info!("Loading index file");
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .expect("Can not open aggregated records file...");
 
-
-
     let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
 
-    archive_mmap.advise(memmap2::Advice::Sequential).expect("Failed to set mmap advice");
+    archive_mmap
+        .advise(memmap2::Advice::Sequential)
+        .expect("Failed to set mmap advice");
 
     info!("Start to process transcripts");
     let mut iter_count = 0;
@@ -218,7 +214,10 @@ fn main() -> Result<()> {
 
         if iter_count == 10_000 {
             batch += 1;
-            info!("Processed {} transcripts", (batch * 10_000).to_formatted_string(&Locale::en));
+            info!(
+                "Processed {} transcripts",
+                (batch * 10_000).to_formatted_string(&Locale::en)
+            );
             iter_count = 0;
         }
 
@@ -334,7 +333,10 @@ fn main() -> Result<()> {
         }
     }
     let total = hit_count + miss_count;
-    info!("Processed {} transcripts", (100000 * batch + iter_count).to_formatted_string(&Locale::en));
+    info!(
+        "Processed {} transcripts",
+        (100000 * batch + iter_count).to_formatted_string(&Locale::en)
+    );
     info!("Sample-wide stats: ");
     info!("> Sample\thit\tmiss\tpct");
     for i in 0..dataset_info.get_size() {

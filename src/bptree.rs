@@ -450,7 +450,7 @@ impl Cache {
             .unwrap();
     }
 
-    pub fn from_disk(file_path: &str,lru_size: usize) -> Cache {
+    pub fn from_disk(file_path: &str, lru_size: usize) -> Cache {
         let mut file: File = File::open(file_path).unwrap();
         let mut header_bytes = [0; 4096];
         file.read_exact(&mut header_bytes).unwrap();
@@ -615,13 +615,13 @@ impl BPTree {
         }
     }
 
-    pub fn from_disk(idx_path: &PathBuf, chrom_id: u16,lru_size:usize) -> BPTree {
+    pub fn from_disk(idx_path: &PathBuf, chrom_id: u16, lru_size: usize) -> BPTree {
         let cache = Cache::from_disk_mmap(
             idx_path
                 .join(format!("bptree_{}.idx", chrom_id))
                 .to_str()
                 .unwrap(),
-            lru_size
+            lru_size,
         )
         .expect("Can not open cache file");
         BPTree {
@@ -898,7 +898,7 @@ impl BPTree {
         // span the range in the leaf node
 
         let mut results = Vec::new();
-        // results.reserve(estimated_size); 
+        // results.reserve(estimated_size);
 
         loop {
             let keys = &node.header.keys[..node.header.num_keys as usize];
@@ -985,9 +985,10 @@ impl BPForest {
                 return None;
             }
         };
-        let tree: &mut BPTree = self.trees_by_chrom.entry(chrom_id)
-    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id,lru_size));
-
+        let tree: &mut BPTree = self
+            .trees_by_chrom
+            .entry(chrom_id)
+            .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
 
         // dbg!("aaa");
         tree.single_pos_search(pos)
@@ -1007,10 +1008,10 @@ impl BPForest {
             }
         };
 
-
-        let tree: &mut BPTree = self.trees_by_chrom.entry(chrom_id)
-    .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id,lru_size));
-
+        let tree: &mut BPTree = self
+            .trees_by_chrom
+            .entry(chrom_id)
+            .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
 
         tree.range_search2(pos, flank)
     }
@@ -1024,7 +1025,7 @@ impl BPForest {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(),lru_size)
+                self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
                     .unwrap_or_else(|| vec![])
             })
             .collect();
@@ -1041,13 +1042,18 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
-        lru_size: usize
+        lru_size: usize,
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search_one_range(&chrom_name.to_ascii_uppercase(), pos.clone(), flank,lru_size)
-                    .unwrap_or_else(|| vec![])
+                self.search_one_range(
+                    &chrom_name.to_ascii_uppercase(),
+                    pos.clone(),
+                    flank,
+                    lru_size,
+                )
+                .unwrap_or_else(|| vec![])
             })
             .collect();
 
@@ -1064,7 +1070,7 @@ impl BPForest {
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
-        lru_size: usize
+        lru_size: usize,
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         if flank == 0 {
             self.search_multi_exact(positions, 0, lru_size)
@@ -1078,7 +1084,7 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
-        lru_size: usize
+        lru_size: usize,
     ) -> Option<Vec<MergedIsoformOffsetPtr>> {
         if flank == 0 {
             self.search_multi_exact(positions, min_match, lru_size)
@@ -1142,8 +1148,6 @@ pub fn find_partial_common(
         .map(|(item, _)| item)
         .collect()
 }
-
-
 
 pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOffsetPtr> {
     if vecs.is_empty() {

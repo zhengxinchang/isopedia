@@ -18,13 +18,17 @@ X11 change gini to depend on CPM
 build index gencode
 build index sg-nex
 build index sra 
-Xreplace randam read with mmap
+X replace randam read with mmap
 Subset results
 Gff output
 XImprove readme and release
 add search SJ addtional to input GTF
-X--cach-size in GB for preheat memmap2
-X--lru size also included.
-Xwarmup size need to be adjusted
+X --cach-size in GB for preheat memmap2
+X --lru size also included.
+X warmup size need to be adjusted
+check chrom distribution before aggregation
+
+
+
 
 

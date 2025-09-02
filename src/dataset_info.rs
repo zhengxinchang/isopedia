@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,7 +7,6 @@ use std::{
     path::{Path, PathBuf},
     vec,
 };
-use anyhow::Result;
 
 #[derive(Serialize, Deserialize, Debug)]
 
@@ -47,8 +47,7 @@ impl DatasetInfo {
             dbinfo.add_sample(name, Some(path));
         }
         dbinfo.sample_total_evidence_vec = vec![0; dbinfo.sample_size];
-        Ok( dbinfo )
-
+        Ok(dbinfo)
     }
 
     pub fn save_to_file<P: AsRef<Path>>(self, path: P) -> std::io::Result<()> {

@@ -318,7 +318,10 @@ fn main() -> Result<()> {
             }
 
             batches += 1;
-            info!("Processed: {} records", (batch_size * batches).to_formatted_string(&Locale::en));
+            info!(
+                "Processed: {} records",
+                (batch_size * batches).to_formatted_string(&Locale::en)
+            );
             curr_batch = 0;
             for sig in need_deleted.iter() {
                 merged_map.remove(sig);

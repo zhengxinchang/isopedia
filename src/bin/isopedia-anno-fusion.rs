@@ -84,7 +84,7 @@ struct Cli {
     pub debug: bool,
 
     /// number of cached nodes for each tree in maximal
-    #[arg(short='c', long="cached_nodes", default_value_t = 1_000_000)]
+    #[arg(short = 'c', long = "cached_nodes", default_value_t = 1_000_000)]
     pub lru_size: usize,
 }
 
@@ -217,8 +217,10 @@ fn anno_single_fusion(
         "Processing breakpoints: {}:{}-{}:{}",
         breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
     );
-    let left_target = forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
-    let right_target = forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
+    let left_target =
+        forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
+    let right_target =
+        forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
 
     if left_target.is_none() || right_target.is_none() {
         if cli.debug {
@@ -361,8 +363,11 @@ fn main() -> Result<()> {
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .context("Failed to open merged file for mmap")?;
 
-    let archive_mmap = unsafe { Mmap::map(&archive_file_handle).context("Failed to map merged file")? };
-    archive_mmap.advise(Advice::Random).context("Failed to set mmap advice")?;
+    let archive_mmap =
+        unsafe { Mmap::map(&archive_file_handle).context("Failed to map merged file")? };
+    archive_mmap
+        .advise(Advice::Random)
+        .context("Failed to set mmap advice")?;
 
     let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
 
@@ -469,7 +474,8 @@ fn main() -> Result<()> {
                     .map(|x| (chromosome.clone(), *x))
                     .collect::<Vec<(String, u64)>>();
 
-                let target = forest.search_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
+                let target =
+                    forest.search_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
 
                 if target.is_none() {
                     skipped_genes += 1;

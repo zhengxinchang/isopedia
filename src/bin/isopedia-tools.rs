@@ -57,11 +57,13 @@ pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
     //         .expect("Can not open aggregated records file...exit"),
     // );
 
-    let archive_file_handler = File::open(idx.join(MERGED_FILE_NAME))
-        .expect("Can not open aggregated records file...");
+    let archive_file_handler =
+        File::open(idx.join(MERGED_FILE_NAME)).expect("Can not open aggregated records file...");
     let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
 
-    archive_mmap.advise(memmap2::Advice::Sequential).expect("Failed to set mmap advice");
+    archive_mmap
+        .advise(memmap2::Advice::Sequential)
+        .expect("Failed to set mmap advice");
 
     for chrom_id in chromamp.get_chrom_idxs() {
         // let chrom_name = chromamp.get_chrom_name(chrom_id);
@@ -72,8 +74,7 @@ pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
         for block in blocks {
             for record_grp in block {
                 for record_ptr in record_grp.record_ptr_vec {
-                    let rec =
-                        read_record_from_mmap(&archive_mmap, &record_ptr, &mut archive_buf);
+                    let rec = read_record_from_mmap(&archive_mmap, &record_ptr, &mut archive_buf);
                     if processed_signautres.contains(&rec.signature) {
                         continue;
                     }

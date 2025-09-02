@@ -512,7 +512,6 @@ impl SingleSampleReader {
     }
 }
 
-
 impl Iterator for SingleSampleReader {
     type Item = AggrRead;
 

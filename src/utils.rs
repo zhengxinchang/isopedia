@@ -1,7 +1,7 @@
 use ahash::RandomState;
-use std::{fs::File, hash::Hash, io::Read, path::{ Path}};
 use anyhow::Result;
 use std::fs;
+use std::{fs::File, hash::Hash, io::Read, path::Path};
 
 pub fn pack_u32(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | (low as u64)
@@ -84,7 +84,6 @@ pub fn warmup(path: &Path, max_bytes: usize) -> Result<()> {
     Ok(())
 }
 
-
 pub fn get_total_memory_bytes() -> Option<u64> {
     if let Ok(meminfo) = fs::read_to_string("/proc/meminfo") {
         for line in meminfo.lines() {
@@ -92,7 +91,7 @@ pub fn get_total_memory_bytes() -> Option<u64> {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
                     if let Ok(kb) = parts[1].parse::<u64>() {
-                        return Some(kb * 1024); 
+                        return Some(kb * 1024);
                     }
                 }
             }
