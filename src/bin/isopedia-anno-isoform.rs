@@ -34,35 +34,37 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com>
 #[clap(after_long_help = "
 ")]
 struct Cli {
-    /// index directory
+    /// Path to the index directory
     #[arg(short, long)]
     pub idxdir: PathBuf,
 
-    /// gtf file
+    /// Path to the GTF file
     #[arg(short, long)]
     pub gtf: PathBuf,
 
-    /// flank size for search, before and after the position
+    /// Flanking size (in bases) before and after the position
     #[arg(short, long, default_value_t = 10)]
     pub flank: u64,
 
-    /// minimal reads to define a positive sample
+    /// Minimum number of reads required to define a positive sample
     #[arg(short, long, default_value_t = 1)]
     pub min_read: u32,
 
-    /// output file for search results
+    /// Output file for search results
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// memory size for warming up, in Gigabytes, example: 1GB
+    /// Memory size to use for warming up (in gigabytes).  
+    /// Example: 1GB. Increasing this will significantly improve performance;  
+    /// set it as large as your system allows.
     #[arg(short, long, default_value_t = 4)]
     pub warmup_mem: usize,
 
-    /// number of cached nodes for each tree in maximal
+    /// Maximum number of cached nodes per tree
     #[arg(short='c', long="cached_nodes", default_value_t = 100_000)]
     pub lru_size: usize,
-
 }
+
 
 impl Cli {
     fn validate(&self) {
