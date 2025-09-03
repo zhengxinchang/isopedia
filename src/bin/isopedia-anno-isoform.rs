@@ -29,7 +29,7 @@ use serde::Serialize;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>
+Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 ", long_about = None)]
 #[clap(after_long_help = "
 ")]
@@ -225,11 +225,11 @@ fn main() -> Result<()> {
         queries.sort_by_key(|x| x.1);
         let res = forest.search_all_match(&queries, cli.flank, cli.lru_size);
 
-        if res.is_none() {
-            // error!("No results found for queries: {:?}", queries);
-            continue;
-        }
-        let res = res.unwrap();
+        // if res.is_none() {
+        //     // error!("No results found for queries: {:?}", queries);
+        //     continue;
+        // }
+        // let res = res.unwrap();
 
         // make sure the returned isoform has exactly the same number of splice sites as the query
         let target: Vec<MergedIsoformOffsetPtr> = res

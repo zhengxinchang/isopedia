@@ -31,7 +31,7 @@ use serde::Serialize;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>
+Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 ", long_about = None)]
 #[clap(after_long_help = r#"
 Examples:
@@ -222,7 +222,7 @@ fn anno_single_fusion(
     let right_target =
         forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
 
-    if left_target.is_none() || right_target.is_none() {
+    if left_target.is_empty() || right_target.is_empty() {
         if cli.debug {
             error!(
                 "No candidates found for breakpoints: {}:{}-{}:{}",
@@ -232,8 +232,8 @@ fn anno_single_fusion(
         return Ok(());
     }
 
-    let left_target = left_target.unwrap();
-    let right_target = right_target.unwrap();
+    // let left_target = left_target.unwrap();
+    // let right_target = right_target.unwrap();
     if cli.debug {
         info!(
             "Found {} candidates",
@@ -316,7 +316,7 @@ fn anno_single_fusion(
     Ok(())
 }
 
-fn parse_bed_line(line: &str) -> Result<BreakpointType> {
+fn parse_bed(line: &str) -> Result<BreakpointType> {
     let fields: Vec<&str> = line.split('\t').collect();
     if fields.len() < 5 {
         return Err(anyhow!(
@@ -423,7 +423,7 @@ fn main() -> Result<()> {
 
         for line in reader.lines() {
             let line = line.context("Failed to read line from bed file")?;
-            let breakpoints: BreakpointType = parse_bed_line(&line)?;
+            let breakpoints: BreakpointType = parse_bed(&line)?;
 
             anno_single_fusion(
                 breakpoints,
@@ -474,20 +474,20 @@ fn main() -> Result<()> {
                     .map(|x| (chromosome.clone(), *x))
                     .collect::<Vec<(String, u64)>>();
 
-                let target =
+                let targets =
                     forest.search_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
-
-                if target.is_none() {
-                    skipped_genes += 1;
-                    continue;
-                }
-
-                let targets = target.unwrap();
 
                 if targets.is_empty() {
                     skipped_genes += 1;
                     continue;
                 }
+
+                // let targets = target.unwrap();
+
+                // if targets.is_empty() {
+                //     skipped_genes += 1;
+                //     continue;
+                // }
 
                 for rec_ptr in targets {
                     let isoform: MergedIsoform =

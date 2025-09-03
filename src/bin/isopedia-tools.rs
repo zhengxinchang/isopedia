@@ -228,7 +228,12 @@ fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
 
 #[derive(Parser, Clone, Debug, Serialize, Deserialize)]
 #[command(name = "isopedia-tool")]
-#[command(about = "Auxiliary tools for Isopedia")]
+#[command(
+    about = "
+Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+",
+    long_about = "This subtool provides several utilities for working with Isopedia."
+)]
 #[command(author = "Xinchang Zheng", version)]
 pub struct ToolCli {
     #[command(subcommand)]

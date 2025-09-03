@@ -862,11 +862,7 @@ impl BPTree {
     //     final_addrs
     // }
 
-    pub fn range_search2(
-        &mut self,
-        pos: KeyType,
-        flank: KeyType,
-    ) ->Vec<MergedIsoformOffsetPtr> {
+    pub fn range_search2(&mut self, pos: KeyType, flank: KeyType) -> Vec<MergedIsoformOffsetPtr> {
         let start = pos.saturating_sub(flank);
         let end = pos.saturating_add(flank);
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -1021,7 +1017,6 @@ impl BPForest {
             .iter()
             .map(|(chrom_name, pos)| {
                 self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
-                   
             })
             .collect();
 
@@ -1048,7 +1043,6 @@ impl BPForest {
                     flank,
                     lru_size,
                 )
-               
             })
             .collect();
 

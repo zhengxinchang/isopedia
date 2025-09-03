@@ -28,6 +28,26 @@ X --lru size also included.
 X warmup size need to be adjusted
 check chrom distribution before aggregation
 
+AS 1 query
+
+report all possible reads
+
+output format
+SJ_id, AS_id in the input file
+SJ left chrom
+SJ left pos
+SJ right chrom 
+SJ right pos 
+SJ Associated isoform
+SJ exact match? bool
+SJ index in the isoform
+isoform start pos(sd)
+isoform end pos(sd)
+SJ isoforms sample column，read infor in each sample.
+standarize the breakpoints between the anno-fusion and anno-splice
+
+anno-isoform shouldnt drop any queries.
+
 
 
 

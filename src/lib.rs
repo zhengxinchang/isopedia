@@ -1,4 +1,5 @@
 pub mod bptree;
+pub mod breakpoints;
 pub mod chromosome;
 pub mod constants;
 pub mod dataset_info;
