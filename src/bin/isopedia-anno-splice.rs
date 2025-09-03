@@ -3,11 +3,15 @@ use clap::{arg, Parser};
 use isopedia::bptree::BPForest;
 use isopedia::breakpoints::{self, BreakPointsPair};
 use isopedia::dataset_info::DatasetInfo;
+use isopedia::isoform::MergedIsoform;
+use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::utils::{get_total_memory_bytes, warmup};
 use isopedia::writer::MyGzWriter;
 use isopedia::{constants::*, utils};
 use log::{error, info};
+use memmap2::Mmap;
 use serde::Serialize;
+use std::fs::File;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Serialize)]
@@ -152,6 +156,16 @@ fn main() -> Result<()> {
     info!("loading indexes");
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
+    let mut archive_buf: Vec<u8> = Vec::with_capacity(1024 * 1024); // 1MB buffer
+
+    let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+        .expect("Can not open aggregated records file...");
+
+    let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
+
+    archive_mmap
+        .advise(memmap2::Advice::Sequential)
+        .expect("Failed to set mmap advice");
 
     let mut hit_count = 0u32;
     let mut miss_count = 0u32;
@@ -167,12 +181,11 @@ fn main() -> Result<()> {
     header_str.push('\n');
     mywriter.write_all_bytes(header_str.as_bytes())?;
 
-    let mut queries: Vec<BreakPointsPair> = if cli.splice.is_some() {
+    let queries: Vec<BreakPointsPair> = if cli.splice.is_some() {
         info!("parse breakpoints pair from command line...");
         let splice_str = cli.splice.clone().unwrap();
-        let mut bp =
+        let bp =
             BreakPointsPair::parse_string(&splice_str).expect("Can not parse splice junction...");
-        bp.sort();
         vec![bp]
     } else if cli.splice_bed.is_some() {
         let splice_bed_path = cli.splice_bed.unwrap();
@@ -205,7 +218,26 @@ fn main() -> Result<()> {
         }
     }
 
-    for query in &queries {}
+    let mut outline = String::with_capacity(1024);
+    for query in &queries {
+        outline.clear();
+        outline.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}",
+            query.left_chr, query.left_pos, query.right_chr, query.right_pos, query.id,
+        ));
+
+        let isoforms = forest.search_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
+
+        if isoforms.is_empty() {
+        } else {
+            for offset in &isoforms {
+                let record: MergedIsoform =
+                    read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
+
+                
+            }
+        }
+    }
 
     Ok(())
 }

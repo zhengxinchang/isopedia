@@ -107,15 +107,15 @@ fn get_file_size(path: &Path) -> Result<u64> {
     Ok(metadata.len())
 }
 
-pub fn parse_breakpoint_str(s: &str) -> Result<(String, u32, String, u32)> {
+pub fn parse_breakpoint_str(s: &str) -> Result<(String, u64, String, u64)> {
     let parts: Vec<&str> = s.split(',').collect();
 
     let left_part = parts[0].split(|c| c == ':').collect::<Vec<&str>>();
     let left_chr = trim_chr_prefix_to_upper(left_part[0]);
-    let left_pos: u32 = left_part[1].parse()?;
+    let left_pos: u64 = left_part[1].parse()?;
 
     let right_part = parts[1].split(|c| c == ':').collect::<Vec<&str>>();
     let right_chr = trim_chr_prefix_to_upper(right_part[0]);
-    let right_pos: u32 = right_part[1].parse()?;
+    let right_pos: u64 = right_part[1].parse()?;
     Ok((left_chr, left_pos, right_chr, right_pos))
 }

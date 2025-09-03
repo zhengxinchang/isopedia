@@ -2,14 +2,15 @@ use anyhow::{anyhow, Result};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::rc::Rc;
 
 use crate::utils::{self, trim_chr_prefix_to_upper};
 #[derive(Debug, Clone)]
 pub struct BreakPointsPair {
     pub left_chr: String,
-    pub left_pos: u32,
+    pub left_pos: u64,
     pub right_chr: String,
-    pub right_pos: u32,
+    pub right_pos: u64,
     pub id: String,
     pub rest_info: String,
 }
@@ -72,6 +73,13 @@ impl BreakPointsPair {
             self.left_pos = self.right_pos;
             self.right_pos = t;
         }
+    }
+
+    pub fn to_pos_vec(&self) -> Vec<(String, u64)> {
+        vec![
+            (self.left_chr.clone(), self.left_pos),
+            (self.right_chr.clone(), self.right_pos),
+        ]
     }
 }
 
