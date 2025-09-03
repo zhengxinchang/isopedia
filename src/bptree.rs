@@ -777,7 +777,7 @@ impl BPTree {
     /// return the record pointer list
     /// if the key is not found, return None
     /// this function does not need chrom id since one bptree for one chromsome
-    pub fn single_pos_search(&mut self, key: KeyType) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    pub fn single_pos_search(&mut self, key: KeyType) -> Vec<MergedIsoformOffsetPtr> {
         // println!("search key: {}", &key);
         // let mut cache = cache::DataCache::from_disk("./test/block0.dat");
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -785,7 +785,7 @@ impl BPTree {
 
         let mut hit = match root.search(key) {
             None => {
-                return None;
+                return vec![];
             }
             Some(hit) => {
                 // println!("search node: {}", hit);
@@ -799,73 +799,74 @@ impl BPTree {
             if !node.is_leaf() {
                 hit = match node.search(key) {
                     Some(hit) => hit,
-                    None => return None,
+                    None => return vec![],
                 };
             } else {
                 hit = match node.exact_search(key) {
                     Some(hit) => hit,
-                    None => return None,
+                    None => return vec![],
                 };
                 let addrs = node.get_addresses_by_children_value(&hit);
-                return Some(addrs);
+                return addrs;
             }
         }
     }
 
-    pub fn range_search(
-        &mut self,
-        pos: KeyType,
-        flank: KeyType,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
-        let start = pos - flank;
-        let end = pos + flank;
+    // pub fn range_search(
+    //     &mut self,
+    //     pos: KeyType,
+    //     flank: KeyType,
+    // ) -> Vec<MergedIsoformOffsetPtr> {
+    //     let start = pos - flank;
+    //     let end = pos + flank;
 
-        let cache = self.cache.as_mut().expect("Can not get cache");
-        let min_pos = cache.get_min_key();
-        let max_pos = cache.get_max_key();
-        if start > max_pos || end < min_pos {
-            // eprint!("start key {} is greater than max key {} or end key {} is less than min key {}\n", start, max_pos, end, min_pos);
-            return None;
-        }
+    //     let cache = self.cache.as_mut().expect("Can not get cache");
+    //     let min_pos = cache.get_min_key();
+    //     let max_pos = cache.get_max_key();
+    //     if start > max_pos || end < min_pos {
+    //         // eprint!("start key {} is greater than max key {} or end key {} is less than min key {}\n", start, max_pos, end, min_pos);
+    //         return vec![];
+    //     }
 
-        if start == end {
-            return self.single_pos_search(start);
-        }
+    //     if start == end {
+    //         return self.single_pos_search(start);
+    //     }
 
-        if start > end {
-            // eprint!("start key {} is greater than end key {}\n", start, end);
-            return None;
-        }
+    //     if start > end {
+    //         // eprint!("start key {} is greater than end key {}\n", start, end);
+    //         return vec![];
+    //     }
 
-        let start_pos = if start < min_pos { min_pos } else { start };
-        let end_pos = if end > max_pos { max_pos } else { end };
+    //     let start_pos = if start < min_pos { min_pos } else { start };
+    //     let end_pos = if end > max_pos { max_pos } else { end };
 
-        // let root = cache.get_root_node();
+    //     // let root = cache.get_root_node();
 
-        // 这里的问题是如果搜索start_pos, 如果start_不存在则直接返回None了
-        // 应该的逻辑如果start_pos不存在，应该找到最近的一个key，然后从这个key开始搜索
+    //     // 这里的问题是如果搜索start_pos, 如果start_不存在则直接返回None了
+    //     // 应该的逻辑如果start_pos不存在，应该找到最近的一个key，然后从这个key开始搜索
 
-        // check if the start is in the root node
-        // let mut final_values: Vec<u64> = Vec::new();
-        let mut final_addrs: Vec<MergedIsoformOffsetPtr> = Vec::new();
+    //     // check if the start is in the root node
+    //     // let mut final_values: Vec<u64> = Vec::new();
+    //     let mut final_addrs: Vec<MergedIsoformOffsetPtr> = Vec::new();
 
-        for s_key in start_pos..end_pos {
-            self.single_pos_search(s_key).map(|addrs| {
-                final_addrs.extend(addrs);
-            });
-        }
+    //     for s_key in start_pos..end_pos {
+    //         self.single_pos_search(s_key).into_iter().map(|addrs| {
+    //             final_addrs.push(addrs);
+    //         });
+    //     }
 
-        // node中应该有一个函数，找到start_pos的node，以及最近的一个key之后向右侧延申key，进行range search
-        // 目前我这样的搜索实际上是增加了 flank*2 倍数的搜索时间。
+    //     // node中应该有一个函数，找到start_pos的node，以及最近的一个key之后向右侧延申key，进行range search
+    //     // 目前我这样的搜索实际上是增加了 flank*2 倍数的搜索时间。
 
-        return Some(final_addrs);
-    }
+    //     // return Some(final_addrs);
+    //     final_addrs
+    // }
 
     pub fn range_search2(
         &mut self,
         pos: KeyType,
         flank: KeyType,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) ->Vec<MergedIsoformOffsetPtr> {
         let start = pos.saturating_sub(flank);
         let end = pos.saturating_add(flank);
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -888,7 +889,7 @@ impl BPTree {
 
                 if child_id == 0 || child_id > cache.header.total_nodes {
                     // eprintln!("No such node: {}", child_id);
-                    return None; // no such node
+                    return vec![]; // no such node
                 }
 
                 n = cache.get_node2(child_id).expect("Can not get next node");
@@ -908,7 +909,7 @@ impl BPTree {
                 }
 
                 if *k > end {
-                    return Some(results);
+                    return results;
                 }
 
                 let combined = node.header.childs[nk];
@@ -923,13 +924,7 @@ impl BPTree {
                 .get_node2(next_node_id)
                 .expect("Can not get next leaf node");
         }
-
-        if results.is_empty() {
-            None
-        } else {
-            Some(results)
-        }
-        // Some(results)
+        results
     }
 }
 
@@ -978,11 +973,11 @@ impl BPForest {
         chrom_name: &str,
         pos: u64,
         lru_size: usize,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) -> Vec<MergedIsoformOffsetPtr> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
             None => {
-                return None;
+                return vec![];
             }
         };
         let tree: &mut BPTree = self
@@ -1000,11 +995,11 @@ impl BPForest {
         pos: u64,
         flank: u64,
         lru_size: usize,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) -> Vec<MergedIsoformOffsetPtr> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
             None => {
-                return None;
+                return vec![];
             }
         };
 
@@ -1021,19 +1016,19 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         min_match: usize,
         lru_size: usize,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) -> Vec<MergedIsoformOffsetPtr> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
                 self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
-                    .unwrap_or_else(|| vec![])
+                   
             })
             .collect();
 
         if min_match == 0 || min_match >= positions.len() {
-            return Some(find_common(res_vec));
+            return find_common(res_vec);
         } else {
-            return Some(find_partial_common(&res_vec, min_match));
+            return find_partial_common(&res_vec, min_match);
         }
     }
 
@@ -1043,7 +1038,7 @@ impl BPForest {
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) -> Vec<MergedIsoformOffsetPtr> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -1053,16 +1048,16 @@ impl BPForest {
                     flank,
                     lru_size,
                 )
-                .unwrap_or_else(|| vec![])
+               
             })
             .collect();
 
         // dbg!(&res_vec);
 
         if min_match == 0 || min_match >= positions.len() {
-            Some(find_common(res_vec))
+            find_common(res_vec)
         } else {
-            Some(find_partial_common(&res_vec, min_match))
+            find_partial_common(&res_vec, min_match)
         }
     }
 
@@ -1071,7 +1066,7 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         lru_size: usize,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) -> Vec<MergedIsoformOffsetPtr> {
         if flank == 0 {
             self.search_multi_exact(positions, 0, lru_size)
         } else {
@@ -1085,7 +1080,7 @@ impl BPForest {
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
-    ) -> Option<Vec<MergedIsoformOffsetPtr>> {
+    ) -> Vec<MergedIsoformOffsetPtr> {
         if flank == 0 {
             self.search_multi_exact(positions, min_match, lru_size)
         } else {
