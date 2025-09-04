@@ -8,9 +8,10 @@ use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::utils::{get_total_memory_bytes, warmup};
 use isopedia::writer::MyGzWriter;
 use isopedia::{constants::*, utils};
-use log::{error, info};
+use log::{error, info, warn};
 use memmap2::Mmap;
 use serde::Serialize;
+use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -22,7 +23,10 @@ use std::path::PathBuf;
 Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 ", long_about = None)]
 #[clap(after_long_help = "
-Use 
+
+
+Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.
+
 ")]
 struct Cli {
     /// Path to the index directory
@@ -30,11 +34,11 @@ struct Cli {
     pub idxdir: PathBuf,
 
     /// Splice junction in 'chr1:pos1,chr2:pos2' format
-    #[arg(short = 'i', long = "splice")]
+    #[arg(short = 's', long = "splice")]
     pub splice: Option<String>,
 
     /// Path to splice junction bed file
-    #[arg(short = 'I', long = "splice-bed")]
+    #[arg(short = 'S', long = "splice-bed")]
     pub splice_bed: Option<PathBuf>,
 
     /// Flanking size (in bases) before and after the position
@@ -142,9 +146,13 @@ fn greetings(args: &Cli) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),
     }
+
+    eprintln!("Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.");
 }
 
 fn main() -> Result<()> {
+    env::set_var("RUST_LOG", "info");
+    env_logger::init();
     let cli = Cli::parse();
     cli.validate();
     greetings(&cli);
@@ -169,14 +177,6 @@ fn main() -> Result<()> {
 
     // init the output writer
     let mut mywriter = MyGzWriter::new(&cli.output)?;
-    let mut header_str =
-        String::from("chr1\tpos1\tchr2\tpos2\tid\trest_info\tpositive/sample_size");
-    let sample_name = dataset_info.get_sample_names();
-    for name in sample_name {
-        header_str.push_str(&format!("\t{}", name));
-    }
-    header_str.push('\n');
-    mywriter.write_all_bytes(header_str.as_bytes())?;
 
     let queries: Vec<BreakPointPair> = if cli.splice.is_some() {
         info!("parse breakpoints pair from command line...");
@@ -200,6 +200,8 @@ fn main() -> Result<()> {
         error!("Please provide either --splice or --splice-bed");
         std::process::exit(1);
     };
+
+    info!("Found {} splice junctions for query.", queries.len());
 
     // validate the breakpoints from same chromsome
     for breakpoint_pair in &queries {
@@ -249,24 +251,28 @@ fn main() -> Result<()> {
             query.id, query.left_chr, query.left_pos, query.right_chr, query.right_pos,
         ));
 
-        let isoforms = forest.search_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
+        let isoforms_ptr = forest.search_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
 
-        if isoforms.is_empty() {
+        if isoforms_ptr.is_empty() {
+            warn!("No isoforms found for query: {}", query.id);
         } else {
-            for offset in &isoforms {
+            for offset in &isoforms_ptr {
                 let record: MergedIsoform =
                     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
                 match record.get_splice_report(query, cli.flank, &dataset_info) {
                     Some(record_str) => {
-                        out_str.push_str(&format!("\t{}", record_str));
-                        out_str.push('\n');
-                        mywriter.write_all_bytes(out_str.as_bytes())?;
+                        let new_out_str = format!("{}\t{}\n", out_str, record_str);
+                        mywriter.write_all_bytes(new_out_str.as_bytes())?;
                     }
                     None => {}
                 }
             }
         }
     }
+
+    mywriter.finish()?;
+
+    info!("Finished!");
 
     Ok(())
 }

@@ -119,3 +119,22 @@ pub fn parse_breakpoint_str(s: &str) -> Result<(String, u64, String, u64)> {
     let right_pos: u64 = right_part[1].parse()?;
     Ok((left_chr, left_pos, right_chr, right_pos))
 }
+
+
+pub fn u64diff2i32(a: u64, b: u64) -> i32 {
+    if a >= b {
+        let diff = a - b;
+        if diff > i32::MAX as u64 {
+            i32::MAX
+        } else {
+            diff as i32
+        }
+    } else {
+        let diff = b - a;
+        if diff > i32::MAX as u64 {
+            -i32::MAX
+        } else {
+            -(diff as i32)
+        }
+    }
+}
