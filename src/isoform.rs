@@ -7,9 +7,11 @@ use serde_with::serde_as;
 
 use crate::{
     // constants::MAX_SAMPLE_SIZE,
+    breakpoints::BreakPointPair,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     reads::{AggrRead, Segment, Strand},
+    utils::calc_cpm,
 };
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReadDiffSlim {
@@ -477,6 +479,120 @@ impl MergedIsoform {
                 * (evidence_frac_vec.iter().sum::<f64>() / evidence_frac_vec.len() as f64).exp()
                 * (1.0 - gini);
         }
+    }
+
+    /// get partial report for splice junction searching
+    pub fn get_splice_report(
+        &self,
+        bpp: &BreakPointPair,
+        flank: u64,
+        dbinfo: &DatasetInfo,
+    ) -> Option<String> {
+        let mut out_str = Vec::new();
+
+        // support evidence
+        out_str.push(self.total_evidence.to_string());
+
+        // cpm of this isoform
+        out_str.push(
+            calc_cpm(
+                &self.total_evidence,
+                &(dbinfo.sample_total_evidence_vec.iter().sum::<u32>()),
+            )
+            .to_string(),
+        );
+
+        // index of the SJ in the isoform matched with query
+        if let Some((idx, sj)) = self.splice_junctions_vec.iter().enumerate().find(|(_, x)| {
+            if (x.0.abs_diff(bpp.left_pos) < flank) && (x.1.abs_diff(bpp.right_pos) < flank) {
+                return true;
+            } else {
+                return false;
+            }
+        }) {
+            // idx of splice junction
+            out_str.push((idx + 1).to_string());
+
+            // distance to splice sites
+            out_str.push(format!("{},{}", sj.0 - bpp.left_pos, sj.1 - bpp.right_pos));
+        } else {
+            return None;
+        }
+
+        // for the record only have one SJ, it could be a mono-exon or two exons. it needs to be confirmed here.
+        if self.splice_junctions_vec.len() == 1 {
+            if self.isoform_reads_slim_vec[0].left == self.splice_junctions_vec[0].0
+                && self.isoform_reads_slim_vec[0].right == self.splice_junctions_vec[0].1
+            {
+                // mono-exon
+                out_str.push("1".to_string());
+            } else {
+                out_str.push("2".to_string());
+            }
+        } else {
+            out_str.push((self.splice_junctions_vec.len() + 1).to_string());
+        }
+
+        let mut starts = Vec::with_capacity(10);
+        let mut ends = Vec::with_capacity(10);
+        let mut sample_vec = Vec::with_capacity(dbinfo.get_size());
+        let mut sample_idx = 0usize;
+
+        for (offset, length) in self
+            .sample_offset_arr
+            .iter()
+            .zip(self.sample_evidence_arr.iter())
+        {
+            // for a particular sample, do:
+            if *length > 0 {
+                let sub = &self.isoform_reads_slim_vec
+                    [*offset as usize..(*offset as usize + *length as usize)];
+                let mut sample_read_sub = Vec::with_capacity(*length as usize);
+                for read in sub {
+                    starts.push(read.left);
+                    ends.push(read.right);
+
+                    sample_read_sub.push(format!("{}|{}|{}", read.left, read.right, read.strand));
+                }
+                let sample_read_sub = sample_read_sub.join(",");
+                sample_vec.push(format!(
+                    "{}:{}:{}",
+                    length,
+                    calc_cpm(
+                        length,
+                        &(dbinfo.sample_total_evidence_vec[sample_idx] as u32)
+                    ),
+                    sample_read_sub
+                ));
+            } else {
+                sample_vec.push(format!("{}:{}:{}", 0, 0, "NULL"));
+            }
+            sample_idx = sample_idx + 1;
+        }
+
+        //left right most numbers
+        out_str.push(starts.iter().min().unwrap().to_string());
+        out_str.push(starts.iter().max().unwrap().to_string());
+        out_str.push(ends.iter().min().unwrap().to_string());
+        out_str.push(ends.iter().max().unwrap().to_string());
+
+        // splice junctions
+
+        out_str.push(
+            self.splice_junctions_vec
+                .iter()
+                .map(|(l, r)| format!("{}-{}", l, r))
+                .collect::<Vec<String>>()
+                .join(","),
+        );
+
+        // format
+
+        out_str.push("COUNT:CPM:START,END,STRAND".to_string());
+
+        out_str.extend_from_slice(&sample_vec);
+
+        Some(out_str.join("\t"))
     }
 }
 

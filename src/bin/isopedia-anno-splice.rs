@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{arg, Parser};
 use isopedia::bptree::BPForest;
-use isopedia::breakpoints::{self, BreakPointsPair};
+use isopedia::breakpoints::{self, BreakPointPair};
 use isopedia::dataset_info::DatasetInfo;
 use isopedia::isoform::MergedIsoform;
 use isopedia::isoformarchive::read_record_from_mmap;
@@ -10,7 +10,6 @@ use isopedia::writer::MyGzWriter;
 use isopedia::{constants::*, utils};
 use log::{error, info};
 use memmap2::Mmap;
-use rust_htslib::bam::header;
 use serde::Serialize;
 use std::fs::File;
 use std::path::PathBuf;
@@ -168,9 +167,6 @@ fn main() -> Result<()> {
         .advise(memmap2::Advice::Sequential)
         .expect("Failed to set mmap advice");
 
-    let mut hit_count = 0u32;
-    let mut miss_count = 0u32;
-
     // init the output writer
     let mut mywriter = MyGzWriter::new(&cli.output)?;
     let mut header_str =
@@ -182,11 +178,11 @@ fn main() -> Result<()> {
     header_str.push('\n');
     mywriter.write_all_bytes(header_str.as_bytes())?;
 
-    let queries: Vec<BreakPointsPair> = if cli.splice.is_some() {
+    let queries: Vec<BreakPointPair> = if cli.splice.is_some() {
         info!("parse breakpoints pair from command line...");
         let splice_str = cli.splice.clone().unwrap();
         let bp =
-            BreakPointsPair::parse_string(&splice_str).expect("Can not parse splice junction...");
+            BreakPointPair::parse_string(&splice_str).expect("Can not parse splice junction...");
         vec![bp]
     } else if cli.splice_bed.is_some() {
         let splice_bed_path = cli.splice_bed.unwrap();
@@ -220,19 +216,37 @@ fn main() -> Result<()> {
     }
 
     // make header line
-    let mut header_line = "id\tchr1\tpos1\tchr2\tpos2\ttotal_evidence\tmatched_sj_idx\tdist_to_matched_sj\tstart_pos_left\tstart_pos_right\tend_pos_left\tend_pos_right\tsplice_junctions\t".to_string();
+    let header_line = vec![
+        "id",
+        "chr1",
+        "pos1",
+        "chr2",
+        "pos2",
+        "total_evidence",
+        "cpm",
+        "matched_sj_idx",
+        "dist_to_matched_sj",
+        "n_exons",
+        "start_pos_left",
+        "start_pos_right",
+        "end_pos_left",
+        "end_pos_right",
+        "splice_junctions",
+        "format",
+    ];
+
+    let mut header_line = header_line.join("\t");
     header_line.push_str(&dataset_info.get_sample_names().join("\t"));
     header_line.push_str("\n");
     mywriter.write_all_bytes(header_line.as_bytes())?;
 
-
     // make output
-    let mut outline = String::with_capacity(1024);
+    let mut out_str = String::with_capacity(1024);
     for query in &queries {
-        outline.clear();
-        outline.push_str(&format!(
+        out_str.clear();
+        out_str.push_str(&format!(
             "{}\t{}\t{}\t{}\t{}",
-            query.left_chr, query.left_pos, query.right_chr, query.right_pos, query.id,
+            query.id, query.left_chr, query.left_pos, query.right_chr, query.right_pos,
         ));
 
         let isoforms = forest.search_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
@@ -242,8 +256,14 @@ fn main() -> Result<()> {
             for offset in &isoforms {
                 let record: MergedIsoform =
                     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
-
-                
+                match record.get_splice_report(query, cli.flank, &dataset_info) {
+                    Some(record_str) => {
+                        out_str.push_str(&format!("\t{}", record_str));
+                        out_str.push('\n');
+                        mywriter.write_all_bytes(out_str.as_bytes())?;
+                    }
+                    None => {}
+                }
             }
         }
     }

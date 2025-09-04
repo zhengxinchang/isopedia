@@ -2,11 +2,10 @@ use anyhow::{anyhow, Result};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::rc::Rc;
 
-use crate::utils::{self, trim_chr_prefix_to_upper};
+use crate::utils::{self};
 #[derive(Debug, Clone)]
-pub struct BreakPointsPair {
+pub struct BreakPointPair {
     pub left_chr: String,
     pub left_pos: u64,
     pub right_chr: String,
@@ -15,7 +14,7 @@ pub struct BreakPointsPair {
     pub rest_info: String,
 }
 
-impl BreakPointsPair {
+impl BreakPointPair {
     pub fn parse_bed_line(s: &str) -> Result<Self> {
         let mut parts = s.split('\t');
         let left_chr = parts
@@ -58,7 +57,7 @@ impl BreakPointsPair {
             left_pos,
             right_chr,
             right_pos,
-            id: "".to_string(),
+            id: "single_query".to_string(),
             rest_info: "".to_string(),
         })
     }
@@ -83,17 +82,17 @@ impl BreakPointsPair {
     }
 }
 
-pub fn bed2breakpointsvec<P: AsRef<Path>>(p: P) -> Result<Vec<BreakPointsPair>> {
+pub fn bed2breakpointsvec<P: AsRef<Path>>(p: P) -> Result<Vec<BreakPointPair>> {
     let file = File::open(p)?;
     let reader = BufReader::new(file);
-    let mut breakpoints: Vec<BreakPointsPair> = Vec::new();
+    let mut breakpoints: Vec<BreakPointPair> = Vec::new();
 
     for line in reader.lines() {
         let line = line?;
         if line.trim().is_empty() || line.starts_with('#') {
             continue; // Skip empty lines and comments
         }
-        let mut bp = BreakPointsPair::parse_bed_line(&line)?;
+        let mut bp = BreakPointPair::parse_bed_line(&line)?;
         bp.sort();
         breakpoints.push(bp);
     }
