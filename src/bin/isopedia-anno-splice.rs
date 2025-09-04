@@ -10,6 +10,7 @@ use isopedia::writer::MyGzWriter;
 use isopedia::{constants::*, utils};
 use log::{error, info};
 use memmap2::Mmap;
+use rust_htslib::bam::header;
 use serde::Serialize;
 use std::fs::File;
 use std::path::PathBuf;
@@ -218,6 +219,14 @@ fn main() -> Result<()> {
         }
     }
 
+    // make header line
+    let mut header_line = "id\tchr1\tpos1\tchr2\tpos2\ttotal_evidence\tmatched_sj_idx\tdist_to_matched_sj\tstart_pos_left\tstart_pos_right\tend_pos_left\tend_pos_right\tsplice_junctions\t".to_string();
+    header_line.push_str(&dataset_info.get_sample_names().join("\t"));
+    header_line.push_str("\n");
+    mywriter.write_all_bytes(header_line.as_bytes())?;
+
+
+    // make output
     let mut outline = String::with_capacity(1024);
     for query in &queries {
         outline.clear();
