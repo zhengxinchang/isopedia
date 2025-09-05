@@ -30,7 +30,7 @@ check chrom distribution before aggregation
 X anno-isoform shouldnt drop any queries.
 standarize the breakpoints between the anno-fusion and anno-splice
 use record type to mark if the record from mono-exon, then each split if a record is combined from a mono exon and two exon but share same SJ. extramely rare event?? 
-
+clean up file path in meta object when buiding the index, and also remove the header_clean.remove(1); // remove the path
 
 AS 1 query
 

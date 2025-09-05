@@ -8,8 +8,9 @@ use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::utils::{get_total_memory_bytes, warmup};
 use isopedia::writer::MyGzWriter;
 use isopedia::{constants::*, meta, utils};
-use log::{error, info, warn, Metadata};
+use log::{error, info, warn};
 use memmap2::Mmap;
+use rust_htslib::bam::header;
 use serde::Serialize;
 use std::env;
 use std::fs::File;
@@ -23,7 +24,6 @@ use std::path::PathBuf;
 Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 ", long_about = None)]
 #[clap(after_long_help = "
-
 
 Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.
 
@@ -245,6 +245,7 @@ fn main() -> Result<()> {
     ];
 
     let mut header_line = header_line.join("\t");
+    header_line.push_str("\t");
     header_line.push_str(&dataset_info.get_sample_names().join("\t"));
     header_line.push_str("\n");
     mywriter.write_all_bytes(header_line.as_bytes())?;
