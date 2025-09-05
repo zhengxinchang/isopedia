@@ -115,13 +115,14 @@ impl Meta {
 
     pub fn get_meta_table(&self, prefix: Option<&str>) -> String {
         let mut table = String::new();
+        let mut header_clean = self.header.clone();
+        header_clean.remove(1); // remove the path
 
         if let Some(p) = prefix {
-            table.push_str(&format!("{}{}\n", p, self.header.join("\t")));
+            table.push_str(&format!("{}{}\n", p, header_clean.join("\t")));
             for sample in &self.samples {
                 if let Some(entry) = self.records.get(sample) {
-                    let fields: Vec<String> = self
-                        .header
+                    let fields: Vec<String> = header_clean
                         .iter()
                         .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
                         .collect();
