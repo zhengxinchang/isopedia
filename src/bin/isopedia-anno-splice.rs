@@ -7,8 +7,8 @@ use isopedia::isoform::MergedIsoform;
 use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::utils::{get_total_memory_bytes, warmup};
 use isopedia::writer::MyGzWriter;
-use isopedia::{constants::*, utils};
-use log::{error, info, warn};
+use isopedia::{constants::*, meta, utils};
+use log::{error, info, warn, Metadata};
 use memmap2::Mmap;
 use serde::Serialize;
 use std::env;
@@ -166,6 +166,9 @@ fn main() -> Result<()> {
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
     let mut archive_buf: Vec<u8> = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
+    info!("loading metadata");
+    let meta = meta::Meta::parse(cli.idxdir.join(META_FILE_NAME))?;
+
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .expect("Can not open aggregated records file...");
 
@@ -217,9 +220,13 @@ fn main() -> Result<()> {
         }
     }
 
+    let meta_table = meta.get_meta_table(Some("##"));
+
+    mywriter.write_all_bytes(meta_table.as_bytes())?;
+
     // make header line
     let header_line = vec![
-        "id",
+        "#id",
         "chr1",
         "pos1",
         "chr2",
