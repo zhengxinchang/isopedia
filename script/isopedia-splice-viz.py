@@ -97,6 +97,8 @@ class MetaTable:
         self.line_no = 0
         self.data = {}
         self.sample_names = []
+        self.left_most = None
+        self.right_most = None
 
     def add_record(self, line):
         if self.line_no == 0:
@@ -135,6 +137,134 @@ class MetaTable:
         }
 
 
+class GTFRecord:
+    def __init__(self, line):
+        fields = line.strip().split("\t")
+        self.feature = fields[2]
+        self.chr = fields[0]
+        self.start = int(fields[3])
+        self.end = int(fields[4])
+        self.strand = fields[6]
+        self.attributes = GTF._parse_attributes(fields[8])
+        self.transcript = OrderedDict()
+        self.elements = []
+
+    def add_transcript(self, start, end, attributes):
+        trans_id = attributes.get('transcript_id', None)
+        self.transcript[trans_id] = {
+            'transcript_id': trans_id,
+            'gene_id': attributes.get('gene_id', None),
+            'start': start,
+            'end': end,
+            'attributes': attributes,
+            'elements': []
+        }
+
+    def add_elements(self, start, end, attributes):
+        gene_id = attributes.get('gene_id', None)
+        transcript_id = attributes.get('transcript_id', None)
+
+        self.transcript[transcript_id]['elements'].append({
+            'element_id': attributes.get('element_id', None),
+            'transcript_id': transcript_id,
+            'gene_id': gene_id,
+            'start': start,
+            'end': end,
+            'attributes': attributes
+        })
+
+    def get_json(self):
+        # print(f"Gene {self.attributes.get('gene_id', None)} has {len(self.transcript)} transcripts", file=sys.stderr)
+        return {
+            "feature": self.feature,
+            "gene_id": self.attributes.get("gene_id", None),
+            "chr": self.chr,
+            "start": self.start,
+            "end": self.end,
+            "strand": self.strand,
+            "attributes": self.attributes,
+            "transcripts": self.transcript,
+        }
+
+
+class GTF:
+
+    def __init__(self,gtf_path,q_chr,q_start,q_end):
+
+        self.gene_records = {}
+
+        with open(gtf_path,'r') as infile:
+            for line in infile:
+                if line.startswith("#"):
+                    continue
+                fields = line.strip().split("\t")
+                # print(len(fields) )
+                if len(fields) < 9:
+                    continue
+                feature_type = fields[2]
+                # print(feature_type)
+                chrom = trim_chr(fields[0])
+                start = int(fields[3])
+                end = int(fields[4])
+
+                if chrom != q_chr:
+                    continue
+                
+                if feature_type == "gene":
+                    
+                    if GTF._overlap(start,end,q_start,q_end) > 0 and chrom == trim_chr(q_chr):
+                        ## gene that overlap with the query
+
+                        attrs = GTF._parse_attributes(fields[8])
+                        gene_id = attrs.get('gene_id', None)
+                        self.gene_records[gene_id] = GTFRecord(line)
+
+                elif feature_type == "transcript":
+                    attrs = GTF._parse_attributes(fields[8])
+                    gene_id = attrs.get('gene_id', None)
+                    if gene_id in self.gene_records.keys():
+                        self.gene_records[gene_id].add_transcript(start, end, attrs)
+                else:
+                    attrs = GTF._parse_attributes(fields[8])
+                    gene_id = attrs.get('gene_id', None)
+                    if gene_id in self.gene_records.keys():
+                        self.gene_records[gene_id].add_elements(start, end, attrs)
+
+
+
+    def _overlap(a1,a2,b1,b2):
+        return max(0, min(a2, b2) - max(a1, b1))
+
+    def _parse_attributes(string):
+        attributes = {}
+        for attr in string.split(";"):
+            attr = attr.strip()
+            if attr == "":
+                continue
+            key_value = attr.split(" ")
+            if len(key_value) >= 2:
+                key = key_value[0]
+                value = " ".join(key_value[1:]).strip('"')
+                attributes[key] = value
+        return attributes
+
+
+    def get_json(self):
+        gene_list = []
+        for gene in self.gene_records.values():
+            # print("aa",gene.get_json())
+            gene_list.append(gene.get_json())
+        return gene_list
+
+
+def trim_chr(chrom):
+
+    chr = chrom.strip("chr").upper()
+    if chr == "MT":
+        return "M"
+    return chr
+
+
 def main():
     args = parse_args()
 
@@ -142,6 +272,9 @@ def main():
     isoform_records = []
     sample_names = []
     current_id = None
+
+    left_most = sys.maxsize
+    right_most = 0
     with gzip.open(args.input, 'rt') as infile:
         for line in infile:
             if line.startswith("##"):
@@ -161,16 +294,28 @@ def main():
                 if current_id != isoform_record.id:
                     print(f"Error: Only single query are supported, however multiple query were found in the input file.",file=sys.stderr)
                     exit(1)
+
+                if isoform_record.start_pos_left < left_most:
+                    left_most = isoform_record.start_pos_left
+                if isoform_record.end_pos_right > right_most:   
+                    right_most = isoform_record.end_pos_right
                 isoform_records.append(isoform_record)
 
+    chrom = isoform_record.chr1
+    # print(chrom,left_most,right_most)
+    gtf = GTF(gtf_path=args.gtf,q_chr=chrom,q_start=left_most,q_end=right_most)
+
+
+    # print(gtf.get_json(),file=sys.stderr)
 
     out_json = {
         "meta": metatable.get_json(),
+        'annotation': gtf.get_json(),
         "isoforms": [record.get_json() for record in isoform_records]
     }
 
     with open(args.output, 'w') as outfile:
-        json.dump(out_json, outfile, indent=4)
+        json.dump(out_json, outfile)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Visualize isoforms from isopedia-anno-splice output")
