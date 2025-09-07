@@ -166,12 +166,13 @@ class GTFRecord:
             'elements': []
         }
 
-    def add_elements(self, start, end, attributes):
+    def add_elements(self, start, end,feature, attributes):
         gene_id = attributes.get('gene_id', None)
         transcript_id = attributes.get('transcript_id', None)
 
         self.transcript[transcript_id]['elements'].append({
-            'element_id': attributes.get('element_id', None),
+            'element_id': None,
+            'feature': feature,
             'transcript_id': transcript_id,
             'gene_id': gene_id,
             'start': start,
@@ -234,7 +235,7 @@ class GTF:
                     attrs = GTF._parse_attributes(fields[8])
                     gene_id = attrs.get('gene_id', None)
                     if gene_id in self.gene_records.keys():
-                        self.gene_records[gene_id].add_elements(start, end, attrs)
+                        self.gene_records[gene_id].add_elements(start, end,feature_type, attrs)
 
 
 
