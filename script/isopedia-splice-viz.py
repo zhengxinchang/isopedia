@@ -115,6 +115,10 @@ class MetaTable:
             self.line_no += 1
             self.sample_names.append(fields[0])
 
+    def update_range(self, left, right):
+        self.left_most = left
+        self.right_most = right
+
     def get_attr_list(self):
         return self.attrs
 
@@ -132,6 +136,8 @@ class MetaTable:
         return {
             "attrs": self.attrs,
             "data": self.data,
+            "left_most": self.left_most,
+            "right_most": self.right_most,
             "all_sample_names": self.sample_names,
             "record_no": self.line_no
         }
@@ -307,6 +313,9 @@ def main():
 
 
     # print(gtf.get_json(),file=sys.stderr)
+    metatable.update_range(left_most, right_most)
+
+    isoform_records.sort(key=lambda x: x.start_pos_left, reverse=False)
 
     out_json = {
         "meta": metatable.get_json(),
