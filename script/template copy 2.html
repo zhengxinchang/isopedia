@@ -9,6 +9,7 @@
 
     <style>
         /* Add your custom styles here */
+
     </style>
 </head>
 
@@ -62,162 +63,412 @@
 
     <script>
 
-        const { createApp } = Vue;
+const { createApp } = Vue;
 
-        const app = createApp({
-            data() {
-                return {
-                    meta,
-                    annotation,
-                    isoforms,
+const app = createApp({
+  data() {
+    return {
+      meta,
+      annotation,
+      isoforms,
 
-                    svg: null,
-                    svgW: 0,
-                    svgH: 0,
-                    margin: { top: 40, right: 50, bottom: 40, left: 80 },
-                    innerW: 0,
-                    innerH: 0,
+      svg: null,
+      svgW: 0,
+      svgH: 0,
+      margin: { top: 40, right: 50, bottom: 40, left: 80 },
+      innerW: 0,
+      innerH: 0,
 
-                    // X（共享）
-                    x0: null,
-                    xz: null,
+      // X（共享）
+      x0: null,
+      xz: null,
 
-                    // Bottom（连续 + band）
-                    y0: null,
-                    yz: null,
-                    yBand: null,
+      // Bottom（连续 + band）
+      y0: null,
+      yz: null,
+      yBand: null,
 
-                    // Top（连续 + band）
-                    y0Ref: null,
-                    yzRef: null,
-                    yRefBand: null,
+      // Top（连续 + band）
+      y0Ref: null,
+      yzRef: null,
+      yRefBand: null,
 
-                    // 分组/轴
-                    gRoot: null,
-                    gTop: null,
-                    gBottom: null,
-                    gXAxis: null,
-                    gYAxis: null,
-                    gYAxisRef: null,
-                    gContent: null,
-                    gContentRef: null,
+      // 分组/轴
+      gRoot: null,
+      gTop: null,
+      gBottom: null,
+      gXAxis: null,
+      gYAxis: null,
+      gYAxisRef: null,
+      gContent: null,
+      gContentRef: null,
 
-                    // 尺寸拆分
-                    refH: 120,
-                    bodyH: 0,
+      // 尺寸拆分
+      refH: 120,
+      bodyH: 0,
 
-                    // 交互 overlay & zoom（各自独立）
-                    topOverlay: null,
-                    bottomOverlay: null,
-                    zoomTop: null,
-                    zoomBottom: null,
+      // 交互 overlay & zoom（各自独立）
+      topOverlay: null,
+      bottomOverlay: null,
+      zoomTop: null,
+      zoomBottom: null,
 
-                    // 数据
-                    sjData: [],
-                    exonData: [],
-                    readspanData: [],
-                    ref_introns: [],
-                    ref_exons: [],
-                    ref_cds: [],
-                    ref_stop_codons: [],
-                    ref_start_codons: [],
-                    ref_utrs: [],
-                    ref_tx_count: 0,
+      // 数据
+      sjData: [],
+      exonData: [],
+      readspanData: [],
+      ref_introns: [],
+      ref_exons: [],
+      ref_cds: [],
+      ref_stop_codons: [],
+      ref_start_codons: [],
+      ref_utrs: [],
+      ref_tx_count: 0
+    };
+  },
 
-                    // [ADDED] —— 共享缩放比例/水平位移（上下共用）
-                    kShared: 1,
-                    xShared: 0,
+  methods: {
+    prepare() {
+      // ====== 1) 预处理 reference ======
+      this.ref_tx_count = 0;
+      this.ref_exons = [];
+      this.ref_introns = [];
+      this.ref_cds = [];
+      this.ref_stop_codons = [];
+      this.ref_start_codons = [];
+      this.ref_utrs = [];
 
-                    // [ADDED] —— 防止 transform 互相同步时递归触发
-                    syncing: false,
-                };
-            },
+      this.annotation.forEach(gene => {
+        Object.values(gene.transcripts).forEach(tx => {
+          this.ref_tx_count += 1;
+          tx.elements.forEach(el => {
+            if (el.feature === 'exon') {
+              this.ref_exons.push({
+                feature: el.feature, row: this.ref_tx_count,
+                coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
+              });
+              this.ref_introns.push(el.start, el.end);
+            } else if (el.feature === 'CDS') {
+              this.ref_cds.push({
+                feature: el.feature, row: this.ref_tx_count,
+                coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
+              });
+            } else if (el.feature === 'stop_codon') {
+              this.ref_stop_codons.push({
+                feature: el.feature, row: this.ref_tx_count,
+                coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
+              });
+            } else if (el.feature === 'start_codon') {
+              this.ref_start_codons.push({
+                feature: el.feature, row: this.ref_tx_count,
+                coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
+              });
+            } else if (el.feature === 'UTR') {
+              this.ref_utrs.push({
+                feature: el.feature, row: this.ref_tx_count,
+                coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
+              });
+            }
+          });
+        });
+      });
 
-            methods: {
-                prepare() {
-                    // ====== 1) 预处理 reference ======
-                    this.ref_tx_count = 0;
-                    this.ref_exons = [];
-                    this.ref_introns = [];
-                    this.ref_cds = [];
-                    this.ref_stop_codons = [];
-                    this.ref_start_codons = [];
-                    this.ref_utrs = [];
+      // ====== 2) 预处理 bottom（isoforms） ======
+      this.sjData = [];
+      this.exonData = [];
+      this.readspanData = [];
+      this.isoforms.forEach((iso, i) => { iso._row = i + 1; });
 
-                    this.annotation.forEach(gene => {
-                        Object.values(gene.transcripts).forEach(tx => {
-                            this.ref_tx_count += 1;
-                            tx.elements.forEach(el => {
-                                if (el.feature === 'exon') {
-                                    this.ref_exons.push({
-                                        feature: el.feature, row: this.ref_tx_count,
-                                        coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
-                                    });
-                                    this.ref_introns.push(el.start, el.end);
-                                } else if (el.feature === 'CDS') {
-                                    this.ref_cds.push({
-                                        feature: el.feature, row: this.ref_tx_count,
-                                        coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
-                                    });
-                                } else if (el.feature === 'stop_codon') {
-                                    this.ref_stop_codons.push({
-                                        feature: el.feature, row: this.ref_tx_count,
-                                        coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
-                                    });
-                                } else if (el.feature === 'start_codon') {
-                                    this.ref_start_codons.push({
-                                        feature: el.feature, row: this.ref_tx_count,
-                                        coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
-                                    });
-                                } else if (el.feature === 'UTR') {
-                                    this.ref_utrs.push({
-                                        feature: el.feature, row: this.ref_tx_count,
-                                        coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
-                                    });
-                                }
-                            });
-                        });
-                    });
+      this.isoforms.forEach(iso => {
+        (iso.splice_junction || []).forEach(sj => {
+          this.sjData.push({ coord: sj, row: iso._row });
+        });
 
-                    // ====== 2) 预处理 bottom（isoforms） ======
-                    this.sjData = [];
-                    this.exonData = [];
-                    this.readspanData = [];
-                    this.isoforms.forEach((iso, i) => { iso._row = i + 1; });
+        const splice_sites = (iso.splice_sites || []).slice();
+        splice_sites.unshift(iso.start_pos_right);
+        splice_sites.push(iso.end_pos_left);
+        splice_sites.forEach((pos, i) => {
+          if (i % 2 === 0 && splice_sites[i + 1] != null) {
+            this.exonData.push({ coord: [pos, splice_sites[i + 1]], row: iso._row });
+          }
+        });
 
-                    this.isoforms.forEach(iso => {
-                        (iso.splice_junction || []).forEach(sj => {
-                            this.sjData.push({ coord: sj, row: iso._row });
-                        });
+        this.readspanData.push({ coord: [iso.start_pos_left, iso.start_pos_right], row: iso._row });
+        this.readspanData.push({ coord: [iso.end_pos_left, iso.end_pos_right], row: iso._row });
+      });
 
-                        const splice_sites = (iso.splice_sites || []).slice();
-                        splice_sites.unshift(iso.start_pos_right);
-                        splice_sites.push(iso.end_pos_left);
-                        splice_sites.forEach((pos, i) => {
-                            if (i % 2 === 0 && splice_sites[i + 1] != null) {
-                                this.exonData.push({ coord: [pos, splice_sites[i + 1]], row: iso._row });
-                            }
-                        });
+      // ====== 3) 尺寸 ======
+      const { width, height } = this.svg.node().getBoundingClientRect();
+      this.svgW = width;
+      this.svgH = height;
+      this.innerW = Math.max(10, width - this.margin.left - this.margin.right);
+      this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
+      this.bodyH = Math.max(10, this.innerH - this.refH);
 
-                        this.readspanData.push({ coord: [iso.start_pos_left, iso.start_pos_right], row: iso._row });
-                        this.readspanData.push({ coord: [iso.end_pos_left, iso.end_pos_right], row: iso._row });
-                    });
+      // ====== 4) 尺度 ======
+      const N = this.isoforms.length;
+      const xdomain = [this.meta.left_most, this.meta.right_most];
+      const ydomainContinuous = [0, N];
+      const ydomainBand = d3.range(1, N + 1);
+      const ref_tx_arr = d3.range(1, this.ref_tx_count + 1);
 
-                    // ====== 3) 尺寸 ======
-                    const { width, height } = this.svg.node().getBoundingClientRect();
-                    this.svgW = width;
-                    this.svgH = height;
-                    this.innerW = Math.max(10, width - this.margin.left - this.margin.right);
-                    this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
-                    this.bodyH = Math.max(10, this.innerH - this.refH);
+      // X（共享）
+      this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
+      this.xz = this.x0.copy();
 
-                    // ====== 4) 尺度 ======
-                    const N = this.isoforms.length;
-                    const xdomain = [this.meta.left_most, this.meta.right_most];
-                    const ydomainContinuous = [0, N];
-                    const ydomainBand = d3.range(1, N + 1);
-                    const ref_tx_arr = d3.range(1, this.ref_tx_count + 1);
+      // Bottom Y
+      this.y0 = d3.scaleLinear().domain(ydomainContinuous).range([0, this.bodyH]);
+      this.yz = this.y0.copy();
+      this.yBand = d3.scaleBand().domain(ydomainBand).range([0, this.bodyH]).padding(0.2);
 
-                    // X（共享）
-                    this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
-                    this.xz = this.x0.copy()
+      // Top Y
+      this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
+      this.yzRef = this.y0Ref.copy();
+      this.yRefBand = d3.scaleBand().domain(ref_tx_arr).range([0, this.refH]).padding(0.3);
+
+      // ====== 5) SVG & 分组 ======
+      this.svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
+
+      this.gRoot = this.svg.append("g")
+        .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+
+      this.gTop = this.gRoot.append("g")
+        .attr("class", "top-ref")
+        .attr("transform", "translate(0,0)");
+
+      this.gBottom = this.gRoot.append("g")
+        .attr("class", "bottom-body")
+        .attr("transform", `translate(0,${this.refH})`);
+
+      // 只裁内容，不裁坐标轴（防止轴消失）
+      const defs = this.svg.append("defs");
+      defs.append("clipPath").attr("id", "clipTop")
+        .append("rect").attr("x", 0).attr("y", 0)
+        .attr("width", this.innerW).attr("height", this.refH);
+      defs.append("clipPath").attr("id", "clipBottom")
+        .append("rect").attr("x", 0).attr("y", 0)
+        .attr("width", this.innerW).attr("height", this.bodyH);
+
+      // 轴
+      this.gXAxis = this.gTop.append("g")
+        .attr("class", "x-axis")
+        .attr("transform", "translate(0,0)")
+        .call(d3.axisTop(this.xz).ticks(10));
+
+      this.gYAxisRef = this.gTop.append("g")
+        .attr("class", "y-axis-ref")
+        .call(d3.axisLeft(this.yRefBand).tickValues(ref_tx_arr));
+
+      this.gYAxis = this.gBottom.append("g")
+        .attr("class", "y-axis")
+        .call(this.yAxisGenerator());
+
+      // 内容组（套 clipPath）
+      this.gContentRef = this.gTop.append("g")
+        .attr("class", "content-ref")
+        .attr("clip-path", "url(#clipTop)");
+
+      this.gContent = this.gBottom.append("g")
+        .attr("class", "content")
+        .attr("clip-path", "url(#clipBottom)");
+
+      // 覆盖层（各自独立 zoom 的交互面）
+      this.topOverlay = this.gTop.append("rect")
+        .attr("class", "overlay-top")
+        .attr("x", 0).attr("y", 0)
+        .attr("width", this.innerW).attr("height", this.refH)
+        .style("fill", "none").style("pointer-events", "all");
+
+      this.bottomOverlay = this.gBottom.append("rect")
+        .attr("class", "overlay-bottom")
+        .attr("x", 0).attr("y", 0)
+        .attr("width", this.innerW).attr("height", this.bodyH)
+        .style("fill", "none").style("pointer-events", "all");
+
+      // ====== 6) 两块各自的 zoom 行为（X 共享，Y 独立） ======
+      this.zoomTop = d3.zoom()
+        .scaleExtent([0.3, 150])
+        .translateExtent([[0, 0], [this.innerW, this.refH]])
+        .extent([[0, 0], [this.innerW, this.refH]])
+        .on("zoom", (event) => this.onZoomTop(event));
+
+      this.zoomBottom = d3.zoom()
+        .scaleExtent([0.3, 150])
+        .translateExtent([[0, 0], [this.innerW, this.bodyH]])
+        .extent([[0, 0], [this.innerW, this.bodyH]])
+        .on("zoom", (event) => this.onZoomBottom(event));
+
+      this.topOverlay.call(this.zoomTop);
+      this.bottomOverlay.call(this.zoomBottom);
+    },
+
+    draw() {
+      // Bottom 内容
+      this.gContent.selectAll("line.splice")
+        .data(this.sjData)
+        .join("line")
+        .attr("class", "splice")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]))
+        .attr("y1", d => this.yCenter(d.row))
+        .attr("y2", d => this.yCenter(d.row))
+        .attr("stroke", "red")
+        .attr("stroke-width", 0.8)
+        .attr("vector-effect", "non-scaling-stroke");
+
+      this.gContent.selectAll("line.exon")
+        .data(this.exonData)
+        .join("line")
+        .attr("class", "exon")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]))
+        .attr("y1", d => this.yCenter(d.row))
+        .attr("y2", d => this.yCenter(d.row))
+        .attr("stroke", "black")
+        .attr("stroke-width", 4)
+        .attr("vector-effect", "non-scaling-stroke");
+
+      this.gContent.selectAll("line.readspan")
+        .data(this.readspanData)
+        .join("line")
+        .attr("class", "readspan")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]))
+        .attr("y1", d => this.yCenter(d.row))
+        .attr("y2", d => this.yCenter(d.row))
+        .attr("stroke", "blue")
+        .attr("stroke-width", 4)
+        .attr("vector-effect", "non-scaling-stroke");
+
+      // Top 内容
+      this.gContentRef.selectAll("line.ref-exon")
+        .data(this.ref_exons)
+        .join("line")
+        .attr("class", "ref-exon")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]))
+        .attr("y1", d => this.yRefCenter(d.row))
+        .attr("y2", d => this.yRefCenter(d.row))
+        .attr("stroke", "black")
+        .attr("stroke-width", 4)
+        .attr("vector-effect", "non-scaling-stroke");
+    },
+
+    // 顶部：X 共享 + 顶部 Y 独立
+    onZoomTop(event) {
+      const t = event.transform;
+
+      // X（共享给两块）
+      this.xz = t.rescaleX(this.x0);
+      this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
+
+      // 顶部 Y
+      this.yzRef = t.rescaleY(this.y0Ref);
+      this.yRefBand.range([this.yzRef(0), this.yzRef(this.ref_tx_count)]);
+      this.gYAxisRef.call(this.yRefAxisGenerator());
+
+      // 更新 top 内容（x+y）
+      this.gContentRef.selectAll("line.ref-exon")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]))
+        .attr("y1", d => this.yRefCenter(d.row))
+        .attr("y2", d => this.yRefCenter(d.row));
+
+      // bottom：只更新 X（Y 不动）
+      this.gYAxis.call(this.yAxisGenerator());
+      this.gContent.selectAll("line.splice, line.exon, line.readspan")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]));
+    },
+
+    // 底部：X 共享 + 底部 Y 独立
+    onZoomBottom(event) {
+      const t = event.transform;
+
+      // X（共享给两块）
+      this.xz = t.rescaleX(this.x0);
+      this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
+
+      // 底部 Y
+      const N = this.isoforms.length;
+      this.yz = t.rescaleY(this.y0);
+      this.yBand.range([this.yz(0), this.yz(N)]);
+      this.gYAxis.call(this.yAxisGenerator());
+
+      // 更新 bottom 内容（x+y）
+      this.gContent.selectAll("line.splice, line.exon, line.readspan")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]))
+        .attr("y1", d => this.yCenter(d.row))
+        .attr("y2", d => this.yCenter(d.row));
+
+      // top：只更新 X（Y 不动）
+      this.gYAxisRef.call(this.yRefAxisGenerator());
+      this.gContentRef.selectAll("line.ref-exon")
+        .attr("x1", d => this.xz(d.coord[0]))
+        .attr("x2", d => this.xz(d.coord[1]));
+    }, 
+
+    // Bottom Y 轴（按可视范围自适应）
+    yAxisGenerator() {
+      const N = this.isoforms.length;
+      const startRow = Math.max(0, Math.floor(this.yz.invert(0)));
+      const endRow = Math.min(N, Math.ceil(this.yz.invert(this.bodyH)));
+
+      const targetTicksByPixel = Math.max(3, Math.floor(this.bodyH / 22));
+      const maxTicks = Math.min(50, targetTicksByPixel);
+
+      const visibleCount = Math.max(1, endRow - startRow + 1);
+      const step = Math.max(1, Math.ceil(visibleCount / maxTicks));
+
+      const ticks = [];
+      for (let r = startRow + 1; r <= endRow; r += step) ticks.push(r);
+
+      return d3.axisLeft(this.yBand).tickValues(ticks);
+    },
+
+    // Top Y 轴（按可视范围自适应）
+    yRefAxisGenerator() {
+      const Nref = this.ref_tx_count;
+      const startRow = Math.max(0, Math.floor(this.yzRef.invert(0)));
+      const endRow = Math.min(Nref, Math.ceil(this.yzRef.invert(this.refH)));
+
+      const targetTicksByPixel = Math.max(3, Math.floor(this.refH / 22));
+      const maxTicks = Math.min(50, targetTicksByPixel);
+
+      const visibleCount = Math.max(1, endRow - startRow + 1);
+      const step = Math.max(1, Math.ceil(visibleCount / maxTicks));
+
+      const ticks = [];
+      for (let r = startRow + 1; r <= endRow; r += step) ticks.push(r);
+
+      return d3.axisLeft(this.yRefBand).tickValues(ticks);
+    },
+
+    // 中心位置辅助
+    yCenter(row) {
+      return this.yBand(row) + this.yBand.bandwidth() / 2;
+    },
+    yRefCenter(row) {
+      return this.yRefBand(row) + this.yRefBand.bandwidth() / 2;
+    }
+  },
+
+  mounted() {
+    this.svg = d3.select(this.$refs.svg);
+    this.prepare();
+    this.draw();
+  }
+});
+
+app.mount("#app");
+
+
+
+
+    </script>
+
+
+</body>
+
+</html>

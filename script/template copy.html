@@ -9,6 +9,7 @@
 
     <style>
         /* Add your custom styles here */
+
     </style>
 </head>
 
@@ -62,6 +63,7 @@
 
     <script>
 
+       
         const { createApp } = Vue;
 
         const app = createApp({
@@ -78,39 +80,33 @@
                     innerW: 0,
                     innerH: 0,
 
-                    // X（共享）
+                    // X: 基准尺与当前尺（共享 X）
                     x0: null,
                     xz: null,
 
-                    // Bottom（连续 + band）
-                    y0: null,
-                    yz: null,
-                    yBand: null,
+                    // 下半部分：连续尺 + band 尺
+                    y0: null,      // 连续基准（bottom）
+                    yz: null,      // 连续缩放后（bottom）
+                    yBand: null,   // band（bottom）
 
-                    // Top（连续 + band）
-                    y0Ref: null,
-                    yzRef: null,
-                    yRefBand: null,
+                    // 上半部分：连续尺 + band 尺
+                    y0Ref: null,   // 连续基准（top）
+                    yzRef: null,   // 连续缩放后（top）
+                    yRefBand: null,// band（top）
 
-                    // 分组/轴
+                    // 分组与轴
                     gRoot: null,
-                    gTop: null,
-                    gBottom: null,
                     gXAxis: null,
                     gYAxis: null,
                     gYAxisRef: null,
                     gContent: null,
                     gContentRef: null,
 
-                    // 尺寸拆分
+                    // 上下两个绘图区
                     refH: 120,
                     bodyH: 0,
-
-                    // 交互 overlay & zoom（各自独立）
-                    topOverlay: null,
-                    bottomOverlay: null,
-                    zoomTop: null,
-                    zoomBottom: null,
+                    gTop: null,
+                    gBottom: null,
 
                     // 数据
                     sjData: [],
@@ -124,18 +120,20 @@
                     ref_utrs: [],
                     ref_tx_count: 0,
 
-                    // [ADDED] —— 共享缩放比例/水平位移（上下共用）
-                    kShared: 1,
-                    xShared: 0,
-
-                    // [ADDED] —— 防止 transform 互相同步时递归触发
-                    syncing: false,
+                    // 交互：两个 overlay、两个 zoom、两个 transform 状态 + 防递归锁
+                    topOverlay: null,
+                    bottomOverlay: null,
+                    zoomTop: null,
+                    zoomBottom: null,
+                    tTop: null,
+                    tBottom: null,
+                    syncing: false
                 };
             },
 
             methods: {
                 prepare() {
-                    // ====== 1) 预处理 reference ======
+                    // === 预处理 reference 数据 ===
                     this.ref_tx_count = 0;
                     this.ref_exons = [];
                     this.ref_introns = [];
@@ -150,8 +148,11 @@
                             tx.elements.forEach(el => {
                                 if (el.feature === 'exon') {
                                     this.ref_exons.push({
-                                        feature: el.feature, row: this.ref_tx_count,
-                                        coord: [el.start, el.end], tx_id: el.transcript_id, gene_id: el.gene_id
+                                        feature: el.feature,
+                                        row: this.ref_tx_count,
+                                        coord: [el.start, el.end],
+                                        tx_id: el.transcript_id,
+                                        gene_id: el.gene_id
                                     });
                                     this.ref_introns.push(el.start, el.end);
                                 } else if (el.feature === 'CDS') {
@@ -179,7 +180,7 @@
                         });
                     });
 
-                    // ====== 2) 预处理 bottom（isoforms） ======
+                    // === 下半部分数据 ===
                     this.sjData = [];
                     this.exonData = [];
                     this.readspanData = [];
@@ -203,7 +204,7 @@
                         this.readspanData.push({ coord: [iso.end_pos_left, iso.end_pos_right], row: iso._row });
                     });
 
-                    // ====== 3) 尺寸 ======
+                    // === 尺寸 ===
                     const { width, height } = this.svg.node().getBoundingClientRect();
                     this.svgW = width;
                     this.svgH = height;
@@ -211,13 +212,299 @@
                     this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
                     this.bodyH = Math.max(10, this.innerH - this.refH);
 
-                    // ====== 4) 尺度 ======
+                    // === 尺度 ===
                     const N = this.isoforms.length;
                     const xdomain = [this.meta.left_most, this.meta.right_most];
                     const ydomainContinuous = [0, N];
                     const ydomainBand = d3.range(1, N + 1);
-                    const ref_tx_arr = d3.range(1, this.ref_tx_count + 1);
 
-                    // X（共享）
                     this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
-                    this.xz = this.x0.copy()
+                    this.xz = this.x0.copy();
+
+                    // bottom y
+                    this.y0 = d3.scaleLinear().domain(ydomainContinuous).range([0, this.bodyH]);
+                    this.yz = this.y0.copy();
+                    this.yBand = d3.scaleBand().domain(ydomainBand).range([0, this.bodyH]).padding(0.2);
+
+                    // top y
+                    const ref_tx_arr = d3.range(1, this.ref_tx_count + 1);
+                    this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
+                    this.yzRef = this.y0Ref.copy();
+                    this.yRefBand = d3.scaleBand().domain(ref_tx_arr).range([0, this.refH]).padding(0.3);
+
+                    // === SVG/分组 ===
+                    this.svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
+
+                    this.gRoot = this.svg.append("g")
+                        .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+
+                    this.gTop = this.gRoot.append("g")
+                        .attr("class", "top-ref")
+                        .attr("transform", "translate(0,0)");
+
+                    this.gBottom = this.gRoot.append("g")
+                        .attr("class", "bottom-body")
+                        .attr("transform", `translate(0,${this.refH})`);
+
+                    // clip，避免上下互相绘制溢出
+                    const defs = this.svg.append("defs");
+                    defs.append("clipPath").attr("id", "clipTop")
+                        .append("rect").attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.refH);
+                    defs.append("clipPath").attr("id", "clipBottom")
+                        .append("rect").attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.bodyH);
+                    this.gTop.attr("clip-path", "url(#clipTop)");
+                    this.gBottom.attr("clip-path", "url(#clipBottom)");
+
+                    // 轴
+                    this.gXAxis = this.gTop.append("g")
+                        .attr("class", "x-axis")
+                        .attr("transform", "translate(0,0)")
+                        .call(d3.axisTop(this.xz).ticks(10));
+
+                    this.gYAxisRef = this.gTop.append("g")
+                        .attr("class", "y-axis-ref")
+                        .call(d3.axisLeft(this.yRefBand).tickValues(ref_tx_arr));
+
+                    this.gYAxis = this.gBottom.append("g")
+                        .attr("class", "y-axis")
+                        .call(this.yAxisGenerator());
+
+                    // 内容容器
+                    this.gContentRef = this.gTop.append("g").attr("class", "content-ref");
+                    this.gContent = this.gBottom.append("g").attr("class", "content");
+
+                    // 初始化 transform 状态
+                    this.tTop = d3.zoomIdentity;
+                    this.tBottom = d3.zoomIdentity;
+
+                    // 覆盖层：用于各自区域的交互
+                    this.topOverlay = this.gTop.append("rect")
+                        .attr("class", "overlay-top")
+                        .attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.refH)
+                        .style("fill", "none").style("pointer-events", "all");
+
+                    this.bottomOverlay = this.gBottom.append("rect")
+                        .attr("class", "overlay-bottom")
+                        .attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.bodyH)
+                        .style("fill", "none").style("pointer-events", "all");
+
+                    // 两个独立 zoom：X 共享、Y 分离
+                    this.zoomTop = d3.zoom()
+                        .scaleExtent([0.3, 150])
+                        .translateExtent([[0, 0], [this.innerW, this.refH]])
+                        .extent([[0, 0], [this.innerW, this.refH]])
+                        .on("zoom", (event) => this.onZoomTop(event));
+
+                    this.zoomBottom = d3.zoom()
+                        .scaleExtent([0.3, 150])
+                        .translateExtent([[0, 0], [this.innerW, this.bodyH]])
+                        .extent([[0, 0], [this.innerW, this.bodyH]])
+                        .on("zoom", (event) => this.onZoomBottom(event));
+
+                    this.topOverlay.call(this.zoomTop);
+                    this.bottomOverlay.call(this.zoomBottom);
+                },
+
+                draw() {
+                    // 下半部分
+                    this.gContent.selectAll("line.splice")
+                        .data(this.sjData)
+                        .join("line")
+                        .attr("class", "splice")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .attr("y1", d => this.yCenter(d.row))
+                        .attr("y2", d => this.yCenter(d.row))
+                        .attr("stroke", "red")
+                        .attr("stroke-width", 0.8)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    this.gContent.selectAll("line.exon")
+                        .data(this.exonData)
+                        .join("line")
+                        .attr("class", "exon")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .attr("y1", d => this.yCenter(d.row))
+                        .attr("y2", d => this.yCenter(d.row))
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 4)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    this.gContent.selectAll("line.readspan")
+                        .data(this.readspanData)
+                        .join("line")
+                        .attr("class", "readspan")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .attr("y1", d => this.yCenter(d.row))
+                        .attr("y2", d => this.yCenter(d.row))
+                        .attr("stroke", "blue")
+                        .attr("stroke-width", 4)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    // 上半部分 reference
+                    this.gContentRef.selectAll("line.ref-exon")
+                        .data(this.ref_exons)
+                        .join("line")
+                        .attr("class", "ref-exon")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .attr("y1", d => this.yRefCenter(d.row))
+                        .attr("y2", d => this.yRefCenter(d.row))
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 4)
+                        .attr("vector-effect", "non-scaling-stroke");
+                },
+
+                // 顶部缩放/拖动：更新共享 X 与顶部 Y，并把 X 同步到底部
+                onZoomTop(event) {
+                    if (this.syncing) { // 防递归
+                        this.tTop = event.transform;
+                        this.syncing = false;
+                        return;
+                    }
+                    const t = event.transform;
+
+                    // 共享 X
+                    this.xz = t.rescaleX(this.x0);
+
+                    // 顶部 Y 独立
+                    this.yzRef = t.rescaleY(this.y0Ref);
+                    this.yRefBand.range([this.yzRef(0), this.yzRef(this.ref_tx_count)]);
+
+                    // 更新轴/元素
+                    this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
+                    this.gYAxisRef.call(this.yRefAxisGenerator());
+
+                    this.gContentRef.selectAll("line.ref-exon")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .attr("y1", d => this.yRefCenter(d.row))
+                        .attr("y2", d => this.yRefCenter(d.row));
+
+                    // 底部：只更新 X（元素的 y 不变）
+                    this.gYAxis.call(this.yAxisGenerator());
+                    this.gContent.selectAll("line.splice, line.exon, line.readspan")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]));
+
+                    // 记录顶层 transform
+                    this.tTop = t;
+
+                    // 同步 X（k/x）给底部，但保留底部的 y
+                    const syncedBottom = d3.zoomIdentity
+                        .translate(this.tBottom ? this.tBottom.x : 0, this.tBottom ? this.tBottom.y : 0)
+                        .scale(t.k)
+                        .translate(t.x, 0);
+
+                    this.syncing = true;
+                    this.bottomOverlay.call(this.zoomBottom.transform, syncedBottom);
+                    this.tBottom = syncedBottom;
+                },
+
+                // 底部缩放/拖动：更新共享 X 与底部 Y，并把 X 同步到顶部
+                onZoomBottom(event) {
+                    if (this.syncing) { // 防递归
+                        this.tBottom = event.transform;
+                        this.syncing = false;
+                        return;
+                    }
+                    const t = event.transform;
+
+                    // 共享 X
+                    this.xz = t.rescaleX(this.x0);
+
+                    // 底部 Y 独立
+                    const N = this.isoforms.length;
+                    this.yz = t.rescaleY(this.y0);
+                    this.yBand.range([this.yz(0), this.yz(N)]);
+
+                    // 更新轴/元素
+                    this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
+                    this.gYAxis.call(this.yAxisGenerator());
+
+                    this.gContent.selectAll("line.splice, line.exon, line.readspan")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .attr("y1", d => this.yCenter(d.row))
+                        .attr("y2", d => this.yCenter(d.row));
+
+                    // 顶部：只更新 X（元素的 y 不变）
+                    this.gYAxisRef.call(this.yRefAxisGenerator());
+                    this.gContentRef.selectAll("line.ref-exon")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]));
+
+                    // 记录底部 transform
+                    this.tBottom = t;
+
+                    // 同步 X（k/x）给顶部，但保留顶部的 y
+                    const syncedTop = d3.zoomIdentity
+                        .translate(this.tTop ? this.tTop.x : 0, this.tTop ? this.tTop.y : 0)
+                        .scale(t.k)
+                        .translate(t.x, 0);
+
+                    this.syncing = true;
+                    this.topOverlay.call(this.zoomTop.transform, syncedTop);
+                    this.tTop = syncedTop;
+                },
+
+                // 下半部分 Y 轴自动取可视范围
+                yAxisGenerator() {
+                    const N = this.isoforms.length;
+                    const startRow = Math.max(0, Math.floor(this.yz.invert(0)));
+                    const endRow = Math.min(N, Math.ceil(this.yz.invert(this.bodyH)));
+                    const targetTicksByPixel = Math.max(3, Math.floor(this.bodyH / 22));
+                    const maxTicks = Math.min(50, targetTicksByPixel);
+                    const visibleCount = Math.max(1, endRow - startRow + 1);
+                    const step = Math.max(1, Math.ceil(visibleCount / maxTicks));
+                    const ticks = [];
+                    for (let r = startRow + 1; r <= endRow; r += step) ticks.push(r);
+                    return d3.axisLeft(this.yBand).tickValues(ticks);
+                },
+
+                // 上半部分 Y 轴自动取可视范围
+                yRefAxisGenerator() {
+                    const Nref = this.ref_tx_count;
+                    const startRow = Math.max(0, Math.floor(this.yzRef.invert(0)));
+                    const endRow = Math.min(Nref, Math.ceil(this.yzRef.invert(this.refH)));
+                    const targetTicksByPixel = Math.max(3, Math.floor(this.refH / 22));
+                    const maxTicks = Math.min(50, targetTicksByPixel);
+                    const visibleCount = Math.max(1, endRow - startRow + 1);
+                    const step = Math.max(1, Math.ceil(visibleCount / maxTicks));
+                    const ticks = [];
+                    for (let r = startRow + 1; r <= endRow; r += step) ticks.push(r);
+                    return d3.axisLeft(this.yRefBand).tickValues(ticks);
+                },
+
+                // y 中心（bottom）
+                yCenter(row) {
+                    return this.yBand(row) + this.yBand.bandwidth() / 2;
+                },
+                // y 中心（top）
+                yRefCenter(row) {
+                    return this.yRefBand(row) + this.yRefBand.bandwidth() / 2;
+                }
+            },
+
+            mounted() {
+                this.svg = d3.select(this.$refs.svg);
+                this.prepare();
+                this.draw();
+            }
+        });
+
+        app.mount("#app");
+
+
+    </script>
+
+
+</body>
+
+</html>

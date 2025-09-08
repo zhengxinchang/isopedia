@@ -325,7 +325,7 @@ def main():
     }
 
     with open(args.output, 'w') as outfile:
-        json.dump(out_json, outfile)
+        json.dump(out_json, outfile, indent=4)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Visualize isoforms from isopedia-anno-splice output")

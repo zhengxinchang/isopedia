@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Isopedia Splice View</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        /* Add your custom styles here */
+    </style>
+</head>
+
+<body style="margin: 0; height: 100vh;font-size: 14px; background-color: #F0F0F0;">
+    <div id="app" style="display: flex; flex-direction: column; height: 100vh;">
+        <div id='header'
+            style="z-index:11;box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); color:#ba7027;  padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 2.5vh;  position: relative;">
+
+            <h4 style="margin: 0;">Isopedia Splice View</h4>
+
+        </div>
+
+        <div id="content" style="display: flex; height: 95vh;">
+
+            <div id="left"
+                style="z-index:10; box-shadow: 4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-right: none;">
+
+            </div>
+
+            <div id="middle" style="z-index:9; width: 70%; background-color: lightblue; border: 0px solid black;">
+                <!-- <svg id="main_svg" width="100%" height="100%"></svg> -->
+                <!-- preserveAspectRatio="xMidYMid meet" -->
+                <svg ref="svg" style="width: 100%; height: 100%; background-color: #FAFAFA;"></svg>
+            </div>
+
+            <div id="right"
+                style="z-index:10; box-shadow: -4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-left: none;">
+
+            </div>
+
+        </div>
+
+        <div id='footer'
+            style="z-index:12; box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.2); padding-left: 10px; display: flex; height:2.5vh;  justify-content: center; align-items: center; ">
+
+            <div>
+                <a href="https://fritzsedlazeck.github.io/"
+                    style="text-decoration: none; color:blueviolet; padding-right: 5px;" target="_blank">@Sedlazeck
+                    Lab, Baylor College of Medicine</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        const app = createApp({
+            data() {
+                return {
+                    meta: null,
+                    annotation: null,
+                    isoforms: null,
+
+                    svg: null,
+                    svgW: 0,
+                    svgH: 0,
+                    margin: { top: 40, right: 50, bottom: 40, left: 80 },
+                    innerW: 0,
+                    innerH: 0,
+
+                    // X（共享）
+                    x0: null,
+                    xz: null,
+
+                    // Bottom（连续 + band）
+                    y0: null,      // 连续基准（行号 0..N）
+                    yBand: null,   // 可视域 band（range 固定 [0, bodyH]）
+
+                    // Top（连续 + band）
+                    y0Ref: null,
+                    yRefBand: null,
+
+                    // 分组/轴
+                    gRoot: null,
+                    gTop: null,
+                    gBottom: null,
+                    gXAxis: null,
+                    gYAxis: null,
+                    gYAxisRef: null,
+                    gContent: null,
+                    gContentRef: null,
+
+                    // 尺寸拆分
+                    refH: 120,
+                    bodyH: 0,
+
+                    // 交互 overlay & zoom（各自独立）
+                    topOverlay: null,
+                    bottomOverlay: null,
+                    zoomTop: null,
+                    zoomBottom: null,
+
+                    // 数据
+                    sjData: [],
+                    exonData: [],
+                    readspanData: [],
+                    ref_exons: [],
+                    ref_cds: [],
+                    ref_stop_codons: [],
+                    ref_start_codons: [],
+                    ref_utrs: [],
+                    ref_tx_count: 0,
+                    isoform_count: 0,
+
+                    // 共享缩放率/水平位移
+                    kShared: 1,
+                    xShared: 0,
+
+                    // 防止 transform 同步递归
+                    syncing: false,
+                };
+            },
+
+            methods: {
+                /* ---------- 工具函数 ---------- */
+                fetchJSON() {
+                    return fetch("/aa.json")
+                        .then(response => {
+                            if (!response.ok) throw new Error("网络请求失败 " + response.status);
+                            return response.json();
+                        })
+                        .then(data => {
+                            this.meta = data.meta;
+                            this.annotation = data.annotation;
+                            this.isoforms = data.isoforms;
+                            console.log("loaded...", this.meta, this.annotation, this.isoforms);
+                        })
+                        .catch(err => {
+                            console.error("加载 JSON 出错:", err);
+                            throw err; // 让外层 mounted() 能捕获
+                        });
+                },
+
+                // 根据 transform 计算“可视域行号数组”（1-based），并做边界与至少 1 行的保护
+                visibleRowsFromTransform(t, baseY, panelH, maxRow) {
+                    const yScaled = t.rescaleY(baseY);     // domain -> pixel（在当前变换下）
+                    let start = Math.floor(yScaled.invert(0));          // 像素 0 对应的 domain
+                    let end = Math.ceil(yScaled.invert(panelH));      // 像素 panelH 对应的 domain
+
+                    start = Math.max(0, Math.min(maxRow - 1, start));
+                    end = Math.max(1, Math.min(maxRow, end));
+
+                    if (end <= start) end = Math.min(maxRow, start + 1);
+
+                    // 转为 1..maxRow 的整数行号
+                    const rows = [];
+                    for (let r = start + 1; r <= end; r++) rows.push(r);
+                    return rows;
+                },
+
+                // 控制 y 轴刻度密度：按可视域长度与像素高度限流
+                bandTicks(bandScale, panelH) {
+                    const domain = bandScale.domain();
+                    const maxTicks = Math.min(50, Math.max(3, Math.floor(panelH / 22)));
+                    const step = Math.max(1, Math.ceil(domain.length / maxTicks));
+                    const ticks = [];
+                    for (let i = 0; i < domain.length; i += step) ticks.push(domain[i]);
+                    return ticks;
+                },
+
+                // 绘制/更新 X 轴
+                updateXAxis() {
+                    this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
+                },
+
+                // 刷新 Top：根据 yRefBand.domain 定位；域外隐藏
+                renderTop() {
+                    const ticks = this.bandTicks(this.yRefBand, this.refH);
+                    this.gYAxisRef.call(d3.axisLeft(this.yRefBand).tickValues(ticks));
+
+                    // [FIX] 分支处理，避免对不可见行计算 y（产生 NaN）
+                    this.gContentRef.selectAll("line.ref-exon")
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .each((d, i, nodes) => {
+                            const y = this.yRefBand(d.row);
+                            const el = d3.select(nodes[i]);
+                            if (y == null) {
+                                el.style("display", "none")
+                                  .attr("y1", null)
+                                  .attr("y2", null);
+                            } else {
+                                const ym = y + this.yRefBand.bandwidth() / 2;
+                                el.style("display", null)
+                                  .attr("y1", ym)
+                                  .attr("y2", ym);
+                            }
+                        });
+                },
+
+                // 刷新 Bottom：根据 yBand.domain 定位；域外隐藏
+                renderBottom() {
+                    const ticks = this.bandTicks(this.yBand, this.bodyH);
+                    this.gYAxis.call(d3.axisLeft(this.yBand).tickValues(ticks));
+
+                    // [FIX] 安全设置函数：对每个元素分支处理，避免 NaN
+                    const setBottomXY = sel => {
+                        sel
+                          .attr("x1", d => this.xz(d.coord[0]))
+                          .attr("x2", d => this.xz(d.coord[1]))
+                          .each((d, i, nodes) => {
+                              const y = this.yBand(d.row);
+                              const el = d3.select(nodes[i]);
+                              if (y == null) {
+                                  el.style("display", "none")
+                                    .attr("y1", null)
+                                    .attr("y2", null);
+                              } else {
+                                  const ym = y + this.yBand.bandwidth() / 2;
+                                  el.style("display", null)
+                                    .attr("y1", ym)
+                                    .attr("y2", ym);
+                              }
+                          });
+                    };
+
+                    setBottomXY(this.gContent.selectAll("line.splice"));
+                    setBottomXY(this.gContent.selectAll("line.exon"));
+                    setBottomXY(this.gContent.selectAll("line.readspan"));
+                },
+
+                // 以指定中心 (cx,cy) 把 prev 由 k0 放大到 k1，返回 {k,x,y}
+                anchoredAround(prev, k1, cx, cy) {
+                    const k0 = prev.k, s = k1 / k0;
+                    return {
+                        k: k1,
+                        x: (1 - s) * cx + s * prev.x,
+                        y: (1 - s) * cy + s * prev.y
+                    };
+                },
+                // 从 {k,x,y} 构造 d3 的 ZoomTransform（注意次序：translate 再 scale）
+                makeTransform(k, x, y) {
+                    return d3.zoomIdentity.translate(x, y).scale(k);
+                },
+                // 判断这次是“真缩放”还是仅平移
+                isZoomStep(prev, now, eps = 1e-6) {
+                    return Math.abs(now.k - prev.k) > eps;
+                },
+
+                /* ---------- 生命周期：准备与首绘 ---------- */
+
+                prepare() {
+                    // 1) 预处理 reference
+                    this.ref_tx_count = 0;
+                    this.ref_exons = [];
+                    this.ref_cds = [];
+                    this.ref_stop_codons = [];
+                    this.ref_start_codons = [];
+                    this.ref_utrs = [];
+
+                    this.annotation.forEach(gene => {
+                        Object.values(gene.transcripts).forEach(tx => {
+                            this.ref_tx_count += 1;
+                            tx.elements.forEach(el => {
+                                const push = (arr) => arr.push({
+                                    feature: el.feature,
+                                    row: this.ref_tx_count,
+                                    coord: [el.start, el.end],
+                                    tx_id: el.transcript_id,
+                                    gene_id: el.gene_id
+                                });
+                                if (el.feature === 'exon') push(this.ref_exons);
+                                else if (el.feature === 'CDS') push(this.ref_cds);
+                                else if (el.feature === 'stop_codon') push(this.ref_stop_codons);
+                                else if (el.feature === 'start_codon') push(this.ref_start_codons);
+                                else if (el.feature === 'UTR') push(this.ref_utrs);
+                            });
+                        });
+                    });
+
+                    // 2) 预处理 bottom（isoforms）
+                    this.sjData = [];
+                    this.exonData = [];
+                    this.readspanData = [];
+                    this.isoforms.forEach((iso, i) => { iso._row = i + 1; });
+
+                    this.isoforms.forEach(iso => {
+                        (iso.splice_junction || []).forEach(sj => {
+                            this.sjData.push({ coord: sj, row: iso._row });
+                        });
+                        const splice_sites = (iso.splice_sites || []).slice();
+                        splice_sites.unshift(iso.start_pos_right);
+                        splice_sites.push(iso.end_pos_left);
+                        splice_sites.forEach((pos, i) => {
+                            if (i % 2 === 0 && splice_sites[i + 1] != null) {
+                                this.exonData.push({ coord: [pos, splice_sites[i + 1]], row: iso._row });
+                            }
+                        });
+                        this.readspanData.push({ coord: [iso.start_pos_left, iso.start_pos_right], row: iso._row });
+                        this.readspanData.push({ coord: [iso.end_pos_left, iso.end_pos_right], row: iso._row });
+                    });
+
+                    // 3) 尺寸
+                    const { width, height } = this.svg.node().getBoundingClientRect();
+                    this.svgW = width;
+                    this.svgH = height;
+                    this.innerW = Math.max(10, width - this.margin.left - this.margin.right);
+                    this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
+                    this.bodyH = Math.max(10, this.innerH - this.refH);
+
+                    // 4) 尺度
+                    this.isoform_count = this.isoforms.length;
+                    const xdomain = [this.meta.left_most, this.meta.right_most];
+
+                    // X（共享）
+                    this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
+                    this.xz = this.x0.copy();
+
+                    // Bottom Y 连续基准（domain 0..N，range 0..bodyH）
+                    this.y0 = d3.scaleLinear().domain([0, this.isoform_count]).range([0, this.bodyH]);
+                    // Bottom Y band（range 固定 0..bodyH，domain 初始化为全部行 1..N）
+                    this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.2);
+
+                    // Top Y 连续基准
+                    this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
+                    // Top Y band（range 固定 0..refH，domain 初始化为全部行 1..M）
+                    this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
+
+                    // 5) SVG & 分组
+                    this.svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
+
+                    this.gRoot = this.svg.append("g")
+                        .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+
+                    this.gTop = this.gRoot.append("g")
+                        .attr("class", "top-ref")
+                        .attr("transform", "translate(0,0)");
+
+                    this.gBottom = this.gRoot.append("g")
+                        .attr("class", "bottom-body")
+                        .attr("transform", `translate(0,${this.refH})`);
+
+                    // 只裁内容，不裁轴
+                    const defs = this.svg.append("defs");
+                    defs.append("clipPath").attr("id", "clipTop")
+                        .append("rect").attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.refH);
+                    defs.append("clipPath").attr("id", "clipBottom")
+                        .append("rect").attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.bodyH);
+
+                    // 轴组
+                    this.gXAxis = this.gTop.append("g")
+                        .attr("class", "x-axis")
+                        .attr("transform", "translate(0,0)")
+                        .call(d3.axisTop(this.xz).ticks(10));
+
+                    this.gYAxisRef = this.gTop.append("g").attr("class", "y-axis-ref");
+                    this.gYAxis = this.gBottom.append("g").attr("class", "y-axis");
+
+                    // 内容组（clip）
+                    this.gContentRef = this.gTop.append("g").attr("class", "content-ref")
+                        .attr("clip-path", "url(#clipTop)");
+
+                    this.gContent = this.gBottom.append("g").attr("class", "content")
+                        .attr("clip-path", "url(#clipBottom)");
+
+                    // 覆盖层（交互面）
+                    this.topOverlay = this.gTop.append("rect")
+                        .attr("class", "overlay-top")
+                        .attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.refH)
+                        .style("fill", "none").style("pointer-events", "all");
+
+                    this.bottomOverlay = this.gBottom.append("rect")
+                        .attr("class", "overlay-bottom")
+                        .attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.bodyH)
+                        .style("fill", "none").style("pointer-events", "all");
+
+                    // 两块各自 zoom（X 共享，Y 独立）
+                    this.zoomTop = d3.zoom()
+                        .scaleExtent([0.3, 150])
+                        .translateExtent([[0, 0], [this.innerW, this.refH]])
+                        .extent([[0, 0], [this.innerW, this.refH]])
+                        .on("zoom", (event) => this.onZoomTop(event));
+
+                    this.zoomBottom = d3.zoom()
+                        .scaleExtent([0.3, 150])
+                        .translateExtent([[0, 0], [this.innerW, this.bodyH]])
+                        .extent([[0, 0], [this.innerW, this.bodyH]])
+                        .on("zoom", (event) => this.onZoomBottom(event));
+
+                    this.topOverlay.call(this.zoomTop);
+                    this.bottomOverlay.call(this.zoomBottom);
+                },
+
+                draw() {
+                    // Bottom
+                    this.gContent.selectAll("line.splice")
+                        .data(this.sjData)
+                        .join("line")
+                        .attr("class", "splice")
+                        .attr("stroke", "red")
+                        .attr("stroke-width", 0.8)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    this.gContent.selectAll("line.exon")
+                        .data(this.exonData)
+                        .join("line")
+                        .attr("class", "exon")
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 4)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    this.gContent.selectAll("line.readspan")
+                        .data(this.readspanData)
+                        .join("line")
+                        .attr("class", "readspan")
+                        .attr("stroke", "blue")
+                        .attr("stroke-width", 4)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    // Top
+                    this.gContentRef.selectAll("line.ref-exon")
+                        .data(this.ref_exons)
+                        .join("line")
+                        .attr("class", "ref-exon")
+                        .attr("stroke", "black")
+                        .attr("stroke-width", 4)
+                        .attr("vector-effect", "non-scaling-stroke");
+
+                    // 初始一次完整渲染（等价于 identity 变换）
+                    this.updateXAxis();
+                    // 让两个面板都以 identity 计算可视域
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    // 顶部
+                    const rowsTop = this.visibleRowsFromTransform(tId, this.y0Ref, this.refH, this.ref_tx_count);
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromTransform(tId, this.y0, this.bodyH, this.isoform_count);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+                },
+
+                /* ---------- 交互：Zoom 回调 ---------- */
+
+                // 顶部：围绕顶部中心缩放；共享 k/x；底部用自己的中心修正 y 后同步
+                onZoomTop(event) {
+                    if (this.syncing) { this.syncing = false; return; }
+
+                    const prevTop = d3.zoomTransform(this.topOverlay.node());
+                    const nowTop = event.transform;
+
+                    // 顶部/底部的“缩放中心”
+                    const cx = this.innerW / 2, cyTop = this.refH / 2, cyBot = this.bodyH / 2;
+
+                    let tTopNew, tBotNew;
+
+                    if (this.isZoomStep(prevTop, nowTop)) {
+                        // === 发生缩放：忽略鼠标锚点，改用“面板中心锚定”的新 transform ===
+                        const anchoredTop = this.anchoredAround(prevTop, nowTop.k, cx, cyTop);
+                        // 底部：k/x 与顶部一致，但 y 以底部中心为锚点等比调整
+                        const prevBot = d3.zoomTransform(this.bottomOverlay.node());
+                        const anchoredBot = this.anchoredAround(prevBot, anchoredTop.k, cx, cyBot);
+                        anchoredBot.x = anchoredTop.x; // 共享 x
+
+                        // 更新共享状态
+                        this.kShared = anchoredTop.k;
+                        this.xShared = anchoredTop.x;
+
+                        // 转为 d3 Transform
+                        tTopNew = this.makeTransform(anchoredTop.k, anchoredTop.x, anchoredTop.y);
+                        tBotNew = this.makeTransform(anchoredBot.k, anchoredBot.x, anchoredBot.y);
+                    } else {
+                        // === 仅平移：接受 d3 的平移，但共享 x，让另一块只改 x，保留自己的 y ===
+                        const prevBot = d3.zoomTransform(this.bottomOverlay.node());
+                        this.kShared = prevTop.k;
+                        this.xShared = nowTop.x;
+
+                        tTopNew = this.makeTransform(prevTop.k, nowTop.x, nowTop.y);
+                        tBotNew = this.makeTransform(prevBot.k, nowTop.x, prevBot.y);
+                    }
+
+                    // --- 用新的 transform 刷新 X 轴与可视域 ---
+                    this.xz = tTopNew.rescaleX(this.x0);
+                    this.updateXAxis();
+
+                    // 顶部可视行域 -> yRefBand.domain -> 渲染
+                    const rowsTop = this.visibleRowsFromTransform(tTopNew, this.y0Ref, this.refH, this.ref_tx_count);
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+
+                    // 底部可视行域 -> yBand.domain -> 渲染
+                    const rowsBot = this.visibleRowsFromTransform(tBotNew, this.y0, this.bodyH, this.isoform_count);
+                    this.yBand.domain(rowsBot);
+                    this.renderBottom();
+
+                    // 把“中心锚定”的 transform 回写到两个 overlay，避免下一次事件跳变
+                    this.syncing = true; this.topOverlay.call(this.zoomTop.transform, tTopNew);
+                    this.syncing = true; this.bottomOverlay.call(this.zoomBottom.transform, tBotNew);
+                },
+
+                // 底部：与上面完全对称
+                onZoomBottom(event) {
+                    if (this.syncing) { this.syncing = false; return; }
+
+                    const prevBot = d3.zoomTransform(this.bottomOverlay.node());
+                    const nowBot = event.transform;
+
+                    const cx = this.innerW / 2, cyTop = this.refH / 2, cyBot = this.bodyH / 2;
+
+                    let tTopNew, tBotNew;
+
+                    if (this.isZoomStep(prevBot, nowBot)) {
+                        const anchoredBot = this.anchoredAround(prevBot, nowBot.k, cx, cyBot);
+                        const prevTop = d3.zoomTransform(this.topOverlay.node());
+                        const anchoredTop = this.anchoredAround(prevTop, anchoredBot.k, cx, cyTop);
+                        anchoredTop.x = anchoredBot.x; // 共享 x
+
+                        this.kShared = anchoredBot.k;
+                        this.xShared = anchoredBot.x;
+
+                        tBotNew = this.makeTransform(anchoredBot.k, anchoredBot.x, anchoredBot.y);
+                        tTopNew = this.makeTransform(anchoredTop.k, anchoredTop.x, anchoredTop.y);
+                    } else {
+                        const prevTop = d3.zoomTransform(this.topOverlay.node());
+                        this.kShared = prevBot.k;
+                        this.xShared = nowBot.x;
+
+                        tBotNew = this.makeTransform(prevBot.k, nowBot.x, nowBot.y);
+                        tTopNew = this.makeTransform(prevTop.k, nowBot.x, prevTop.y);
+                    }
+
+                    this.xz = tBotNew.rescaleX(this.x0);
+                    this.updateXAxis();
+
+                    const rowsBot = this.visibleRowsFromTransform(tBotNew, this.y0, this.bodyH, this.isoform_count);
+                    this.yBand.domain(rowsBot);
+                    this.renderBottom();
+
+                    const rowsTop = this.visibleRowsFromTransform(tTopNew, this.y0Ref, this.refH, this.ref_tx_count);
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+
+                    this.syncing = true; this.bottomOverlay.call(this.zoomBottom.transform, tBotNew);
+                    this.syncing = true; this.topOverlay.call(this.zoomTop.transform, tTopNew);
+                },
+
+            },
+
+            mounted() {
+                this.svg = d3.select(this.$refs.svg);
+                this.fetchJSON().then(() => {
+                    this.prepare();
+                    this.draw();
+                });
+            }
+        });
+
+        app.mount("#app");
+    </script>
+</body>
+</html>
