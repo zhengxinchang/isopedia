@@ -224,13 +224,7 @@ fn main() -> Result<()> {
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
         let res = forest.search_all_match(&queries, cli.flank, cli.lru_size);
-
-        // if res.is_none() {
-        //     // error!("No results found for queries: {:?}", queries);
-        //     continue;
-        // }
-        // let res = res.unwrap();
-
+        
         // make sure the returned isoform has exactly the same number of splice sites as the query
         let target: Vec<MergedIsoformOffsetPtr> = res
             .into_iter()
@@ -335,7 +329,7 @@ fn main() -> Result<()> {
     let total = hit_count + miss_count;
     info!(
         "Processed {} transcripts",
-        (100000 * batch + iter_count).to_formatted_string(&Locale::en)
+        (10_000 * batch + iter_count).to_formatted_string(&Locale::en)
     );
     info!("Sample-wide stats: ");
     info!("> Sample\thit\tmiss\tpct");

@@ -327,7 +327,7 @@ fn main() -> Result<()> {
                 merged_map.remove(sig);
             }
 
-            if batches / 10 == 0 {
+            if batches % 10 == 0 {
                 // info!("Processed {} batches", batches);
                 merged_map.shrink_to_fit();
             }

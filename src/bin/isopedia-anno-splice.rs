@@ -10,7 +10,6 @@ use isopedia::writer::MyGzWriter;
 use isopedia::{constants::*, meta, utils};
 use log::{error, info, warn};
 use memmap2::Mmap;
-use rust_htslib::bam::header;
 use serde::Serialize;
 use std::env;
 use std::fs::File;
@@ -54,7 +53,7 @@ struct Cli {
     pub output: PathBuf,
 
     /// Memory size to use for warming up (in gigabytes).  
-    /// Example: 1GB. Increasing this will significantly improve performance;  
+    /// Example: 4GB. Increasing this will significantly improve performance;  
     /// set it as large as your system allows.
     #[arg(short, long, default_value_t = 4)]
     pub warmup_mem: usize,
