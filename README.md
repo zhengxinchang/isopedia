@@ -350,3 +350,9 @@ cd isopedia
 cargo build --release
 cargo build --release --target x86_64-unknown-linux-musl
 ```
+
+
+# Contact
+
+* zhengxc93@gmail.com
+* fritz.sedlazeck@bcm.edu

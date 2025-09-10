@@ -17,25 +17,25 @@ push:
 t1:build
 
 	target/release/isopedia-extr \
-	-b /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
+	-i /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
 	-o flnc.isoform.out
 
 t11:build
 	target/release/isopedia-extr \
-	-b test/bams/hg002.directrna.B-Lymphocyte.bam  \
+	-i test/bams/hg002.directrna.B-Lymphocyte.bam  \
 	-o test/ont.isoform.out
 
 	target/release/isopedia-extr \
-	-b test/bams/hg002.pbcluster.bam \
+	-i test/bams/hg002.pbcluster.bam \
 	-o test/clustered.mapped.isoform.out
 
 	target/release/isopedia-extr \
-	-b test/bams/hg002.flnc.minimap2.sorted.bam \
+	-i test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out
 
 t1111:build 
 	target/release/isopedia-extr \
-	-b test/bams/hg002.flnc.minimap2.sorted.bam \
+	-i test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out -d 
 
 
@@ -69,14 +69,14 @@ tfusion4:build
 	-o test/fusion_discovery_cancer.output.gz &> aa.log
 
 tfusion5:build
-	target/release/isopedia-anno-fusion  --debug -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
+	target/release/isopedia-anno-fusion -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
 	-G /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  \
 	-o test/fusion_discovery_cancer.output.all.gz &> aa.log
 
 
 
 tfusion6:build
-	target/release/isopedia-anno-fusion  --debug -i /ssd1/stix-iso-devspace/isopedia-dev/test/HG002_idx \
+	target/release/isopedia-anno-fusion  -i /ssd1/stix-iso-devspace/isopedia-dev/test/HG002_idx \
 	-G /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  \
 	-o test/hg002_fusion_discovery_cancer.output.all.gz &> aa.log
 

@@ -484,30 +484,6 @@ impl Cache {
         })
     }
 
-    // pub fn get_node2(&mut self, node_id: u64) -> Option<&Arc<Node>> {
-
-    //     if self.lru.get(&node_id).is_some() {
-    //         return self.lru.get(&node_id)
-    //     }
-
-    //     let mmap = self.mmap.as_ref().expect("Cache not mmap’d");
-    //     if node_id == 0 || node_id > self.header.total_nodes {
-    //         return None;
-    //     }
-
-    //     let off = (node_id * 4096) as usize;
-    //     let hdr_slice = &mmap[off..off + 4096];
-    //     let mut node = Node::load_header_from_bytes(hdr_slice);
-
-    //     let po = node.header.payload_offset as usize;
-    //     let ps = node.header.payload_size as usize;
-    //     let data_slice = &mmap[po..po + ps];
-    //     node.load_record_pointers_from_bytes(data_slice);
-
-    //     self.lru.put(node_id, Arc::new(node.clone()))
-
-    // }
-
     pub fn get_node2(&mut self, node_id: u64) -> Option<Arc<Node>> {
         if let Some(n) = self.lru.get(&node_id) {
             // 命中缓存，克隆 Arc 返回
@@ -534,39 +510,6 @@ impl Cache {
 
         Some(arc_node)
     }
-
-    // pub fn get_node(&mut self, node_id: u64) -> Option<Node> {
-    //     if let Some(node) = self.lru.get(&node_id) {
-    //         // println!("hit");
-    //         return Some(node.clone());
-    //     }
-
-    //     if node_id > self.header.total_nodes {
-    //         return None;
-    //     }
-
-    //     self.file
-    //         .seek(std::io::SeekFrom::Start(node_id * 4096))
-    //         .unwrap();
-
-    //     let mut node_header_bytes = [0; 4096];
-    //     self.file.read_exact(&mut node_header_bytes).unwrap();
-    //     let mut node = Node::load_header_from_bytes(&node_header_bytes);
-    //     self.file
-    //         .seek(std::io::SeekFrom::Start(node.header.payload_offset))
-    //         .unwrap();
-    //     let mut node_data_bytes = vec![0; node.header.payload_size as usize];
-    //     self.file.read_exact(&mut node_data_bytes).unwrap();
-    //     // println!("{:?}", &node.header.record_range);
-    //     node_data_bytes
-    //         .chunks(std::mem::size_of::<MergedIsoformOffsetPtr>())
-    //         .for_each(|chunk| {
-    //             let record = MergedIsoformOffsetPtr::from_bytes(&chunk);
-    //             node.data.merge_isoform_offset_vec.push(record);
-    //         });
-    //     self.lru.put(node_id, node.clone());
-    //     Some(node)
-    // }
 
     pub fn get_root_node(&mut self) -> Arc<Node> {
         self.get_node2(self.header.root_node_id).unwrap()
@@ -811,56 +754,6 @@ impl BPTree {
             }
         }
     }
-
-    // pub fn range_search(
-    //     &mut self,
-    //     pos: KeyType,
-    //     flank: KeyType,
-    // ) -> Vec<MergedIsoformOffsetPtr> {
-    //     let start = pos - flank;
-    //     let end = pos + flank;
-
-    //     let cache = self.cache.as_mut().expect("Can not get cache");
-    //     let min_pos = cache.get_min_key();
-    //     let max_pos = cache.get_max_key();
-    //     if start > max_pos || end < min_pos {
-    //         // eprint!("start key {} is greater than max key {} or end key {} is less than min key {}\n", start, max_pos, end, min_pos);
-    //         return vec![];
-    //     }
-
-    //     if start == end {
-    //         return self.single_pos_search(start);
-    //     }
-
-    //     if start > end {
-    //         // eprint!("start key {} is greater than end key {}\n", start, end);
-    //         return vec![];
-    //     }
-
-    //     let start_pos = if start < min_pos { min_pos } else { start };
-    //     let end_pos = if end > max_pos { max_pos } else { end };
-
-    //     // let root = cache.get_root_node();
-
-    //     // 这里的问题是如果搜索start_pos, 如果start_不存在则直接返回None了
-    //     // 应该的逻辑如果start_pos不存在，应该找到最近的一个key，然后从这个key开始搜索
-
-    //     // check if the start is in the root node
-    //     // let mut final_values: Vec<u64> = Vec::new();
-    //     let mut final_addrs: Vec<MergedIsoformOffsetPtr> = Vec::new();
-
-    //     for s_key in start_pos..end_pos {
-    //         self.single_pos_search(s_key).into_iter().map(|addrs| {
-    //             final_addrs.push(addrs);
-    //         });
-    //     }
-
-    //     // node中应该有一个函数，找到start_pos的node，以及最近的一个key之后向右侧延申key，进行range search
-    //     // 目前我这样的搜索实际上是增加了 flank*2 倍数的搜索时间。
-
-    //     // return Some(final_addrs);
-    //     final_addrs
-    // }
 
     pub fn range_search2(&mut self, pos: KeyType, flank: KeyType) -> Vec<MergedIsoformOffsetPtr> {
         let start = pos.saturating_sub(flank);

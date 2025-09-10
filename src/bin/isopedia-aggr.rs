@@ -16,7 +16,6 @@ use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::collections::HashSet;
-// use memmap2::{Mmap, Advice};
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-aggr")]
