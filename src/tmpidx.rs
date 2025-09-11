@@ -1,7 +1,8 @@
 use crate::constants::{MAGIC, ORDER};
 use indexmap::IndexMap;
 use itertools::Itertools;
-use rustc_hash::FxHashMap;
+use log::info;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
@@ -62,8 +63,79 @@ impl Tmpindex {
             .sort_by_key(|x: &MergedIsoformOffsetPlusGenomeLoc| (x.chrom_id, x.pos));
     }
 
+    /// rewrite the sorted records to the disk, this is used in warm up step.
+    /// assue the query is sorted by chrom_id and pos
+    /// the record_data should also be sorted by chrom_id and pos
+    /// the processed_offsets is used to avoid putting the same record multiple times
+    pub fn rewrite_sorted_records(
+        &mut self,
+        record_data_path: &PathBuf,
+        new_record_data_path: &PathBuf,
+    ) {
+        // self.sort_records(); // must sort before dump, it is mutable but below is immutable
+
+        let mut converted_offsets_n = 0;
+        let mut duplicated_offsets_n = 0;
+
+        let mut processed_offsets = FxHashSet::default();
+
+        let mut reader = BufReader::new(
+            fs::File::open(record_data_path).expect("Can not open record data file"),
+        );
+        let mut writer = BufWriter::new(
+            fs::File::create(new_record_data_path).expect("Can not create new record data file"),
+        );
+
+        let mut buffer = Vec::new();
+
+        let mut new_offset: u64 = 0;
+        let mut offset_mapping = FxHashMap::default();
+
+        for interim_rec in self.offsets.iter_mut() {
+            if processed_offsets.contains(&interim_rec.record_ptr.offset) {
+                duplicated_offsets_n += 1;
+                interim_rec.record_ptr.offset =
+                    *offset_mapping.get(&interim_rec.record_ptr.offset).unwrap();
+                continue;
+            } else {
+                processed_offsets.insert(interim_rec.record_ptr.offset);
+                offset_mapping.insert(interim_rec.record_ptr.offset, new_offset);
+                converted_offsets_n += 1;
+            }
+
+            // dbg!(&interim_rec.record_ptr);
+
+            buffer.resize(interim_rec.record_ptr.length as usize, 0);
+
+            reader
+                .seek(std::io::SeekFrom::Start(interim_rec.record_ptr.offset))
+                .expect(
+                    "Can not move the cursor to start after read header of interim index file..",
+                );
+            reader
+                .read_exact(&mut buffer)
+                .expect("Can not read record from record data file");
+            writer
+                .write_all(&buffer)
+                .expect("Can not write record to new record data file");
+
+            interim_rec.record_ptr.offset = new_offset;
+            // offset_mapping.insert(interim_rec.record_ptr.offset, new_offset);
+
+            new_offset += interim_rec.record_ptr.length as u64;
+        }
+
+        writer.flush().expect("Can not flush the writer");
+        info!(
+            "Total {} offsets, converted {} offsets, duplicated {} offsets",
+            self.offsets.len(),
+            converted_offsets_n,
+            duplicated_offsets_n
+        );
+    }
+
     pub fn dump_to_disk(&mut self) {
-        self.sort_records(); // must sort before dump, it is mutable but below is immutable
+        // self.sort_records(); // must sort before dump, it is mutable but below is immutable
 
         // create the chrom offset map
         // chrom_counts: IndexMap<ChromId, u64>

@@ -120,7 +120,6 @@ pub fn parse_breakpoint_str(s: &str) -> Result<(String, u64, String, u64)> {
     Ok((left_chr, left_pos, right_chr, right_pos))
 }
 
-
 pub fn u64diff2i32(a: u64, b: u64) -> i32 {
     if a >= b {
         let diff = a - b;

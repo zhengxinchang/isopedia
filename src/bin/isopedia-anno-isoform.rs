@@ -224,7 +224,7 @@ fn main() -> Result<()> {
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
         let res = forest.search_all_match(&queries, cli.flank, cli.lru_size);
-        
+
         // make sure the returned isoform has exactly the same number of splice sites as the query
         let target: Vec<MergedIsoformOffsetPtr> = res
             .into_iter()

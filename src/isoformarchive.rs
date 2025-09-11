@@ -27,6 +27,11 @@ impl IsoformArchive {
             .expect("Failed to write record");
         byte_len
     }
+
+    pub fn close_file(&mut self) -> std::io::Result<()> {
+        self.writer.flush()?;
+        Ok(())
+    }
 }
 
 // pub fn read_record_from_archive(

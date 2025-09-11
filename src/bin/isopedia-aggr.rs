@@ -212,7 +212,10 @@ fn main() -> Result<()> {
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
     // init the output file
 
-    let mut isoform_archive = IsoformArchive::create(&cli.outdir.join(MERGED_FILE_NAME));
+    let mut merged_file_name_pre = PathBuf::from(MERGED_FILE_NAME);
+    merged_file_name_pre.set_extension("tmp");
+
+    let mut isoform_archive = IsoformArchive::create(&cli.outdir.join(&merged_file_name_pre));
 
     let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME));
 
@@ -236,7 +239,7 @@ fn main() -> Result<()> {
 
     // let mut processed = 0;
     let mut curr_batch = 0;
-    let batch_size = 1000000;
+    let batch_size = 1_000_000;
     let mut batches = 0;
     while let Some(Reverse(HeapItem {
         rec,
@@ -383,9 +386,19 @@ fn main() -> Result<()> {
         &cli.outdir.join(MERGED_FILE_NAME).display()
     );
 
+    isoform_archive.close_file()?;
+
     info!(
         "Dump interim index to disk: {}",
         &cli.outdir.join(TMPIDX_FILE_NAME).display()
+    );
+
+    tmpidx.sort_records(); // must sort before dump, it is mutable but below is immutable
+
+    info!("Rewriting sorted records...");
+    tmpidx.rewrite_sorted_records(
+        &cli.outdir.join(merged_file_name_pre),
+        &cli.outdir.join(MERGED_FILE_NAME),
     );
 
     tmpidx.dump_to_disk();

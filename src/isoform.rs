@@ -502,8 +502,6 @@ impl MergedIsoform {
             .to_string(),
         );
 
-        
-
         // index of the SJ in the isoform matched with query
         if let Some((idx, sj)) = self.splice_junctions_vec.iter().enumerate().find(|(_, x)| {
             if (x.0.abs_diff(bpp.left_pos) < flank) && (x.1.abs_diff(bpp.right_pos) < flank) {
@@ -518,7 +516,11 @@ impl MergedIsoform {
             // distance to splice sites
             // dbg!(sj.0, bpp.left_pos, sj.1, bpp.right_pos);
 
-            out_str.push(format!("{},{}", utils::u64diff2i32(sj.0, bpp.left_pos), utils::u64diff2i32(sj.1, bpp.right_pos)));
+            out_str.push(format!(
+                "{},{}",
+                utils::u64diff2i32(sj.0, bpp.left_pos),
+                utils::u64diff2i32(sj.1, bpp.right_pos)
+            ));
         } else {
             return None;
         }
