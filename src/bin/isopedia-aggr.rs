@@ -1,4 +1,6 @@
-use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
+use std::{
+    cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf,
+};
 
 use anyhow::Result;
 use clap::Parser;
@@ -207,7 +209,7 @@ fn main() -> Result<()> {
     info!("Merging...");
 
     // new the heap
-    let mut heap = BinaryHeap::new();
+    let mut heap: BinaryHeap<Reverse<HeapItem<AggrRead>>> = BinaryHeap::new();
     // init the merge buffer
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
     // init the output file
@@ -393,15 +395,25 @@ fn main() -> Result<()> {
         &cli.outdir.join(TMPIDX_FILE_NAME).display()
     );
 
-    tmpidx.sort_records(); // must sort before dump, it is mutable but below is immutable
+    // tmpidx._sort_records(); // must sort before dump, it is mutable but below is immutable
 
-    info!("Rewriting sorted records...");
-    tmpidx.rewrite_sorted_records(
+    // info!("Rewriting sorted records...");
+    // tmpidx.rewrite_sorted_records(
+    //     &cli.outdir.join(merged_file_name_pre),
+    //     &cli.outdir.join(MERGED_FILE_NAME),
+    // );
+
+    info!(
+        "The memory size of tmpidx in MB: {}",
+        tmpidx.memory_usage_mb()
+    );
+
+    info!("Dumping tmpidx to disk...");
+
+    tmpidx.finalize(
         &cli.outdir.join(merged_file_name_pre),
         &cli.outdir.join(MERGED_FILE_NAME),
     );
-
-    tmpidx.dump_to_disk();
 
     // write the chromsome map file
     let mut out_chrom_map_writer = std::io::BufWriter::new(

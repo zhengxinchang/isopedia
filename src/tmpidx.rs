@@ -1,10 +1,13 @@
-use crate::constants::{MAGIC, ORDER};
+use crate::constants::{MAGIC, ORDER, TMPIDX_CHUNK_SIZE};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::info;
+use memmap2::Mmap;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::Reverse,
+    collections::BinaryHeap,
     fs::{self, File},
     io::{BufReader, BufWriter, Read, Seek, Write},
     path::PathBuf,
@@ -33,10 +36,26 @@ pub struct Tmpindex {
     pub meta_start: u64,
     pub meta: TmpindexMeta,
     pub offsets: Vec<MergedIsoformOffsetPlusGenomeLoc>,
+    pub file_name: PathBuf,
     pub file: File,
+    pub chunks: usize,
 }
 
 impl Tmpindex {
+    pub fn memory_usage_bytes(&self) -> usize {
+        let mut total = 0;
+        total += size_of::<Self>();
+        total += size_of::<TmpindexMeta>();
+        total += self.meta.chrom_offsets.len() * (size_of::<ChromId>() + size_of::<(u64, u64)>());
+        total += self.offsets.capacity() * size_of::<MergedIsoformOffsetPlusGenomeLoc>();
+        total
+    }
+
+    /// Human readable MB
+    pub fn memory_usage_mb(&self) -> f64 {
+        self.memory_usage_bytes() as f64 / (1024.0 * 1024.0)
+    }
+
     pub fn create(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::create(file_name).expect("Can not create file");
         let interim_index = Tmpindex {
@@ -48,6 +67,8 @@ impl Tmpindex {
             },
             offsets: Vec::new(),
             file: file,
+            file_name: file_name.clone(),
+            chunks: 0,
         };
 
         interim_index
@@ -56,135 +77,341 @@ impl Tmpindex {
     pub fn add_one(&mut self, interim_record: MergedIsoformOffsetPlusGenomeLoc) {
         self.meta.data_size += 0;
         self.offsets.push(interim_record);
+        if self.offsets.len() >= TMPIDX_CHUNK_SIZE {
+            self._sort_records();
+            self._dump_chunk();
+        }
     }
 
-    pub fn sort_records(&mut self) {
+    fn _dump_chunk(&mut self) {
+        // dump current offsets
+        let chunk_file_name_path = self
+            .file_name
+            .with_extension(format!("chunk{}", self.chunks));
+        // info!(
+        //     "Dumping chunk {} to disk: {}",
+        //     self.chunks,
+        //     chunk_file_name_path.display()
+        // );
+        let mut writer = BufWriter::new(
+            fs::File::create(&chunk_file_name_path)
+                .expect("Can not create chunk file for interim index file"),
+        );
+        let mut buffer: [u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
+        for interim_rec in self.offsets.iter() {
+            buffer = interim_rec.to_bytes();
+            writer.write_all(&buffer).expect("Can not write to file");
+        }
+        writer.flush().expect("Can not flush the writer");
+        self.chunks += 1;
+        self.offsets.clear();
+    }
+
+    fn _sort_records(&mut self) {
         self.offsets
             .sort_by_key(|x: &MergedIsoformOffsetPlusGenomeLoc| (x.chrom_id, x.pos));
     }
 
-    /// rewrite the sorted records to the disk, this is used in warm up step.
-    /// assue the query is sorted by chrom_id and pos
-    /// the record_data should also be sorted by chrom_id and pos
-    /// the processed_offsets is used to avoid putting the same record multiple times
-    pub fn rewrite_sorted_records(
-        &mut self,
-        record_data_path: &PathBuf,
-        new_record_data_path: &PathBuf,
-    ) {
-        // self.sort_records(); // must sort before dump, it is mutable but below is immutable
+    /// finalize the tmpidx, k-way merge the chunk files and rewrite the record data file, update the offsets at the same time.
+    ///
+    /// the final output would be a sorted tmpidx file , a rewritten record data file
+    ///
+    /// this function is the replace for the previous dump_to_disk function and rewrite_sorted_records function
+    pub fn finalize(&mut self, record_data_path: &PathBuf, new_record_data_path: &PathBuf) {
+        // final sort for last chunk
+        if self.offsets.len() > 0 {
+            self._sort_records();
+            self._dump_chunk();
+        }
 
-        let mut converted_offsets_n = 0;
-        let mut duplicated_offsets_n = 0;
-
-        let mut processed_offsets = FxHashSet::default();
-
-        let mut reader = BufReader::new(
-            fs::File::open(record_data_path).expect("Can not open record data file"),
+        info!(
+            "Merging {} chunk files to final tmpidx file: {}",
+            self.chunks,
+            self.file_name.display()
         );
-        let mut writer = BufWriter::new(
+
+        // tmpidx writer
+        let mut tmpidx_writer =
+            fs::File::create(&self.file_name).expect("Can not create tmpidx file");
+
+        tmpidx_writer
+            .seek(std::io::SeekFrom::Start(8))
+            .expect("Can not move the cursor to start after write interim index file..");
+        // let mut buffer: [u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
+        // self.meta_start = 8; // 8 bytes for the meta offset
+
+        let mut chrom_count_map = IndexMap::new();
+
+        // k-way merge the chunk files
+        let file_list = (0..self.chunks)
+            .map(|i| self.file_name.with_extension(format!("chunk{}", i)))
+            .collect::<Vec<_>>();
+        let mut readers = file_list
+            .iter()
+            .map(|path| {
+                let file = fs::File::open(path).expect("Can not open chunk file");
+                let reader = BufReader::new(file);
+                reader
+            })
+            .collect::<Vec<_>>();
+
+        let mut total_idx_n = 0;
+
+        // let mut processed_offsets = FxHashSet::default();
+        let mut offset_mapping: FxHashMap<u64, u64> = FxHashMap::default();
+
+        // mmap the input file
+        let data_file = fs::File::open(record_data_path).expect("Can not open record data file");
+        let mmap = unsafe { Mmap::map(&data_file).expect("mmap failed") };
+
+        // prepare writer
+        let mut data_writer = BufWriter::new(
             fs::File::create(new_record_data_path).expect("Can not create new record data file"),
         );
 
-        let mut buffer = Vec::new();
-
         let mut new_offset: u64 = 0;
-        let mut offset_mapping = FxHashMap::default();
 
-        for interim_rec in self.offsets.iter_mut() {
-            if processed_offsets.contains(&interim_rec.record_ptr.offset) {
-                duplicated_offsets_n += 1;
-                interim_rec.record_ptr.offset =
-                    *offset_mapping.get(&interim_rec.record_ptr.offset).unwrap();
-                continue;
-            } else {
-                processed_offsets.insert(interim_rec.record_ptr.offset);
-                offset_mapping.insert(interim_rec.record_ptr.offset, new_offset);
-                converted_offsets_n += 1;
+        let mut heap: BinaryHeap<Reverse<(MergedIsoformOffsetPlusGenomeLoc, usize)>> =
+            BinaryHeap::new();
+
+        // init heap
+
+        for (idx, reader) in readers.iter_mut().enumerate() {
+            let mut buffer = [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
+            if let Ok(_) = reader.read_exact(&mut buffer) {
+                let interim_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&buffer);
+
+                heap.push(Reverse((interim_rec, idx)));
             }
-
-            // dbg!(&interim_rec.record_ptr);
-
-            buffer.resize(interim_rec.record_ptr.length as usize, 0);
-
-            reader
-                .seek(std::io::SeekFrom::Start(interim_rec.record_ptr.offset))
-                .expect(
-                    "Can not move the cursor to start after read header of interim index file..",
-                );
-            reader
-                .read_exact(&mut buffer)
-                .expect("Can not read record from record data file");
-            writer
-                .write_all(&buffer)
-                .expect("Can not write record to new record data file");
-
-            interim_rec.record_ptr.offset = new_offset;
-            // offset_mapping.insert(interim_rec.record_ptr.offset, new_offset);
-
-            new_offset += interim_rec.record_ptr.length as u64;
         }
 
-        writer.flush().expect("Can not flush the writer");
-        info!(
-            "Total {} offsets, converted {} offsets, duplicated {} offsets",
-            self.offsets.len(),
-            converted_offsets_n,
-            duplicated_offsets_n
-        );
-    }
+        // process the heap
+        while let Some(Reverse((interim_rec, idx))) = heap.pop() {
+            chrom_count_map
+                .entry(interim_rec.chrom_id)
+                .and_modify(|c| *c += 1)
+                .or_insert(1);
 
-    pub fn dump_to_disk(&mut self) {
-        // self.sort_records(); // must sort before dump, it is mutable but below is immutable
+            total_idx_n += 1;
 
-        // create the chrom offset map
-        // chrom_counts: IndexMap<ChromId, u64>
-        let chrom_counts = self.offsets.iter().fold(
-            IndexMap::new(),
-            |mut map, pos_rec_ptr: &MergedIsoformOffsetPlusGenomeLoc| {
-                *map.entry(pos_rec_ptr.chrom_id).or_insert(0) += 1;
-                map
-            },
-        );
+            if let Some(rec) = readers[idx]
+                .by_ref()
+                .bytes()
+                .take(MergedIsoformOffsetPlusGenomeLoc::SIZE)
+                .collect::<Result<Vec<u8>, _>>()
+                .ok()
+            {
+                if rec.len() == MergedIsoformOffsetPlusGenomeLoc::SIZE {
+                    let next_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&rec);
+                    heap.push(Reverse((next_rec, idx)));
+                }
+            }
+
+            let mut interim_rec = interim_rec.clone();
+            let old_offset = interim_rec.record_ptr.offset;
+
+            if let Some(&mapped_offset) = offset_mapping.get(&old_offset) {
+                // already processed
+                // duplicated_offsets_n += 1;
+                interim_rec.record_ptr.offset = mapped_offset;
+
+                // write to tmpidx
+
+                tmpidx_writer
+                    .write_all(&interim_rec.to_bytes())
+                    .expect("Can not write to tmpidx file");
+
+                continue;
+            }
+
+            // first time seeing this record
+            // processed_offsets.insert(old_offset);
+            offset_mapping.insert(old_offset, new_offset);
+            // unique_offsets_n += 1;
+
+            let length = interim_rec.record_ptr.length as usize;
+
+            // SAFETY: ensured offsets and lengths are valid
+            let slice = &mmap[old_offset as usize..old_offset as usize + length];
+
+            data_writer
+                .write_all(slice)
+                .expect("Can not write record to new record data file");
+
+            // interim_rec.record_ptr.offset = new_offset;
+            new_offset += interim_rec.record_ptr.length as u64;
+
+            // write to tmpidx
+            tmpidx_writer
+                .write_all(&interim_rec.to_bytes())
+                .expect("Can not write to tmpidx file");
+
+            // self.meta_start += MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
+        }
 
         let mut _curr_offset = 0;
 
-        for (chrom_id, count) in chrom_counts.iter() {
+        for (chrom_id, count) in chrom_count_map.iter() {
             self.meta
                 .chrom_offsets
                 .insert(*chrom_id, (_curr_offset, *count));
             _curr_offset += *count;
         }
 
-        self.meta.data_size = self.offsets.len() as u64;
-
-        // dbg!(&self.meta.chrom_offsets, &self.meta.data_size);
-
-        let mut writer = BufWriter::new(&self.file);
-        writer
-            .seek(std::io::SeekFrom::Start(8))
-            .expect("Can not move the cursor to start after write interim index file..");
-        let mut buffer: [u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
-        self.meta_start = 8; // 8 bytes for the meta offset
-
-        for interim_rec in self.offsets.iter() {
-            buffer = interim_rec.to_bytes();
-            writer.write_all(&buffer).expect("Can not write to file");
-            self.meta_start += MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
-        }
+        self.meta.data_size = total_idx_n;
 
         let meta_bytes = bincode::serialize(&self.meta).expect("Can not serialize meta");
-        writer
+        tmpidx_writer
             .write_all(&meta_bytes)
             .expect("Can not write to file");
 
-        writer
+        tmpidx_writer
             .seek(std::io::SeekFrom::Start(0))
             .expect("Can not move the cursor to start after write interim index file..");
-        writer
+
+        let index_bytes = (total_idx_n as u64) * (MergedIsoformOffsetPlusGenomeLoc::SIZE as u64);
+        self.meta_start = 8 + index_bytes;
+        tmpidx_writer
             .write_all(&self.meta_start.to_le_bytes())
             .expect("Can not update the meta offset");
+
+        tmpidx_writer
+            .flush()
+            .expect("Can not flush the tmpidx to disk");
+        data_writer
+            .flush()
+            .expect("Can not flush the record data file to disk");
+
+        info!("Clean up temporary files...");
+
+        // remove chunk files
+        for path in file_list.iter() {
+            fs::remove_file(path).expect("Can not remove chunk file after merge");
+        }
+
+        // remove old record data file
+        fs::remove_file(record_data_path).expect("Can not remove old record data file");
     }
+
+    // pub fn rewrite_sorted_records(
+    //     &mut self,
+    //     record_data_path: &PathBuf,
+    //     new_record_data_path: &PathBuf,
+    // ) {
+    //     let mut converted_offsets_n = 0;
+    //     let mut duplicated_offsets_n = 0;
+
+    //     let mut processed_offsets = FxHashSet::default();
+    //     let mut offset_mapping: FxHashMap<u64, u64> = FxHashMap::default();
+
+    //     // mmap the input file
+    //     let file = fs::File::open(record_data_path).expect("Can not open record data file");
+    //     let mmap = unsafe { Mmap::map(&file).expect("mmap failed") };
+
+    //     // prepare writer
+    //     let mut writer = BufWriter::new(
+    //         fs::File::create(new_record_data_path).expect("Can not create new record data file"),
+    //     );
+
+    //     let mut new_offset: u64 = 0;
+
+    //     for interim_rec in self.offsets.iter_mut() {
+    //         let old_offset = interim_rec.record_ptr.offset;
+
+    //         if let Some(&mapped_offset) = offset_mapping.get(&old_offset) {
+    //             // already processed
+    //             duplicated_offsets_n += 1;
+    //             interim_rec.record_ptr.offset = mapped_offset;
+    //         }
+
+    //         // first time seeing this record
+    //         processed_offsets.insert(old_offset);
+    //         offset_mapping.insert(old_offset, new_offset);
+    //         converted_offsets_n += 1;
+
+    //         let length = interim_rec.record_ptr.length as usize;
+
+    //         // SAFETY: ensured offsets and lengths are valid
+    //         let slice = &mmap[old_offset as usize..old_offset as usize + length];
+
+    //         writer
+    //             .write_all(slice)
+    //             .expect("Can not write record to new record data file");
+
+    //         interim_rec.record_ptr.offset = new_offset;
+    //         new_offset += interim_rec.record_ptr.length as u64;
+    //     }
+
+    //     writer.flush().expect("Can not flush the writer");
+
+    //     info!(
+    //         "Total {} offsets, converted {} offsets, duplicated {} offsets",
+    //         self.offsets.len(),
+    //         converted_offsets_n,
+    //         duplicated_offsets_n
+    //     );
+    // }
+
+    // pub fn dump_to_disk(&mut self) {
+    //     // final sort for last chunk
+
+    //     // process the last chunk if any data in self.offsets
+
+    //     if self.offsets.len() > 0 {
+    //         self._sort_records();
+    //         self._dump_chunk();
+    //     }
+
+    //     // self.sort_records(); // must sort before dump, it is mutable but below is immutable
+
+    //     // create the chrom offset map
+    //     // chrom_counts: IndexMap<ChromId, u64>
+    //     let chrom_counts = self.offsets.iter().fold(
+    //         IndexMap::new(),
+    //         |mut map, pos_rec_ptr: &MergedIsoformOffsetPlusGenomeLoc| {
+    //             *map.entry(pos_rec_ptr.chrom_id).or_insert(0) += 1;
+    //             map
+    //         },
+    //     );
+
+    //     let mut _curr_offset = 0;
+
+    //     for (chrom_id, count) in chrom_counts.iter() {
+    //         self.meta
+    //             .chrom_offsets
+    //             .insert(*chrom_id, (_curr_offset, *count));
+    //         _curr_offset += *count;
+    //     }
+
+    //     self.meta.data_size = self.offsets.len() as u64;
+
+    //     // dbg!(&self.meta.chrom_offsets, &self.meta.data_size);
+
+    //     let mut writer = BufWriter::new(&self.file);
+    //     writer
+    //         .seek(std::io::SeekFrom::Start(8))
+    //         .expect("Can not move the cursor to start after write interim index file..");
+    //     let mut buffer: [u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
+    //     self.meta_start = 8; // 8 bytes for the meta offset
+
+    //     for interim_rec in self.offsets.iter() {
+    //         buffer = interim_rec.to_bytes();
+    //         writer.write_all(&buffer).expect("Can not write to file");
+    //         self.meta_start += MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
+    //     }
+
+    //     let meta_bytes = bincode::serialize(&self.meta).expect("Can not serialize meta");
+    //     writer
+    //         .write_all(&meta_bytes)
+    //         .expect("Can not write to file");
+
+    //     writer
+    //         .seek(std::io::SeekFrom::Start(0))
+    //         .expect("Can not move the cursor to start after write interim index file..");
+    //     writer
+    //         .write_all(&self.meta_start.to_le_bytes())
+    //         .expect("Can not update the meta offset");
+    // }
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::open(file_name).expect("Can not open file");
@@ -198,6 +425,8 @@ impl Tmpindex {
             },
             offsets: Vec::new(),
             file: file,
+            file_name: file_name.clone(),
+            chunks: 0,
         };
         let mut buffer = [0u8; 8];
         reader

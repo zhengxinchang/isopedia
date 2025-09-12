@@ -39,19 +39,25 @@ t1111:build
 	-o test/flnc.isoform.out -d 
 
 
+scp2bcm:
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-extr  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-tool  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-aggr  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-idx  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+
 
 t2:build
-	target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
+	/usr/bin/time -v target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
 
 t3:build
-	target/release/isopedia-idx  -i test/HG002_idx/ -m test/HG002.meta.txt 
+	target/release/isopedia-idx  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
 
 t4:build
 	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
 
 t41:build
-	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gtf -o test/test.output2.txt
+	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.txt
 
 tfusion:build
 	target/release/isopedia-anno-fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz
