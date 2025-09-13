@@ -330,6 +330,17 @@ key parameters:
 
 
 
+# Memory Usage
+
+
+## ENCODE long-read RNA-seq datasets(107 samples)
+| Step                       | Peak Memory Usage (GB) |
+|----------------------------|------------------------|
+| isopedia-aggr              | 7.12                   |
+| isopedia-idx               | 3.84                   |
+| isopedia-anno-isoform(158K transcripts from GENCODE)      | 15.82                  |
+
+
 
 # Installation
 

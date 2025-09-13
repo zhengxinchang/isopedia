@@ -60,5 +60,12 @@ pub fn read_record_from_mmap(
     let end = start + offset.length as usize;
     buf.clear();
     buf.extend_from_slice(&mmap[start..end]);
-    MergedIsoform::gz_decode(buf).expect("Failed to decode gzipped record")
+    match MergedIsoform::gz_decode(buf) {
+        Ok(record) => record,
+        Err(_) => {
+            eprintln!("Failed to decode gzipped record");
+            eprintln!("Offset: {:?}", offset);
+            std::process::exit(1);
+        }
+    }
 }

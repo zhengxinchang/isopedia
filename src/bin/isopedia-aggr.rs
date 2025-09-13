@@ -391,7 +391,7 @@ fn main() -> Result<()> {
     isoform_archive.close_file()?;
 
     info!(
-        "Dump interim index to disk: {}",
+        "Dump tmpidx chunks to disk: {}",
         &cli.outdir.join(TMPIDX_FILE_NAME).display()
     );
 

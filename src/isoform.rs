@@ -255,8 +255,7 @@ impl MergedIsoform {
         let mut decoder = flate2::bufread::GzDecoder::new(bytes);
         let mut bytes = Vec::new();
         decoder
-            .read_to_end(&mut bytes)
-            .expect("Can not decompress the AggRecord, consider the index is corrupted?");
+            .read_to_end(&mut bytes)?;
 
         bincode::deserialize(&bytes[..])
     }
