@@ -212,8 +212,8 @@ fn main() -> Result<()> {
     let mut heap: BinaryHeap<Reverse<HeapItem<AggrRead>>> = BinaryHeap::new();
     // init the merge buffer
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
-    // init the output file
 
+    // init the output file
     let mut merged_file_name_pre = PathBuf::from(MERGED_FILE_NAME);
     merged_file_name_pre.set_extension("tmp");
 

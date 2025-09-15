@@ -482,13 +482,6 @@ fn main() -> Result<()> {
                     continue;
                 }
 
-                // let targets = target.unwrap();
-
-                // if targets.is_empty() {
-                //     skipped_genes += 1;
-                //     continue;
-                // }
-
                 for rec_ptr in targets {
                     let isoform: MergedIsoform =
                         read_record_from_mmap(&archive_mmap, &rec_ptr, &mut archive_buf);

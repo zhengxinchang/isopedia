@@ -13,3 +13,4 @@ pub mod reads;
 pub mod tmpidx;
 pub mod utils;
 pub mod writer;
+pub mod output;

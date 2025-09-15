@@ -1,7 +1,10 @@
 use ahash::RandomState;
 use anyhow::Result;
+use log::error;
 use std::fs;
 use std::{fs::File, hash::Hash, io::Read, path::Path};
+
+use crate::constants::*;
 
 pub fn pack_u32(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | (low as u64)
@@ -136,4 +139,45 @@ pub fn u64diff2i32(a: u64, b: u64) -> i32 {
             -(diff as i32)
         }
     }
+}
+
+
+pub fn check_index_dir(path: &Path) -> bool {
+
+    if !path.is_dir() {
+        error!("Index directory {:?} is not a directory",path);
+        return false;
+    }
+
+    if !path.exists() {
+        error!("Index directory {:?} does not exist",path);
+        return false;
+    }
+
+    if !path.join(MERGED_FILE_NAME).exists() {
+        error!("Index directory {:?} does not contain {}",path,MERGED_FILE_NAME);
+        return false;
+    }
+
+    if !path.join("bptree_0.idx").exists() {
+        error!("Index directory {:?} does not contain the tree files",path);
+        return false;
+    }
+
+    if !path.join(CHROM_FILE_NAME).exists() {
+        error!("Index directory {:?} does not contain {}",path,CHROM_FILE_NAME);
+        return false;
+    }
+
+    if !path.join(DATASET_INFO_FILE_NAME).exists() {
+        error!("Index directory {:?} does not contain {}",path,DATASET_INFO_FILE_NAME);
+        return false;
+    }
+
+    if !path.join(META_FILE_NAME).exists() {
+        error!("Index directory {:?} does not contain {}",path,META_FILE_NAME);
+        return false;
+    }
+
+    true
 }

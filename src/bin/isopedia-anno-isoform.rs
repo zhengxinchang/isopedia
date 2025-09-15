@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::Result;
+use bincode::de;
 use clap::{command, Parser};
 use isopedia::{
     bptree::BPForest,
@@ -16,13 +17,15 @@ use isopedia::{
     isoform::{self, MergedIsoform},
     isoformarchive::read_record_from_mmap,
     meta::Meta,
+    output::OutputWriter,
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, get_total_memory_bytes, warmup},
+    writer::MyGzWriter,
 };
 use log::{error, info};
 use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-ann-isoform")]
@@ -34,9 +37,13 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 #[clap(after_long_help = "
 ")]
 struct Cli {
-    /// Path to the index directory
+    /// Path to the index directories
     #[arg(short, long)]
-    pub idxdir: PathBuf,
+    pub idxdirs: Option<Vec<PathBuf>>,
+
+    /// Path to the manifest of a list of index directories, each line is a valid path to an index directory
+    #[arg(short = 'I', long = "idx-manifest")]
+    pub manifest: Option<PathBuf>,
 
     /// Path to the GTF file
     #[arg(short, long)]
@@ -68,30 +75,50 @@ struct Cli {
 impl Cli {
     fn validate(&self) {
         let mut is_ok = true;
-        if !self.idxdir.exists() {
-            error!(
-                "--idxdir: index directory {} does not exist",
-                self.idxdir.display()
-            );
+
+        if self.idxdirs.is_none() && self.manifest.is_none() {
+            error!("Either --idxdirs or --idx-manifest must be provided");
             is_ok = false;
         }
 
-        if !self.idxdir.join(MERGED_FILE_NAME).exists() {
-            error!(
-                "--idxdir: Aggr file {} does not exist in {}, please run `stix-isoform aggr` first",
-                MERGED_FILE_NAME,
-                self.idxdir.display()
-            );
-            is_ok = false;
+        if self.idxdirs.is_some() {
+            let idxdirs = self.idxdirs.as_ref().unwrap();
+            for idxdir in idxdirs {
+                if !utils::check_index_dir(idxdir) {
+                    error!(
+                        "--idxdir: index directory {} is not valid",
+                        idxdir.display()
+                    );
+                    is_ok = false;
+                    break;
+                }
+            }
         }
 
-        if !self.idxdir.join("bptree_0.idx").exists() {
-            error!(
-                "--idxdir: index files {} does not exist in {}, please run `stix-isoform idx` first",
-                MERGED_FILE_NAME,
-                self.idxdir.display()
-            );
-            is_ok = false;
+        // check if the manifest file exists
+        if self.manifest.is_some() {
+            let manifest = self.manifest.as_ref().unwrap();
+            if !manifest.exists() {
+                is_ok = false;
+            }
+
+            // read the manifest file and check each index directory
+            let content = std::fs::read_to_string(manifest).expect("Failed to read manifest file");
+            let lines: Vec<&str> = content.lines().collect();
+            if lines.len() == 0 {
+                error!(
+                    "--idx-manifest: manifest file {} is empty",
+                    manifest.display()
+                );
+                is_ok = false;
+            } else {
+                for line in lines {
+                    let idxdir = PathBuf::from(line);
+                    if !utils::check_index_dir(&idxdir) {
+                        is_ok = false;
+                    }
+                }
+            }
         }
 
         if !self.gtf.exists() {
@@ -137,6 +164,172 @@ fn greetings(args: &Cli) {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct IsoformOutputRecord {
+    idx: u32,
+    chrom: String,
+    start: u64,
+    end: u64,
+    length: u64,
+    exon_count: u32,
+    trans_id: String,
+    gene_id: String,
+    confidence: f64,
+    detected: String,
+    min_read: u32,
+    positive_count: u32,
+    sample_size: u32,
+    attributes: String,
+    format: String,
+    sample_vec: Vec<String>,
+    evidence_vec: Vec<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct Output {
+    header: Vec<String>,
+    sample_names: Vec<String>,
+    sample_size: usize,
+    records: Vec<IsoformOutputRecord>,
+    record_size: usize,
+    total_signals_vec: Vec<u32>,
+}
+
+impl Output {
+    pub fn new(
+        header: Vec<String>,
+        sample_names: Vec<String>,
+        total_signals_vec: Vec<u32>,
+    ) -> Self {
+        let sample_size = sample_names.len();
+        Output {
+            header,
+            sample_names,
+            sample_size,
+            records: Vec::new(),
+            record_size: 0,
+            total_signals_vec,
+        }
+    }
+}
+
+impl OutputWriter<Output, IsoformOutputRecord> for Output {
+    fn add_header(&mut self, header: &str) -> Result<()> {
+        self.header.push(header.to_string());
+        Ok(())
+    }
+
+    fn add_one(&mut self, item: IsoformOutputRecord) -> Result<()> {
+        self.records.push(item);
+        self.record_size += 1;
+        Ok(())
+    }
+
+    fn merge(&mut self, other: &Self) -> Result<()> {
+        if self.header != other.header {
+            return Err(anyhow::anyhow!("Headers do not match, cannot merge"));
+        }
+
+        if self.record_size != other.record_size {
+            return Err(anyhow::anyhow!("Sizes do not match, cannot merge"));
+        }
+
+        // extend sample names
+        self.sample_names.extend_from_slice(&other.sample_names);
+
+        for i in 0..self.record_size {
+            if self.records[i].idx != other.records[i].idx {
+                return Err(anyhow::anyhow!(
+                    "Record idx at position {} do not match, cannot merge",
+                    i
+                ));
+            }
+
+            self.records[i]
+                .sample_vec
+                .extend_from_slice(&other.records[i].sample_vec);
+
+            // update positive count
+
+            self.records[i].positive_count =
+                self.records[i].positive_count + other.records[i].positive_count;
+
+            // update sample size
+            self.records[i].sample_size =
+                self.records[i].sample_size + other.records[i].sample_size;
+
+            // update evidence vec
+            self.records[i]
+                .evidence_vec
+                .extend_from_slice(&other.records[i].evidence_vec);
+        }
+
+        // update total evidence vec
+        self.total_signals_vec
+            .extend_from_slice(&other.total_signals_vec);
+
+        Ok(())
+    }
+
+    fn finalize(&mut self) -> Result<()> {
+        // calcuate confidence for each record
+        for record in &mut self.records {
+            record.confidence = isoform::MergedIsoform::get_confidence_value(
+                record.evidence_vec.clone(),
+                self.sample_size,
+                &self.total_signals_vec,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn dump(&mut self, output: &PathBuf, meta_string: &str) -> Result<()> {
+        self.finalize()?;
+
+        // init writer
+        let mut mywriter = MyGzWriter::new(output)?;
+
+        // write meta
+        mywriter.write_all_bytes(meta_string.as_bytes())?;
+
+        // write header
+        let mut header_line = self.header.join("\t");
+        header_line.push_str("\t");
+        header_line.push_str(&self.sample_names.join("\t"));
+        header_line.push_str("\n");
+        mywriter.write_all_bytes(header_line.as_bytes())?;
+
+        // write records
+        for record in &self.records {
+            let mut line = format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}/{}\t{}\t{}\t",
+                record.chrom,
+                record.start,
+                record.end,
+                record.length,
+                record.exon_count,
+                record.trans_id,
+                record.gene_id,
+                record.confidence,
+                record.detected,
+                record.min_read,
+                record.positive_count,
+                record.sample_size,
+                record.attributes,
+                record.format
+            );
+
+            // add sample strings
+            line.push_str(&record.sample_vec.join("\t"));
+            line.push_str("\n");
+            mywriter.write_all_bytes(line.as_bytes())?;
+        }
+
+        Ok(())
+    }
+}
+
 fn main() -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
@@ -144,6 +337,56 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     cli.validate();
     greetings(&cli);
+
+
+    // the index shold be put in a vec and then be merged.
+    // build the vec of index directories
+    let idx_dirs = if cli.manifest.is_some() {
+
+        let manifest = cli.manifest.as_ref().unwrap();
+        let content =
+            std::fs::read_to_string(manifest).expect("Failed to read manifest file");
+        let lines: Vec<&str> = content.lines().collect();
+        let mut idx_dirs: Vec<PathBuf> = Vec::new();
+        for line in lines {
+            let idxdir = PathBuf::from(line);
+            idx_dirs.push(idxdir);
+        }
+        idx_dirs
+
+    }else {
+        cli.idxdirs.as_ref().unwrap().clone()
+
+    };
+
+    // open gtf file
+
+    info!("Search by gtf/gff file");
+    let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
+        BufReader::new(std::fs::File::open(cli.gtf).expect("can not read gtf")),
+    );
+
+    // create the base output object
+
+    // load indexes one by one
+
+    for (i, idx_dir) in idx_dirs.iter().enumerate() {
+        info!("Annotating index shard {}/{}", i+1, idx_dirs.len());
+
+        let forest = BPForest::init(idx_dir);
+        let dataset_info = DatasetInfo::load_from_file(&idx_dir.join(DATASET_INFO_FILE_NAME))?;
+        let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
+        let meta = Meta::parse(idx_dir.join(META_FILE_NAME))?;
+
+        let gtf: TranscriptChunker<BufReader<File>> = TranscriptChunker::new(gtfreader);
+
+        info!("Warmup index file");
+        let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
+        warmup(&idx_dir.clone().join(MERGED_FILE_NAME), max_gb)?;
+
+        
+    }
+
 
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
@@ -268,7 +511,8 @@ fn main() -> Result<()> {
 
             let confidence = isoform::MergedIsoform::get_confidence_value(
                 acc_sample_evidence_arr.clone(),
-                &dataset_info,
+                dataset_info.get_size(),
+                &dataset_info.sample_total_evidence_vec,
             );
 
             write!(
