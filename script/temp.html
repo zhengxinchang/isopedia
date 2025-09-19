@@ -9,6 +9,12 @@
 
     <style>
         /* Add your custom styles here */
+        /* set font size of all button */
+        button {
+            font-size: 10px;
+            margin-left: 2px;
+            margin-right: 2px;
+        }
     </style>
 </head>
 
@@ -17,7 +23,12 @@
         <div id='header'
             style="z-index:11;box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); color:#ba7027;  padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 2.5vh;  position: relative;">
 
-            <h4 style="margin: 0;">Isopedia Splice View</h4>
+            <a href="https://github.com/zhengxinchang/isopedia" style="color:#ba7027;text-decoration: none;" target="_blank">
+                <h4 style="margin: 0;">Isopedia Splice View</h4>
+            </a>
+            
+
+            <div>ver. 1.0.0</div>
 
         </div>
 
@@ -25,6 +36,24 @@
 
             <div id="left"
                 style="z-index:10; box-shadow: 4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-right: none;">
+
+
+                <expand-box name="Data Info" :expanded="true">
+                    1. query information<br>
+                    2. sample size<br>
+                    3. isoform count<br>
+                    4. reference annotation count<br>
+                </expand-box>
+
+
+                <expand-box name="Selected Isoform">
+
+                </expand-box>
+
+                <expand-box name="Selected Reference Transcript">
+
+                </expand-box>
+
 
             </div>
 
@@ -36,6 +65,45 @@
 
             <div id="right"
                 style="z-index:10; box-shadow: -4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-left: none;">
+
+                <expand-box name="Zoom" :expanded="true">
+                    <button @click="zoomIn">Zoom In</button>
+                    <button @click="zoomOut">Zoom Out</button>
+                    <button @click="resetView">Reset</button>
+                </expand-box>
+
+
+                <expand-box name ="Filter&Sort Reference Annotation">
+
+                    <div>
+                        <div>Genes to show</div>
+
+                        <div>Only show query regionoverlapped transcripts</div>
+                        <div v-for="transcript in transcripts" :key="transcript.id">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between;align-items: center;">
+                        <button @click="filterIsopediaIndex">Apply</button>
+                        <button @click="resetIsopediaIndex">Reset</button>
+                    </div>
+
+                </expand-box>
+
+                <expand-box name="Filter&Sort Isopedia Index">
+
+                    Lorem ipsum dolor sit amet consectetur, adipisicing elit. Aliquid inventore quibusdam eaque? Facere ipsum accusamus debitis delectus, ad aperiam quas laboriosam eaque sed accusantium nemo voluptatem id cupiditate, deserunt optio.
+
+                    <div style="display: flex; justify-content: space-between;align-items: center;">
+                        <button @click="filterIsopediaIndex">Apply</button>
+                        <button @click="resetIsopediaIndex">Reset</button>
+                    </div>
+                    
+                </expand-box>
+
+                <expand-box name="Legend&Help">
+                </expand-box>
+
 
             </div>
 
@@ -92,14 +160,8 @@
                     gContentRef: null,
 
                     // 尺寸拆分
-                    refH: 120,
+                    refH: 160,
                     bodyH: 0,
-
-                    // 交互 overlay & zoom（各自独立）
-                    topOverlay: null,
-                    bottomOverlay: null,
-                    zoomTop: null,
-                    zoomBottom: null,
 
                     // 数据
                     sjData: [],
@@ -113,12 +175,8 @@
                     ref_tx_count: 0,
                     isoform_count: 0,
 
-                    // 共享缩放率/水平位移
                     kShared: 1,
                     xShared: 0,
-
-                    // 防止 transform 同步递归
-                    syncing: false,
                 };
             },
 
@@ -134,7 +192,22 @@
                             this.meta = data.meta;
                             this.annotation = data.annotation;
                             this.isoforms = data.isoforms;
-                            console.log("loaded...", this.meta, this.annotation, this.isoforms);
+                            // console.log("loaded...", this.meta, this.annotation, this.isoforms);
+
+                            this.isoforms.forEach(isofrom => {
+                                console.log("isofrom", isofrom);
+                                isofrom.pass = true;
+                            });
+
+                            this.annotation.forEach(ann => {
+                                console.log("ann", ann);
+                                // ann.transcripts is a dict
+
+                                Object.keys(ann.transcripts).forEach(txId => {
+                                    const tx = ann.transcripts[txId];
+                                    tx.pass = true;
+                                });
+                            });
                         })
                         .catch(err => {
                             console.error("加载 JSON 出错:", err);
@@ -142,21 +215,45 @@
                         });
                 },
 
-                // 根据 transform 计算“可视域行号数组”（1-based），并做边界与至少 1 行的保护
+                // transform -> visible rows
                 visibleRowsFromTransform(t, baseY, panelH, maxRow) {
+                    // console.log("baseY", baseY);
+                    console.log("baseY domain", baseY.domain());
                     const yScaled = t.rescaleY(baseY);     // domain -> pixel（在当前变换下）
                     let start = Math.floor(yScaled.invert(0));          // 像素 0 对应的 domain
                     let end = Math.ceil(yScaled.invert(panelH));      // 像素 panelH 对应的 domain
 
+                    // console.log("visibleRowsFromTransform", t, panelH, maxRow, start, end);
+                    console.log("prev start,end", start, end);
+
                     start = Math.max(0, Math.min(maxRow - 1, start));
                     end = Math.max(1, Math.min(maxRow, end));
+
+                    console.log("after start,end", start, end);
 
                     if (end <= start) end = Math.min(maxRow, start + 1);
 
                     // 转为 1..maxRow 的整数行号
-                    const rows = [];
-                    for (let r = start + 1; r <= end; r++) rows.push(r);
+                    // const rows = [];
+                    // for (let r = start + 1; r <= end; r++) rows.push(r);
+                    const rows = d3.range(start + 1, end + 1);
                     return rows;
+                },
+
+                visibleRowsFromBand(bandScale, panelH, maxRow, rate) {
+                    const domain = bandScale.domain();
+                    if (!domain.length) return domain;
+
+                    // step 是相邻带的起点间距（含 padding），比 bandwidth 更合适用来估计“每屏能放几行”
+                    let step = typeof bandScale.step === "function" ? bandScale.step() : bandScale.bandwidth();
+                    const first = domain[0];                  // 当前顶部行（1-based）
+                    step = step * (rate || 1);
+                    console.log("step,first,panelH", step, first, panelH);
+                    const visible = Math.max(1, Math.floor(panelH / step));
+                    console.log("visible", visible);
+                    const last = Math.min(maxRow, first + visible - 1);
+                    console.log("last", last);
+                    return d3.range(first, last + 1);
                 },
 
                 // 控制 y 轴刻度密度：按可视域长度与像素高度限流
@@ -171,6 +268,10 @@
 
                 // 绘制/更新 X 轴
                 updateXAxis() {
+
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    this.xz = tId.rescaleX(this.x0);
+
                     this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
                 },
 
@@ -178,25 +279,10 @@
                 renderTop() {
                     const ticks = this.bandTicks(this.yRefBand, this.refH);
                     this.gYAxisRef.call(d3.axisLeft(this.yRefBand).tickValues(ticks));
-
-                    // [FIX] 分支处理，避免对不可见行计算 y（产生 NaN）
-                    this.gContentRef.selectAll("line.ref-exon")
-                        .attr("x1", d => this.xz(d.coord[0]))
-                        .attr("x2", d => this.xz(d.coord[1]))
-                        .each((d, i, nodes) => {
-                            const y = this.yRefBand(d.row);
-                            const el = d3.select(nodes[i]);
-                            if (y == null) {
-                                el.style("display", "none")
-                                  .attr("y1", null)
-                                  .attr("y2", null);
-                            } else {
-                                const ym = y + this.yRefBand.bandwidth() / 2;
-                                el.style("display", null)
-                                  .attr("y1", ym)
-                                  .attr("y2", ym);
-                            }
-                        });
+                    this.updateLines(this.gContentRef.selectAll("line.ref-exon"), this.xz, this.yRefBand);
+                    this.updateLines(this.gContentRef.selectAll("line.ref-utrs"), this.xz, this.yRefBand);
+                    this.updateLines(this.gContentRef.selectAll("line.ref-introns"), this.xz, this.yRefBand);
+                    // this.updateLines(this.gContentRef.selectAll("rect.query-region"), this.xz, this.yRefBand);
                 },
 
                 // 刷新 Bottom：根据 yBand.domain 定位；域外隐藏
@@ -204,51 +290,261 @@
                     const ticks = this.bandTicks(this.yBand, this.bodyH);
                     this.gYAxis.call(d3.axisLeft(this.yBand).tickValues(ticks));
 
-                    // [FIX] 安全设置函数：对每个元素分支处理，避免 NaN
-                    const setBottomXY = sel => {
-                        sel
-                          .attr("x1", d => this.xz(d.coord[0]))
-                          .attr("x2", d => this.xz(d.coord[1]))
-                          .each((d, i, nodes) => {
-                              const y = this.yBand(d.row);
-                              const el = d3.select(nodes[i]);
-                              if (y == null) {
-                                  el.style("display", "none")
-                                    .attr("y1", null)
-                                    .attr("y2", null);
-                              } else {
-                                  const ym = y + this.yBand.bandwidth() / 2;
-                                  el.style("display", null)
-                                    .attr("y1", ym)
-                                    .attr("y2", ym);
-                              }
-                          });
-                    };
+                    this.updateLines(this.gContent.selectAll("line.splice"), this.xz, this.yBand);
+                    this.updateLines(this.gContent.selectAll("line.exon"), this.xz, this.yBand);
+                    this.updateLines(this.gContent.selectAll("line.readspan"), this.xz, this.yBand);
 
-                    setBottomXY(this.gContent.selectAll("line.splice"));
-                    setBottomXY(this.gContent.selectAll("line.exon"));
-                    setBottomXY(this.gContent.selectAll("line.readspan"));
                 },
 
-                // 以指定中心 (cx,cy) 把 prev 由 k0 放大到 k1，返回 {k,x,y}
-                anchoredAround(prev, k1, cx, cy) {
-                    const k0 = prev.k, s = k1 / k0;
-                    return {
-                        k: k1,
-                        x: (1 - s) * cx + s * prev.x,
-                        y: (1 - s) * cy + s * prev.y
-                    };
-                },
-                // 从 {k,x,y} 构造 d3 的 ZoomTransform（注意次序：translate 再 scale）
-                makeTransform(k, x, y) {
-                    return d3.zoomIdentity.translate(x, y).scale(k);
-                },
-                // 判断这次是“真缩放”还是仅平移
-                isZoomStep(prev, now, eps = 1e-6) {
-                    return Math.abs(now.k - prev.k) > eps;
+                renderQueryRegion() {
+                    this.gContent.selectAll("rect.query-region")
+                        .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);           // ✅ 防止 0/负宽度
+                        });
+
+                    this.gContentRef.selectAll("rect.query-region")
+                        .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);           // ✅ 防止 0/负宽度
+                        });
                 },
 
-                /* ---------- 生命周期：准备与首绘 ---------- */
+                updateLines(sel, xScale, yScale) {
+                    // console.log(sel);
+                    // sel.attr("x1", d => xScale(d.coord[0]))
+                    //     .attr("x2", d => xScale(d.coord[1]))
+
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    this.xz = tId.rescaleX(this.x0);
+
+                    sel
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        // .attr("x1", d => d.coord[0])
+                        // .attr("x2", d => d.coord[1])
+                        .each((d, i, nodes) => {
+
+                            // if (i < 5) {
+                            //     console.log("updating line", d.coord, i);
+                            // }
+
+
+                            const y = yScale(d.row);
+
+                            const el = d3.select(nodes[i]);
+                            if (y == null) {
+                                el.style("display", "none").attr("y1", null).attr("y2", null);
+                            } else {
+                                const ym = y + yScale.bandwidth() / 2;
+                                el.style("display", null).attr("y1", ym).attr("y2", ym);
+                            }
+                        });
+                },
+
+                bindLines(sel, data, cls, color, width) {
+                    sel.data(data)
+                        .join("line")
+                        .attr("class", cls)
+                        .attr("stroke", color)
+                        .attr("stroke-width", width)
+                        .attr("vector-effect", "non-scaling-stroke");
+                },
+
+                zoomIn() {
+                    const newK = this.kShared * 1.2;
+                    if (newK > 150) return;
+                    this.kShared = newK;
+                    this.xShared = this.xShared - (this.innerW / 2) * (newK - this.kShared) / newK;
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+                    // 顶部
+                    console.log("y0Ref", this.y0Ref);
+                    console.log("y0", this.y0);
+
+                    startDomainRef = this.yRefBand.domain().map(d => d);
+                    startDomainData = this.yBand.domain().map(d => d);
+
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1.2);
+
+                    // console.log("rowsTop", rowsTop);
+
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1.2);
+                    console.log("rowsBottom", rowsBottom);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+
+                    // X 轴
+                    this.xz = tId.rescaleX(this.x0);
+                    this.updateXAxis();
+
+
+                    this.renderQueryRegion();
+                },
+
+                zoomOut() {
+
+                    const newK = this.kShared / 1.2;
+                    if (newK < 1) return;
+                    this.kShared = newK;
+                    this.xShared = this.xShared - (this.innerW / 2) * (newK - this.kShared) / newK;
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+                    // 顶部
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1 / 1.2);
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1 / 1.2);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+
+                    // X 轴
+                    this.xz = tId.rescaleX(this.x0);
+                    this.updateXAxis();
+
+                    this.renderQueryRegion();
+                },
+
+                resetView() {
+
+                    const xdomain = [this.meta.left_most, this.meta.right_most];
+
+                    // X（共享）
+                    this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
+                    this.xz = this.x0.copy();
+
+                    // Bottom Y 连续基准（domain 0..N，range 0..bodyH）
+                    this.y0 = d3.scaleLinear().domain([0, this.isoform_count]).range([0, this.bodyH]);
+                    // Bottom Y band（range 固定 0..bodyH，domain 初始化为全部行 1..N）
+                    this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
+
+                    // Top Y 连续基准
+                    this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
+                    // Top Y band（range 固定 0..refH，domain 初始化为全部行 1..M）
+                    this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
+
+
+                    // 让两个面板都以 identity 计算可视域
+                    this.kShared = 1;
+                    this.xShared = 0;
+                    this.xz = this.x0.copy();
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+                    this.renderQueryRegion();
+
+                    // 初始一次完整渲染（等价于 identity 变换）
+                    this.updateXAxis();
+
+                    // 顶部
+
+
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1);
+
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+                },
+
+
+                enableDrag() {
+                    let isDragging = false;
+                    let startX = 0;
+                    let startY = 0;
+                    let startSharedX = 0;
+                    let startDomainRef = [];
+                    let startDomainData = [];
+
+                    // 鼠标按下
+                    this.svg.on("mousedown", (event) => {
+                        isDragging = true;
+                        startX = event.clientX;
+                        startY = event.clientY;
+                        startSharedX = this.xShared;
+                        startDomainRef = this.yRefBand.domain().map(d => d);
+                        startDomainData = this.yBand.domain().map(d => d);
+                    });
+
+                    // 鼠标移动
+                    d3.select(window).on("mousemove", (event) => {
+                        if (!isDragging) return;
+
+                        const dx = event.clientX - startX;
+                        const dy = event.clientY - startY;
+
+                        // ---- 水平拖动：更新 xShared，保持上下同步 ----
+                        this.xShared = startSharedX + dx;
+                        this.xz = this.x0.copy()
+                            .range([0, this.innerW].map(d => this.kShared * d + this.xShared));
+
+                        this.updateXAxis();
+                        this.renderQueryRegion();
+                        this.renderTop();
+                        this.renderBottom();
+
+
+                        let gNode = event.target.closest("g");
+
+                        if (!gNode) return;
+
+                        // ---- 垂直拖动：分别移动顶部和底部 ----
+                        if (dy !== 0) {
+                            // Top
+                            if (gNode.getAttribute("class") === "content-ref") {
+
+                                let shiftedRef = startDomainRef.map(r => r - Math.round(dy / this.yRefBand.bandwidth()));
+
+                                if (startDomainRef[0] == 1 && shiftedRef[0] <= 1) return;
+
+                                if (startDomainRef[startDomainRef.length - 1] == this.ref_tx_count && shiftedRef[shiftedRef.length - 1] >= this.ref_tx_count) return;
+
+                                shiftedRef = shiftedRef.filter(r => r > 0 && r <= this.ref_tx_count);
+
+                                if (shiftedRef.length > 0) {
+                                    this.yRefBand.domain(shiftedRef);
+                                    this.renderTop();
+                                }
+                            }
+
+                            // Bottom
+                            if (gNode.getAttribute("class") === "content") {
+
+                                let shiftedData = startDomainData.map(r => r - Math.round(dy / this.yBand.bandwidth()));
+
+                                // console.log("startDomainData[0]", startDomainData[0]);
+                                // console.log("startDomainData[-1]", startDomainData[startDomainData.length - 1]);
+                                // console.log("startDomainData", startDomainData);
+                                // console.log("shiftedData", shiftedData);
+
+
+                                if (startDomainData[0] == 1 && shiftedData[0] <= 1) return;
+                                if (startDomainData[startDomainData.length - 1] == this.isoform_count && shiftedData[shiftedData.length - 1] >= this.isoform_count) return;
+
+                                shiftedData = shiftedData.filter(r => r > 0 && r <= this.isoform_count);
+                                if (shiftedData.length > 0) {
+                                    this.yBand.domain(shiftedData);
+                                    this.renderBottom();
+                                }
+                            }
+                        }
+                    });
+
+                    // 鼠标松开
+                    d3.select(window).on("mouseup", () => {
+                        isDragging = false;
+                    });
+                },
+
+
+
 
                 prepare() {
                     // 1) 预处理 reference
@@ -258,10 +554,12 @@
                     this.ref_stop_codons = [];
                     this.ref_start_codons = [];
                     this.ref_utrs = [];
+                    this.ref_introns = [];
 
                     this.annotation.forEach(gene => {
                         Object.values(gene.transcripts).forEach(tx => {
                             this.ref_tx_count += 1;
+                            let intron = [];
                             tx.elements.forEach(el => {
                                 const push = (arr) => arr.push({
                                     feature: el.feature,
@@ -270,14 +568,25 @@
                                     tx_id: el.transcript_id,
                                     gene_id: el.gene_id
                                 });
-                                if (el.feature === 'exon') push(this.ref_exons);
+                                if (el.feature === 'exon') {
+                                    push(this.ref_exons)
+                                    intron.push(el.start);
+                                    intron.push(el.end);
+                                }
                                 else if (el.feature === 'CDS') push(this.ref_cds);
                                 else if (el.feature === 'stop_codon') push(this.ref_stop_codons);
                                 else if (el.feature === 'start_codon') push(this.ref_start_codons);
                                 else if (el.feature === 'UTR') push(this.ref_utrs);
                             });
+
+                            // remove the first and last element (not intron)
+                            intron = intron.slice(1, -1);
+                            for (let i = 0; i < intron.length; i += 2) {
+                                this.ref_introns.push({ coord: [intron[i], intron[i + 1]], row: this.ref_tx_count });
+                            }
                         });
                     });
+
 
                     // 2) 预处理 bottom（isoforms）
                     this.sjData = [];
@@ -320,7 +629,7 @@
                     // Bottom Y 连续基准（domain 0..N，range 0..bodyH）
                     this.y0 = d3.scaleLinear().domain([0, this.isoform_count]).range([0, this.bodyH]);
                     // Bottom Y band（range 固定 0..bodyH，domain 初始化为全部行 1..N）
-                    this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.2);
+                    this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
 
                     // Top Y 连续基准
                     this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
@@ -363,190 +672,140 @@
                     this.gContentRef = this.gTop.append("g").attr("class", "content-ref")
                         .attr("clip-path", "url(#clipTop)");
 
+                    this.gContentRef.append("rect")
+                        .attr("class", "bg-ref")
+                        .attr("x", 0)
+                        .attr("y", 0)
+                        .attr("width", this.innerW)
+                        .attr("height", this.refH)
+                        // .style("fill", "transparent")
+                        .attr("fill", "lightblue")
+                        .attr("fill-opacity", 0.1)   // 调整透明度
+                        .style("pointer-events", "all");   // 透明但能接收事件
+
+
                     this.gContent = this.gBottom.append("g").attr("class", "content")
                         .attr("clip-path", "url(#clipBottom)");
 
-                    // 覆盖层（交互面）
-                    this.topOverlay = this.gTop.append("rect")
-                        .attr("class", "overlay-top")
-                        .attr("x", 0).attr("y", 0)
-                        .attr("width", this.innerW).attr("height", this.refH)
-                        .style("fill", "none").style("pointer-events", "all");
+                    this.gContent.append("rect")
+                        .attr("class", "bg-content")
+                        .attr("x", 0)
+                        .attr("y", 0)
+                        .attr("width", this.innerW)
+                        .attr("height", this.bodyH)
+                        .attr("fill", "lightpink")
+                        .attr("fill-opacity", 0.1)   // 调整透明度
+                        .style("pointer-events", "all");
 
-                    this.bottomOverlay = this.gBottom.append("rect")
-                        .attr("class", "overlay-bottom")
-                        .attr("x", 0).attr("y", 0)
-                        .attr("width", this.innerW).attr("height", this.bodyH)
-                        .style("fill", "none").style("pointer-events", "all");
+                    // y labels
 
-                    // 两块各自 zoom（X 共享，Y 独立）
-                    this.zoomTop = d3.zoom()
-                        .scaleExtent([0.3, 150])
-                        .translateExtent([[0, 0], [this.innerW, this.refH]])
-                        .extent([[0, 0], [this.innerW, this.refH]])
-                        .on("zoom", (event) => this.onZoomTop(event));
+                    // 给顶部 Y 轴加 label
+                    this.gYAxisRef.append("text")
+                        .attr("class", "y-label-ref")
+                        .attr("transform", "rotate(-90)")       // 旋转 90 度
+                        .attr("y", -50)                         // 调整位置（负数往左）
+                        .attr("x", -this.refH / 2)              // 垂直居中
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("fill", "black")
+                        .text("Reference Annotation");
 
-                    this.zoomBottom = d3.zoom()
-                        .scaleExtent([0.3, 150])
-                        .translateExtent([[0, 0], [this.innerW, this.bodyH]])
-                        .extent([[0, 0], [this.innerW, this.bodyH]])
-                        .on("zoom", (event) => this.onZoomBottom(event));
+                    // 给底部 Y 轴加 label
+                    this.gYAxis.append("text")
+                        .attr("class", "y-label-data")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", -50)
+                        .attr("x", -this.bodyH / 2)             // 垂直居中
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("fill", "black")
+                        .text("Isopedia Index");
 
-                    this.topOverlay.call(this.zoomTop);
-                    this.bottomOverlay.call(this.zoomBottom);
+                    this.gXAxis.append("text")
+                        .attr("class", "x-label")
+                        .attr("x", this.innerW / 2)
+                        .attr("y", -25)
+                        .style("text-anchor", "middle")
+                        .style("fill", "black")
+                        .text("Genomic Position");
+
+
+                },
+                drawQueryRegion() {
+
+                    const iso0 = this.isoforms[0];
+                    const x1 = +iso0.pos1;
+                    const x2 = +iso0.pos2;
+                    const xLeft = Math.min(x1, x2);
+                    const xRight = Math.max(x1, x2);
+                    this.gContent
+                        .selectAll("rect.query-region")
+                        .data([{ x1: xLeft, x2: xRight }])
+                        .join("rect")
+                        .attr("class", "query-region")
+                        .attr("x", d => this.xz(d.x1))
+                        .attr("y", 0)
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);
+                        })
+                        .attr("height", this.bodyH)
+                        .attr("fill", "purple")
+                        .attr("fill-opacity", 0.42)
+                        .style("pointer-events", "none");
+
+                    this.gContentRef
+                        .selectAll("rect.query-region")
+                        .data([{ x1: xLeft, x2: xRight }])
+                        .join("rect")
+                        .attr("class", "query-region")
+                        .attr("x", d => this.xz(d.x1))
+                        .attr("y", 0)
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);
+                        })
+                        .attr("height", this.refH)
+                        .attr("fill", "purple")
+                        .attr("fill-opacity", 0.42)
+                        .style("pointer-events", "none");
                 },
 
                 draw() {
-                    // Bottom
-                    this.gContent.selectAll("line.splice")
-                        .data(this.sjData)
-                        .join("line")
-                        .attr("class", "splice")
-                        .attr("stroke", "red")
-                        .attr("stroke-width", 0.8)
-                        .attr("vector-effect", "non-scaling-stroke");
 
-                    this.gContent.selectAll("line.exon")
-                        .data(this.exonData)
-                        .join("line")
-                        .attr("class", "exon")
-                        .attr("stroke", "black")
-                        .attr("stroke-width", 4)
-                        .attr("vector-effect", "non-scaling-stroke");
+                    // 取一个 isoform 的左右边界（你可以按需求换成 right/left 的组合）
 
-                    this.gContent.selectAll("line.readspan")
-                        .data(this.readspanData)
-                        .join("line")
-                        .attr("class", "readspan")
-                        .attr("stroke", "blue")
-                        .attr("stroke-width", 4)
-                        .attr("vector-effect", "non-scaling-stroke");
 
-                    // Top
-                    this.gContentRef.selectAll("line.ref-exon")
-                        .data(this.ref_exons)
-                        .join("line")
-                        .attr("class", "ref-exon")
-                        .attr("stroke", "black")
-                        .attr("stroke-width", 4)
-                        .attr("vector-effect", "non-scaling-stroke");
+                    this.drawQueryRegion();
+
+                    this.bindLines(this.gContent.selectAll("line.splice"), this.sjData, "splice", "pink", 0.8);
+                    this.bindLines(this.gContent.selectAll("line.exon"), this.exonData, "exon", "black", 4);
+                    this.bindLines(this.gContent.selectAll("line.readspan"), this.readspanData, "readspan", "blue", 4);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-introns"), this.ref_introns, "ref-introns", "green", 0.8);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-exon"), this.ref_exons, "ref-exon", "black", 4);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-utrs"), this.ref_utrs, "ref-utrs", "orange", 4);
+
+
+
+
+
+                    // 让两个面板都以 identity 计算可视域
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
 
                     // 初始一次完整渲染（等价于 identity 变换）
                     this.updateXAxis();
-                    // 让两个面板都以 identity 计算可视域
-                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
                     // 顶部
-                    const rowsTop = this.visibleRowsFromTransform(tId, this.y0Ref, this.refH, this.ref_tx_count);
+
+
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1);
+
                     this.yRefBand.domain(rowsTop);
                     this.renderTop();
                     // 底部
-                    const rowsBottom = this.visibleRowsFromTransform(tId, this.y0, this.bodyH, this.isoform_count);
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1);
                     this.yBand.domain(rowsBottom);
                     this.renderBottom();
-                },
-
-                /* ---------- 交互：Zoom 回调 ---------- */
-
-                // 顶部：围绕顶部中心缩放；共享 k/x；底部用自己的中心修正 y 后同步
-                onZoomTop(event) {
-                    if (this.syncing) { this.syncing = false; return; }
-
-                    const prevTop = d3.zoomTransform(this.topOverlay.node());
-                    const nowTop = event.transform;
-
-                    // 顶部/底部的“缩放中心”
-                    const cx = this.innerW / 2, cyTop = this.refH / 2, cyBot = this.bodyH / 2;
-
-                    let tTopNew, tBotNew;
-
-                    if (this.isZoomStep(prevTop, nowTop)) {
-                        // === 发生缩放：忽略鼠标锚点，改用“面板中心锚定”的新 transform ===
-                        const anchoredTop = this.anchoredAround(prevTop, nowTop.k, cx, cyTop);
-                        // 底部：k/x 与顶部一致，但 y 以底部中心为锚点等比调整
-                        const prevBot = d3.zoomTransform(this.bottomOverlay.node());
-                        const anchoredBot = this.anchoredAround(prevBot, anchoredTop.k, cx, cyBot);
-                        anchoredBot.x = anchoredTop.x; // 共享 x
-
-                        // 更新共享状态
-                        this.kShared = anchoredTop.k;
-                        this.xShared = anchoredTop.x;
-
-                        // 转为 d3 Transform
-                        tTopNew = this.makeTransform(anchoredTop.k, anchoredTop.x, anchoredTop.y);
-                        tBotNew = this.makeTransform(anchoredBot.k, anchoredBot.x, anchoredBot.y);
-                    } else {
-                        // === 仅平移：接受 d3 的平移，但共享 x，让另一块只改 x，保留自己的 y ===
-                        const prevBot = d3.zoomTransform(this.bottomOverlay.node());
-                        this.kShared = prevTop.k;
-                        this.xShared = nowTop.x;
-
-                        tTopNew = this.makeTransform(prevTop.k, nowTop.x, nowTop.y);
-                        tBotNew = this.makeTransform(prevBot.k, nowTop.x, prevBot.y);
-                    }
-
-                    // --- 用新的 transform 刷新 X 轴与可视域 ---
-                    this.xz = tTopNew.rescaleX(this.x0);
-                    this.updateXAxis();
-
-                    // 顶部可视行域 -> yRefBand.domain -> 渲染
-                    const rowsTop = this.visibleRowsFromTransform(tTopNew, this.y0Ref, this.refH, this.ref_tx_count);
-                    this.yRefBand.domain(rowsTop);
-                    this.renderTop();
-
-                    // 底部可视行域 -> yBand.domain -> 渲染
-                    const rowsBot = this.visibleRowsFromTransform(tBotNew, this.y0, this.bodyH, this.isoform_count);
-                    this.yBand.domain(rowsBot);
-                    this.renderBottom();
-
-                    // 把“中心锚定”的 transform 回写到两个 overlay，避免下一次事件跳变
-                    this.syncing = true; this.topOverlay.call(this.zoomTop.transform, tTopNew);
-                    this.syncing = true; this.bottomOverlay.call(this.zoomBottom.transform, tBotNew);
-                },
-
-                // 底部：与上面完全对称
-                onZoomBottom(event) {
-                    if (this.syncing) { this.syncing = false; return; }
-
-                    const prevBot = d3.zoomTransform(this.bottomOverlay.node());
-                    const nowBot = event.transform;
-
-                    const cx = this.innerW / 2, cyTop = this.refH / 2, cyBot = this.bodyH / 2;
-
-                    let tTopNew, tBotNew;
-
-                    if (this.isZoomStep(prevBot, nowBot)) {
-                        const anchoredBot = this.anchoredAround(prevBot, nowBot.k, cx, cyBot);
-                        const prevTop = d3.zoomTransform(this.topOverlay.node());
-                        const anchoredTop = this.anchoredAround(prevTop, anchoredBot.k, cx, cyTop);
-                        anchoredTop.x = anchoredBot.x; // 共享 x
-
-                        this.kShared = anchoredBot.k;
-                        this.xShared = anchoredBot.x;
-
-                        tBotNew = this.makeTransform(anchoredBot.k, anchoredBot.x, anchoredBot.y);
-                        tTopNew = this.makeTransform(anchoredTop.k, anchoredTop.x, anchoredTop.y);
-                    } else {
-                        const prevTop = d3.zoomTransform(this.topOverlay.node());
-                        this.kShared = prevBot.k;
-                        this.xShared = nowBot.x;
-
-                        tBotNew = this.makeTransform(prevBot.k, nowBot.x, nowBot.y);
-                        tTopNew = this.makeTransform(prevTop.k, nowBot.x, prevTop.y);
-                    }
-
-                    this.xz = tBotNew.rescaleX(this.x0);
-                    this.updateXAxis();
-
-                    const rowsBot = this.visibleRowsFromTransform(tBotNew, this.y0, this.bodyH, this.isoform_count);
-                    this.yBand.domain(rowsBot);
-                    this.renderBottom();
-
-                    const rowsTop = this.visibleRowsFromTransform(tTopNew, this.y0Ref, this.refH, this.ref_tx_count);
-                    this.yRefBand.domain(rowsTop);
-                    this.renderTop();
-
-                    this.syncing = true; this.bottomOverlay.call(this.zoomBottom.transform, tBotNew);
-                    this.syncing = true; this.topOverlay.call(this.zoomTop.transform, tTopNew);
                 },
 
             },
@@ -556,11 +815,55 @@
                 this.fetchJSON().then(() => {
                     this.prepare();
                     this.draw();
+                    this.enableDrag();
                 });
             }
         });
 
-        app.mount("#app");
+
+
+
+
+
+        // 注册组件
+        app.component('expand-box', {
+
+            data() {
+                return {
+                    curr_expanded: null,
+                };
+            },
+            props: {
+                'name': {
+                    type: String,
+                    required: true
+                },
+                'expanded': {
+                    type: Boolean,
+                    default: true,
+                }
+            },
+            created() {
+                this.curr_expanded = this.expanded;
+            },
+            template: `
+                <div style="margin-top:1px;">
+                    <div @click="toggle" style="box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); padding-left:2px;padding-right:2px; background-color: lightgray; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;"> {{ name }} <span v-if="curr_expanded">[&minus;]</span><span v-else>[+]</span></div>
+                    <div v-if="curr_expanded" style="margin-left: 10px; margin-top: 5px;">
+                        <slot></slot>
+                    </div>
+                </div>
+            `,
+            methods: {
+                toggle() {
+                    this.curr_expanded = !this.curr_expanded;
+                }
+            }
+        });
+
+        app.mount('#app');
+
     </script>
 </body>
+
 </html>

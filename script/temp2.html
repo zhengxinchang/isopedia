@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Isopedia Splice View (Button + Drag)</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    body { margin: 0; height: 100vh; background-color: #F0F0F0; font-size: 14px; }
+    #toolbar { padding: 5px; background: #ddd; display: flex; gap: 10px; }
+    button { padding: 3px 8px; }
+  </style>
+</head>
+<body>
+  <div id="app" style="display: flex; flex-direction: column; height: 100vh;">
+
+    <!-- 顶部按钮工具栏 -->
+    <div id="toolbar">
+      <button @click="zoomIn">Zoom In</button>
+      <button @click="zoomOut">Zoom Out</button>
+      <button @click="panLeft">← Pan Left</button>
+      <button @click="panRight">Pan Right →</button>
+    </div>
+
+    <!-- 中间主绘图区 -->
+    <div style="flex: 1; background: #fafafa;">
+      <svg ref="svg" style="width: 100%; height: 100%;"></svg>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    const app = createApp({
+      data() {
+        return {
+          // SVG
+          svg: null,
+          svgW: 0,
+          svgH: 0,
+          margin: { top: 20, right: 20, bottom: 20, left: 60 },
+          innerW: 0,
+          innerH: 0,
+
+          // 比例尺
+          x0: null,  // 初始比例尺
+          xz: null,  // 当前缩放比例尺
+          yBand: null, // isoform Y 轴
+
+          // 轴
+          gXAxis: null,
+          gYAxis: null,
+
+          // 绘图容器
+          gContent: null,
+
+          // 数据（简化版）
+          sjData: [],      // splice junctions
+          exonData: [],    // exons
+          ref_exons: [],   // reference exons
+
+          // 共享缩放 & 平移参数
+          kShared: 1,   // 缩放倍数
+          xShared: 0,   // X 平移偏移
+        };
+      },
+
+      methods: {
+        /* 模拟数据 */
+        mockData() {
+          // 模拟 3 条 isoform
+          this.exonData = [
+            { coord: [10, 30], row: 1 },
+            { coord: [50, 80], row: 1 },
+            { coord: [15, 40], row: 2 },
+            { coord: [70, 100], row: 2 },
+            { coord: [20, 60], row: 3 }
+          ];
+          this.sjData = [
+            { coord: [30, 50], row: 1 },
+            { coord: [40, 70], row: 2 },
+            { coord: [60, 90], row: 3 }
+          ];
+          this.ref_exons = [
+            { coord: [5, 25], row: 1 },
+            { coord: [45, 65], row: 2 },
+            { coord: [75, 95], row: 3 }
+          ];
+        },
+
+        /* 初始化绘图区域 */
+        prepare() {
+          const { width, height } = this.svg.node().getBoundingClientRect();
+          this.svgW = width;
+          this.svgH = height;
+          this.innerW = width - this.margin.left - this.margin.right;
+          this.innerH = height - this.margin.top - this.margin.bottom;
+
+          // 初始比例尺：domain [0,100] → range [0,innerW]
+          this.x0 = d3.scaleLinear().domain([0, 100]).range([0, this.innerW]);
+          this.xz = this.x0.copy();
+
+          // Y band 比例尺（每个 isoform 一行）
+          this.yBand = d3.scaleBand()
+            .domain([1, 2, 3])
+            .range([0, this.innerH])
+            .padding(0.2);
+
+          // 清空并建主分组
+          this.svg.selectAll("*").remove();
+          const gRoot = this.svg.append("g")
+            .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+
+          // X 轴
+          this.gXAxis = gRoot.append("g")
+            .attr("transform", `translate(0,${this.innerH})`)
+            .call(d3.axisBottom(this.xz));
+
+          // Y 轴
+          this.gYAxis = gRoot.append("g")
+            .call(d3.axisLeft(this.yBand));
+
+          // 内容组
+          this.gContent = gRoot.append("g")
+            .attr("class", "content");
+
+          // === 鼠标拖动（只允许平移，不缩放） ===
+          const zoomPan = d3.zoom()
+            .scaleExtent([1, 1])  // 固定缩放比例，不允许滚轮缩放
+            .translateExtent([[0, 0], [this.innerW, this.innerH]])
+            .extent([[0, 0], [this.innerW, this.innerH]])
+            .on("zoom", (event) => {
+              this.xz = event.transform.rescaleX(this.x0);
+              this.refresh();
+            });
+
+          this.svg.call(zoomPan);
+        },
+
+        /* 绘制内容 */
+        draw() {
+          // splice junctions（红线）
+          this.gContent.selectAll("line.splice")
+            .data(this.sjData)
+            .join("line")
+            .attr("class", "splice")
+            .attr("stroke", "red").attr("stroke-width", 1.5)
+            .attr("y1", d => this.yBand(d.row) + this.yBand.bandwidth()/2)
+            .attr("y2", d => this.yBand(d.row) + this.yBand.bandwidth()/2);
+
+          // exons（黑线）
+          this.gContent.selectAll("line.exon")
+            .data(this.exonData)
+            .join("line")
+            .attr("class", "exon")
+            .attr("stroke", "black").attr("stroke-width", 4)
+            .attr("y1", d => this.yBand(d.row) + this.yBand.bandwidth()/2)
+            .attr("y2", d => this.yBand(d.row) + this.yBand.bandwidth()/2);
+
+          // reference exons（蓝线）
+          this.gContent.selectAll("line.ref-exon")
+            .data(this.ref_exons)
+            .join("line")
+            .attr("class", "ref-exon")
+            .attr("stroke", "blue").attr("stroke-width", 2)
+            .attr("y1", d => this.yBand(d.row) - this.yBand.bandwidth()/3)
+            .attr("y2", d => this.yBand(d.row) - this.yBand.bandwidth()/3);
+
+          this.refresh();
+        },
+
+        /* 刷新绘图内容（比例尺更新后调用） */
+        refresh() {
+          // 更新 X 轴
+          this.gXAxis.call(d3.axisBottom(this.xz));
+
+          // 更新 splice junctions
+          this.gContent.selectAll("line.splice")
+            .attr("x1", d => this.xz(d.coord[0]))
+            .attr("x2", d => this.xz(d.coord[1]));
+
+          // 更新 exons
+          this.gContent.selectAll("line.exon")
+            .attr("x1", d => this.xz(d.coord[0]))
+            .attr("x2", d => this.xz(d.coord[1]));
+
+          // 更新 ref exons
+          this.gContent.selectAll("line.ref-exon")
+            .attr("x1", d => this.xz(d.coord[0]))
+            .attr("x2", d => this.xz(d.coord[1]));
+        },
+
+        /* 缩放按钮 */
+        zoomIn() {
+          this.kShared *= 1.2;   // 放大 20%
+          this.applyTransform();
+        },
+        zoomOut() {
+          this.kShared /= 1.2;   // 缩小 20%
+          this.applyTransform();
+        },
+
+        /* 平移按钮 */
+        panLeft() {
+          this.xShared += 50;   // 向右平移
+          this.applyTransform();
+        },
+        panRight() {
+          this.xShared -= 50;   // 向左平移
+          this.applyTransform();
+        },
+
+        /* 应用缩放/平移参数 */
+        applyTransform() {
+          this.xz = this.x0.copy()
+            .range([0, this.innerW].map(d => this.kShared * d + this.xShared));
+
+          this.refresh();
+        }
+      },
+
+      mounted() {
+        this.svg = d3.select(this.$refs.svg);
+        this.mockData();   // 加载模拟数据
+        this.prepare();    // 初始化画布
+        this.draw();       // 绘制
+      }
+    });
+
+    app.mount("#app");
+  </script>
+</body>
+</html>
