@@ -41,7 +41,7 @@
             stroke-width: 6 !important;
         } */
 
-        .line-exon {
+        /* .line-exon {
             stroke: black;
             stroke-width: 6;
         }
@@ -61,7 +61,7 @@
 
             stroke: orange;
             stroke-width: 6;
-        }
+        } */
     </style>
 </head>
 
@@ -86,28 +86,68 @@
                 style="z-index:10; box-shadow: 4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-right: none;">
 
 
-                <expand-box name="Data Info" :expanded="true">
-                    1. query information<br>
-                    3. isoform count<br>
-                    4. reference annotation count<br>
-                </expand-box>
+                <expand-box name="Query Info" :expanded="true">
 
+                    <chip>
+                        <template v-slot:label>Query Region</template>
+                        <template v-slot:content>{{meta && meta.query_chr || ""}}:{{meta && meta.query_start ||
+                            ""}}-{{meta && meta.query_end || ""}}</template>
+                    </chip>
 
-                <expand-box name="Selected Isoform">
+                    <chip>
+                        <template v-slot:label>#Isoforms Detected</template>
+                        <template v-slot:content>{{isoforms && isoforms.length || 0 }}</template>
+                    </chip>
 
-                </expand-box>
+                    <chip>
+                        <template v-slot:label>#Reference Genes Overlapped</template>
+                        <template v-slot:content>{{annotation && annotation.length || 0 }}</template>
+                    </chip>
 
-                <expand-box name="Selected Reference Transcript">
+                    <chip>
+                        <template v-slot:label>#Reference Transcripts Overlapped</template>
+                        <template v-slot:content>{{ann_transcript && ann_transcript.length || 0 }}</template>
+                    </chip>
+
 
                 </expand-box>
 
                 <expand-box name="Index Info" :expanded="true">
-                    1. query information<br>
-                    3. isoform count<br>
-                    4. reference annotation count<br>
+
+                    <chip >
+                        <template v-slot:label>Shards</template>
+                        <template v-slot:content>1[fixed]</template>
+                    </chip>
+
+
+                    <chip>
+                        <template v-slot:label>Total Samples</template>
+                        <template v-slot:content>{{meta && meta.record_no || ""}}</template>
+                    </chip>
+
+
+                    <!-- <chip>
+                        <template v-slot:label>Sample Attributes</template>
+                        <template v-slot:content>{{meta && meta.attrs.length || 0}}</template>
+                    </chip> -->
+
+                    <expand-box  :expanded="false">
+
+                        <template v-slot:label>
+                            <chip style="padding-left:6px; padding-right:0px;">
+                                <template v-slot:label>Sample Attributes</template>
+                                <template v-slot:content>({{meta && meta.attrs.length || 0}})</template>
+                            </chip>
+                        </template>
+
+                        <div v-for="attr in meta && meta.attrs" :key="attr" style="font-size: 10px; margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
+                            {{attr}}
+                        </div>
+                    </expand-box>   
+
                 </expand-box>
 
-                <expand-box name="Sample Metadata">
+                <expand-box name="Sample Metadata Table">
 
                 </expand-box>
 
@@ -215,13 +255,14 @@
             <div v-show="sel_isoform_idx!= null">
                 <!-- {{this.sel_isoform_data}} -->
 
-                  <div v-for="item in Object.entries(sel_isoform_data)" :key="item">   
+                <div v-for="item in Object.entries(sel_isoform_data)" :key="item">
 
-                                <chip v-if="item[0] != 'splice_sites' && item[0] != 'splice_junction' && item[0] != 'positive_samples'  && item[0] !='pass' && item[0] != 'init_idx' && item[0] != '_row'">
-                                    <template v-slot:label>{{item[0]}}</template>
-                                    <template v-slot:content>{{item[1]}}</template>
-                                </chip>
-                  </div>
+                    <chip
+                        v-if="item[0] != 'splice_sites' && item[0] != 'splice_junction' && item[0] != 'positive_samples'  && item[0] !='pass' && item[0] != 'init_idx' && item[0] != '_row'">
+                        <template v-slot:label>{{item[0]}}</template>
+                        <template v-slot:content>{{item[1]}}</template>
+                    </chip>
+                </div>
 
 
             </div>
@@ -341,6 +382,7 @@
                         })
                         .then(data => {
                             this.meta = data.meta;
+                            // console.log("meta", this.meta);
                             this.annotation = data.annotation;
                             this.isoforms = data.isoforms;
                             // console.log("loaded...", this.meta, this.annotation, this.isoforms);
@@ -543,39 +585,6 @@
                             return Math.max(1, w);           // ✅ 防止 0/负宽度
                         });
                 },
-
-                // renderHighlightBox() {
-
-                //     this.gContent.selectAll("rect.highlight-box-isoform")
-                //         .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
-                //         .attr("width", d => {
-                //             const w = this.xz(d.x2) - this.xz(d.x1);
-                //             return Math.max(1, w);           // ✅ 防止 0/负宽度
-                //         })
-                //         .attr("y", d => {
-                //             const y = this.yBand(d.row);
-                //             if (y == null) return null;
-                //             return y + this.yBand.bandwidth() * 0.1;
-                //         })
-                //         .attr("height", d => {
-                //             return this.yBand.bandwidth() * 0.8;
-                //         });
-                //     this.gContentRef.selectAll("rect.highlight-box-ref")
-                //         .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
-                //         .attr("width", d => {
-                //             const w = this.xz(d.x2) - this.xz(d.x1);
-                //             return Math.max(1, w);           // ✅ 防止 0/负宽度
-                //         })
-
-                //         .attr("y", d => {
-                //             const y = this.yBand(d.row);
-                //             if (y == null) return null;
-                //             return y + this.yRefBand.bandwidth() * 0.1;
-                //         })
-                //         .attr("height", d => {
-                //             return this.yRefBand.bandwidth() * 0.8;
-                //         })
-                // },
 
 
                 updateLines(sel, xScale, yScale) {
@@ -1320,7 +1329,13 @@
             },
             template: `
                 <div style="margin-top:4px;">
-                    <div @click="toggle" style="font-size:12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); padding-left:2px;padding-right:2px; background-color: lightgray; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;"> {{ name }} <span v-if="curr_expanded">[&minus;]</span><span v-else>[+]</span></div>
+                    <div @click="toggle" style="font-size:12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); padding-left:2px;padding-right:2px; background-color: lightgray; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;"> 
+                        
+                        <slot name="label">
+                            {{ name }}
+                        </slot>
+
+                        <span v-if="curr_expanded">[&minus;]</span><span v-else>[+]</span></div>
                     <div v-if="curr_expanded" style="margin-left: 10px; margin-top: 5px;">
                         <slot></slot>
                     </div>

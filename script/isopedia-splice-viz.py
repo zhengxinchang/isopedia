@@ -96,6 +96,9 @@ class MetaTable:
         self.attrs = []
         self.line_no = 0
         self.data = {}
+        self.query_chr = None
+        self.query_start = None
+        self.query_end = None
         self.sample_names = []
         self.left_most = None
         self.right_most = None
@@ -119,6 +122,11 @@ class MetaTable:
         self.left_most = left
         self.right_most = right
 
+    def update_query(self, chr, start, end):
+        self.query_chr = chr
+        self.query_start = start
+        self.query_end = end
+
     def get_attr_list(self):
         return self.attrs
 
@@ -139,7 +147,10 @@ class MetaTable:
             "left_most": self.left_most,
             "right_most": self.right_most,
             "all_sample_names": self.sample_names,
-            "record_no": self.line_no
+            "record_no": self.line_no,
+            "query_chr": self.query_chr,
+            "query_start": self.query_start,
+            "query_end": self.query_end
         }
 
 
@@ -315,6 +326,7 @@ def main():
 
     # print(gtf.get_json(),file=sys.stderr)
     metatable.update_range(left_most, right_most)
+    metatable.update_query(chrom, isoform_record.pos1, isoform_record.pos2)
 
     isoform_records.sort(key=lambda x: x.start_pos_left, reverse=False)
 
