@@ -315,11 +315,11 @@ key parameters:
 | gene2_name                 | Name of gene 2                                         |
 | gene2_id                   | ID of gene 2                                           |
 | chr1                       | Chromosome of gene 1                                   |
-| start1                     | Consensus start position for gene 1 mapped region                              |
-| end1                       | Consensus end position for gene 1 mapped region                              |
+| start1                     | Consensus start position for gene 1 mapped region      |
+| end1                       | Consensus end position for gene 1 mapped region        |
 | chr2                       | Chromosome of gene 2                                   |
-| start2                     | Consensus start position for gene 2 mapped region                              |
-| end2                       | Consensus end position for gene 2 mapped region                              |
+| start2                     | Consensus start position for gene 2 mapped region      |
+| end2                       | Consensus end position for gene 2 mapped region        |
 | total_evidences            | Total number of supporting evidences                   |
 | total_samples              | Total number of samples supporting the event           |
 | splice_junctions_count1    | Number of splice junctions supporting gene 1           |
@@ -328,6 +328,65 @@ key parameters:
 |...|...|
 | SampleN                    | Number of supporting reads in sampleN                            |
 
+
+
+
+## Annotate splice junctions and visualize isoforms
+
+### Purpose:
+This command is designed for cases where you have a specific splice junction of interest and want to explore its isoform context in detail. It provides both tabular output and visualization.
+
+### Example:
+
+```bash
+isopedia-anno-splice \
+  -i index/ \
+  -g gencode.v47.basic.chr22.gtf \
+  -p chr22:41100500-41101500 \
+  -o splice.out.gz
+```
+
+key parameters:
+
+| Option | Argument        | Description                                                                 | Default   |
+|--------|-----------------|-----------------------------------------------------------------------------|-----------|
+| `-i, --idxdir`       | `<IDXDIR>`      | Path to the index directory                                           | —         |
+| `-s, --splice`       | `<SPLICE>`      | Splice junction in `chr1:pos1,chr2:pos2` format                      | —         |
+| `-S, --splice-bed`   | `<SPLICE_BED>`  | Path to splice junction BED file                                     | —         |
+| `-f, --flank`        | `<FLANK>`       | Flanking size (in bases) before and after the position               | `10`      |
+| `-m, --min-read`     | `<MIN_READ>`    | Minimum number of reads required to define a positive sample         | `1`       |
+| `-o, --output`       | `<OUTPUT>`      | Output file for search results (gzip-compressed)                     | —         |
+| `-w, --warmup-mem`   | `<WARMUP_MEM>`  | Memory size for warming up (GB). Larger values improve performance   | `4`       |
+| `-c, --cached_nodes` | `<LRU_SIZE>`    | Maximum number of cached nodes per tree                              | `100000`  |
+
+
+
+
+### Output
+
+The output is a gzip-compressed file containing detailed information about the splice junction and associated isoforms. Each isoform record includes:
+| Field Name          | Description                                                                 |
+|---------------------|-----------------------------------------------------------------------------|
+| #id                 | Isoform identifier                                                          |
+| chr1, pos1          | Chromosome and position of splice donor                                     |
+| chr2, pos2          | Chromosome and position of splice acceptor                                  |
+| total_evidence      | Total number of supporting reads                                            |
+| cpm                 | Normalized counts (CPM)                                                     |
+| matched_sj_idx      | Index of the matched splice junction                                        |
+| dist_to_matched_sj  | Distance to the matched splice junction                                     |
+| n_exons             | Number of exons in the isoform                                              |
+| start_pos_left      | Leftmost starting position of isoform                                       |
+| start_pos_right     | Rightmost starting position of isoform                                      |
+| end_pos_left        | Leftmost ending position of isoform                                         |
+| end_pos_right       | Rightmost ending position of isoform                                        |
+| splice_junctions    | List of splice junctions in the isoform                                     |
+| format              | Format of record                                                            |
+| ENCSR***            | Per-sample evidence (columns for each dataset, e.g., ENCODE accessions)     |
+
+
+
+Visualization output example:
+https://zhengxinchang.github.io/isopedia/ 
 
 
 # Memory Usage

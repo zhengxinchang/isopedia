@@ -293,6 +293,12 @@ def main():
 
     left_most = sys.maxsize
     right_most = 0
+    # load template
+    template_content = ""
+
+    with open(args.template, 'r') as template_file:
+        template_content = template_file.read()
+
     with gzip.open(args.input, 'rt') as infile:
         for line in infile:
             if line.startswith("##"):
@@ -336,13 +342,21 @@ def main():
         "isoforms": [record.get_json() for record in isoform_records]
     }
 
-    with open(args.output, 'w') as outfile:
+    with open(args.output+".json", 'w') as outfile:
         json.dump(out_json, outfile, indent=4)
+    outjson_str = json.dumps(out_json)
+
+    template_content = template_content.replace("DATA = {}",f"DATA={outjson_str}")
+
+    with open(args.output+".html", 'w') as outfile:
+        outfile.write(template_content)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Visualize isoforms from isopedia-anno-splice output")
     parser.add_argument("-i","--input", required=True, help="Input file, the file is the output from isopedia-anno-splice with single query mode.")
     parser.add_argument("-g","--gtf", required=False, help="Reference GTF file")
+    parser.add_argument("-t","--template", required=False, help="Templates HTML file", default="temp.html")
     parser.add_argument("-o","--output", required=True, help="Output file")
     return parser.parse_args()
 

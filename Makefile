@@ -102,3 +102,4 @@ splice:build
 
 
 	target/release/isopedia-anno-splice -i  /hdd1/isopedia_datadownload/encode_merge_idx/ -s 17:7675236,17:7675993  -o test/splice.output.gz
+	python script/isopedia-splice-viz.py  -i test/splice.output.gz -g /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  -t script/temp.html  -o test/isopedia-splice-view

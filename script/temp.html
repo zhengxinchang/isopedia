@@ -105,21 +105,15 @@
                             {{attr}}
                         </div>
                     </expand-box>
-
                 </expand-box>
 
                 <expand-box name="Sample Metadata Table">
-
-
                     <div class="outline-box" style="overflow: auto; max-height: 300px;max-width: 100%;">
-
                         <table>
-
                             <thead>
                                 <tr>
                                     <th v-for="attr in meta && meta.attrs" :key="attr">{{attr}}</th>
                                 </tr>
-
                             </thead>
                             <tbody>
                                 <tr v-for="[name, data] in (meta ? Object.entries(meta.data) : [])" :key="name">
@@ -127,21 +121,12 @@
                                     <td v-for="val in data" :key="val">{{val}}</td>
                                 </tr>
                             </tbody>
-
                         </table>
                     </div>
-
-
-
-
                 </expand-box>
-
-
             </div>
 
             <div id="middle" style="z-index:9; width: 70%; background-color: lightblue; border: 0px solid black;">
-                <!-- <svg id="main_svg" width="100%" height="100%"></svg> -->
-                <!-- preserveAspectRatio="xMidYMid meet" -->
                 <svg ref="svg" style="width: 100%; height: 100%; background-color: #FAFAFA;"></svg>
             </div>
 
@@ -413,7 +398,6 @@
                     innerW: 0,
                     innerH: 0,
 
-                    // X（共享）
                     x0: null,
                     xz: null,
 
@@ -430,7 +414,6 @@
                     gYAxisRef: null,
                     gContent: null,
                     gContentRef: null,
-
                     // heights
                     refH: 160,
                     bodyH: 0,
@@ -447,7 +430,6 @@
                     ref_start_codons: [],
                     ref_utrs: [],
                     ref_tx_count: 0,
-                    // highlight_box_ref: [],
                     isoform_count: 0,
 
                     kShared: 1,
@@ -473,72 +455,76 @@
             },
 
             methods: {
-                /* ---------- 工具函数 ---------- */
+
+                getData(data) {
+                    this.meta = data.meta;
+                    this.annotation = data.annotation;
+                    this.isoforms = data.isoforms;
+                    this.isoforms.forEach((isofrom, idx) => {
+                        isofrom.pass = true;
+                        isofrom.init_idx = idx;
+                    });
+
+                    let curr_tx_idx = 0;
+                    this.annotation.forEach(gene => {
+
+                        this.ann_gene[gene.gene_id] = {
+                            gene_id: gene.gene_id,
+                            gene_name: gene.gene_name,
+                            chrom: gene.chr,
+                            strand: gene.strand,
+                            tx_count: Object.keys(gene.transcripts).length,
+                            ...gene.attributes
+                        }
+
+                        Object.keys(gene.transcripts).forEach(txId => {
+
+                            const transcript = gene.transcripts[txId];
+
+                            this.ann_transcript.push({
+                                tx_id: txId,
+                                init_idx: curr_tx_idx,
+                                gene_id: gene.gene_id,
+                                gene_name: gene.gene_name,
+                                chrom: gene.chr,
+                                strand: gene.strand,
+                                tx_start: transcript.start,
+                                tx_end: transcript.end,
+                                ...transcript.attributes,
+                                elements: transcript.elements,
+                                pass: true
+                            });
+                            curr_tx_idx += 1;
+                        });
+                    });
+                },
+
                 fetchJSON() {
+                    // Example: 
                     return fetch("/aa.json")
                         .then(response => {
-                            if (!response.ok) throw new Error("网络请求失败 " + response.status);
+                            if (!response.ok) throw new Error("Network request failed " + response.status);
                             return response.json();
                         })
                         .then(data => {
-                            this.meta = data.meta;
-                            // console.log("meta", this.meta);
-                            this.annotation = data.annotation;
-                            this.isoforms = data.isoforms;
-                            // console.log("loaded...", this.meta, this.annotation, this.isoforms);
-
-                            this.isoforms.forEach((isofrom, idx) => {
-                                // console.log("isofrom", isofrom);
-                                // console.log(idx, isofrom);
-                                isofrom.pass = true;
-                                isofrom.init_idx = idx;
-                            });
-
-                            let curr_tx_idx = 0;
-                            this.annotation.forEach(gene => {
-                                // console.log("ann", gene);
-                                // ann.transcripts is a dict
-
-                                console.log("gene", gene);
-
-                                this.ann_gene[gene.gene_id] = {
-                                    gene_id: gene.gene_id,
-                                    gene_name: gene.gene_name,
-                                    chrom: gene.chr,
-                                    strand: gene.strand,
-                                    tx_count: Object.keys(gene.transcripts).length,
-                                    ...gene.attributes
-                                }
-
-                                Object.keys(gene.transcripts).forEach(txId => {
-
-                                    const transcript = gene.transcripts[txId];
-
-                                    this.ann_transcript.push({
-                                        tx_id: txId,
-                                        init_idx: curr_tx_idx,
-                                        gene_id: gene.gene_id,
-                                        gene_name: gene.gene_name,
-                                        chrom: gene.chr,
-                                        strand: gene.strand,
-                                        tx_start: transcript.start,
-                                        tx_end: transcript.end,
-                                        ...transcript.attributes,
-                                        elements: transcript.elements,
-                                        pass: true
-                                    });
-                                    curr_tx_idx += 1;
-                                });
-                            });
+                            this.getData(data);
                         })
                         .catch(err => {
-                            console.error("加载 JSON 出错:", err);
-                            throw err; // 让外层 mounted() 能捕获
+                            console.error("Failed to load JSON:", err);
+                            throw err;
                         });
+
+                    // For local DATA, return a Promise so it can be used in then()
+                    // let DATA = {};
+                    // console.log("DATA", DATA);
+                    // return new Promise((resolve) => {
+                    //     this.getData(DATA);
+                    //     resolve();
+                    // });
                 },
 
                 filter_ref() {
-                    console.log(this.flt_ref_overlap_query);
+                    // console.log(this.flt_ref_overlap_query);
 
                     this.ann_transcript.forEach(tx => {
                         let passed = true;
@@ -550,13 +536,10 @@
                         tx.pass = passed;
                     });
 
-                    // console.log("this.ann_transcript", this.ann_transcript);
-
                     this.process_data();
                     this.init();
                     this.draw();
                     this.drawQueryRegion();
-                    // this.drawHighlightBox();
                     this.enableDrag();
 
                 },
@@ -568,12 +551,9 @@
                     this.init();
                     this.draw();
                     this.drawQueryRegion();
-                    // this.drawHighlightBox();
                     this.enableDrag();
                 },
                 filter_isoform() {
-
-                    // console.log(this.flt_evidence_range, this.flt_sample_size_range);
 
                     this.isoforms.forEach(iso => {
                         let passed = true;
@@ -590,13 +570,10 @@
                         iso.pass = passed;
                     });
 
-                    // console.log("this.isoforms", this.isoforms);
-
                     this.process_data();
                     this.init();
                     this.draw();
                     this.drawQueryRegion();
-                    // this.drawHighlightBox();
                     this.enableDrag();
 
 
@@ -608,7 +585,6 @@
                     this.process_data();
                     this.init();
                     this.draw();
-                    // this.drawHighlightBox();
                     this.drawQueryRegion();
                     this.enableDrag();
                 },
@@ -617,9 +593,8 @@
                     const domain = bandScale.domain();
                     if (!domain.length) return domain;
 
-                    // step
                     let step = typeof bandScale.step === "function" ? bandScale.step() : bandScale.bandwidth();
-                    const first = domain[0];                  // 当前顶部行（1-based）
+                    const first = domain[0];
                     step = step * (rate || 1);
 
                     const visible = Math.max(1, Math.floor(panelH / step));
@@ -659,7 +634,7 @@
 
                 },
 
-                // 刷新 Bottom：根据 yBand.domain 定位；域外隐藏
+
                 renderBottom() {
                     const ticks = this.bandTicks(this.yBand, this.bodyH);
                     this.gYAxis.call(d3.axisLeft(this.yBand).tickValues(ticks));
@@ -672,17 +647,17 @@
 
                 renderQueryRegion() {
                     this.gContent.selectAll("rect.query-region")
-                        .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
+                        .attr("x", d => this.xz(d.x1))
                         .attr("width", d => {
                             const w = this.xz(d.x2) - this.xz(d.x1);
-                            return Math.max(1, w);           // ✅ 防止 0/负宽度
+                            return Math.max(1, w);
                         });
 
                     this.gContentRef.selectAll("rect.query-region")
-                        .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
+                        .attr("x", d => this.xz(d.x1))
                         .attr("width", d => {
                             const w = this.xz(d.x2) - this.xz(d.x1);
-                            return Math.max(1, w);           // ✅ 防止 0/负宽度
+                            return Math.max(1, w);
                         });
                 },
 
@@ -696,7 +671,6 @@
                     sel
                         .attr("x1", d => this.xz(d.coord[0]))
                         .attr("x2", d => this.xz(d.coord[1]))
-                        // cursor: pointer; user-select: none;
                         .style("cursor", "pointer")
                         .style("user-select", "none")
                         .each((d, i, nodes) => {
@@ -722,13 +696,11 @@
                             .attr("stroke", color)
                             .attr("stroke-width", width)
                             .attr("vector-effect", "non-scaling-stroke")
-                            .attr("data-row", d => d.row)        // 打上 row
-                            .attr("data-category", d => d.category) // 打上类型
+                            .attr("data-row", d => d.row)
+                            .attr("data-category", d => d.category)
                             .on("mouseover", (event, d) => this.showTooltip(event, d))
-                            // .on("mousemove", (event, d) => this.moveTooltip(event, d))
                             .on("mouseout", () => this.hideTooltip())
                             .on("dblclick", (event, d) => {
-                                console.log("dblclick", d);
 
                                 this.highlightRow(d);
                             });
@@ -740,10 +712,9 @@
                             .attr("stroke-width", width)
                             .attr("vector-effect", "non-scaling-stroke")
                             .on("mouseover", (event, d) => this.showTooltip(event, d))
-                            // .on("mousemove", (event, d) => this.moveTooltip(event, d))
+
                             .on("mouseout", () => this.hideTooltip())
                             .on("dblclick", (event, d) => {
-                                console.log("dblclick", d);
 
                                 this.highlightRow(d);
                             });
@@ -784,7 +755,7 @@
                 },
 
                 showTooltip(event, d) {
-                    // console.log("showTooltip", event.pageX, event.pageY, d);
+
                     const [x, y] = d3.pointer(event, document.body);
 
                     d3.select("#tooltip")
@@ -836,7 +807,7 @@
                     this.renderTop();
                     // 底部
                     const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1.2);
-                    console.log("rowsBottom", rowsBottom);
+                    // console.log("rowsBottom", rowsBottom);
                     this.yBand.domain(rowsBottom);
                     this.renderBottom();
 
@@ -1003,7 +974,6 @@
                 },
 
                 process_data() {
-                    // 1) 预处理 reference
                     this.ref_tx_count = 0;
                     this.ref_exons = [];
                     this.ref_cds = [];
@@ -1012,10 +982,7 @@
                     this.ref_utrs = [];
                     this.ref_introns = [];
                     this.ref_labels = [];
-                    // this.highlight_box_ref = [];
                     this.isoform_count = 0;
-                    // let that = this;    
-                    // console.log("that.query_chr", this.query_chr);
                     this.ann_transcript.forEach(tx => {
                         if (tx.pass == false) return;
                         this.ref_tx_count += 1;
@@ -1083,18 +1050,10 @@
                     this.exonData = [];
                     this.readspanData = [];
                     this.isoforms.forEach((iso, i) => { iso._row = i + 1; });
-                    // this.highlight_box_isoform = [];
 
                     this.isoforms.forEach(iso => {
                         if (iso.pass == false) return;
                         this.isoform_count += 1;
-
-                        // this.highlight_box_isoform.push({
-                        //     x1: iso.start_pos_left,
-                        //     x2: iso.end_pos_right,
-                        //     row: iso._row
-                        // });
-
                         iso._row = this.isoform_count;
                         (iso.splice_junction || []).forEach(sj => {
                             this.sjData.push({
@@ -1171,12 +1130,9 @@
                 },
 
                 firstTimeInit() {
-                    // collect query info
-                    // collect reference info
-                    // collect maximal sample count from each isoform
+
                     let that = this;
                     this.query_chr = this.isoforms[0].chr1;
-                    console.log("this.query_chr", this.query_chr);
                     this.isoforms.forEach(iso => {
 
                         if (that.evidence_range[0] == 0 || iso.total_evidence < that.evidence_range[0]) {
@@ -1194,13 +1150,11 @@
 
                     });
 
-                    // collect meta info
-
                 },
 
                 init() {
 
-                    // 3) 尺寸
+
                     const { width, height } = this.svg.node().getBoundingClientRect();
                     this.svgW = width;
                     this.svgH = height;
@@ -1208,18 +1162,13 @@
                     this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
                     this.bodyH = Math.max(10, this.innerH - this.refH);
 
-                    // this.isoform_count = this.isoforms.length;
                     const xdomain = [this.meta.left_most, this.meta.right_most];
 
-                    // X
                     this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
                     this.xz = this.x0.copy();
 
-
-
                     this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
 
-                    // Top Y band
                     this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
 
 
@@ -1284,7 +1233,6 @@
 
                     // y labels
 
-                    // 给顶部 Y 轴加 label
                     this.gYAxisRef.append("text")
                         .attr("class", "y-label-ref")
                         .attr("transform", "rotate(-90)")       // rotate left
@@ -1358,9 +1306,7 @@
                         .style("pointer-events", "none");
                 },
 
-
                 draw() {
-
 
                     this.drawQueryRegion();
                     // this.drawHighlightBox();
@@ -1472,8 +1418,6 @@
                 }
             },
             mounted() {
-
-                console.log("range filter box mounted", this.min, this.max, this.modelValue);
                 this.local_min = this.min;
                 this.local_max = this.max;
                 this.record_min = this.min;
