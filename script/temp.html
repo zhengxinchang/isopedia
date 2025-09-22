@@ -28,40 +28,6 @@
             margin-top: 5px;
             padding: 4px;
         }
-
-        /* .highlight-isoform {
-            stroke: blue !important;
-            opacity: 0.2 !important;
-            stroke-width: 6 !important;
-        }
-
-        .highlight-reference {
-            stroke: blue !important;
-            opacity: 0.2 !important;
-            stroke-width: 6 !important;
-        } */
-
-        /* .line-exon {
-            stroke: black;
-            stroke-width: 6;
-        }
-
-        .line-readspan {
-            stroke: gray;
-            stroke-width: 4;
-        }
-
-        .line-ref-exon {
-            stroke: green;
-            stroke-width: 6;
-
-        }
-
-        .line-ref-utrs {
-
-            stroke: orange;
-            stroke-width: 6;
-        } */
     </style>
 </head>
 
@@ -114,7 +80,7 @@
 
                 <expand-box name="Index Info" :expanded="true">
 
-                    <chip >
+                    <chip>
                         <template v-slot:label>Shards</template>
                         <template v-slot:content>1[fixed]</template>
                     </chip>
@@ -125,13 +91,7 @@
                         <template v-slot:content>{{meta && meta.record_no || ""}}</template>
                     </chip>
 
-
-                    <!-- <chip>
-                        <template v-slot:label>Sample Attributes</template>
-                        <template v-slot:content>{{meta && meta.attrs.length || 0}}</template>
-                    </chip> -->
-
-                    <expand-box  :expanded="false">
+                    <expand-box :expanded="false">
 
                         <template v-slot:label>
                             <chip style="padding-left:6px; padding-right:0px;">
@@ -140,14 +100,39 @@
                             </chip>
                         </template>
 
-                        <div v-for="attr in meta && meta.attrs" :key="attr" style="font-size: 10px; margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
+                        <div v-for="attr in meta && meta.attrs" :key="attr"
+                            style="font-size: 9px; margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
                             {{attr}}
                         </div>
-                    </expand-box>   
+                    </expand-box>
 
                 </expand-box>
 
                 <expand-box name="Sample Metadata Table">
+
+
+                    <div class="outline-box" style="overflow: auto; max-height: 300px;max-width: 100%;">
+
+                        <table>
+
+                            <thead>
+                                <tr>
+                                    <th v-for="attr in meta && meta.attrs" :key="attr">{{attr}}</th>
+                                </tr>
+
+                            </thead>
+                            <tbody>
+                                <tr v-for="[name, data] in (meta ? Object.entries(meta.data) : [])" :key="name">
+                                    <td>{{name}}</td>
+                                    <td v-for="val in data" :key="val">{{val}}</td>
+                                </tr>
+                            </tbody>
+
+                        </table>
+                    </div>
+
+
+
 
                 </expand-box>
 
@@ -223,7 +208,18 @@
 
                 </expand-box>
 
-                <expand-box name="Selected Reference">
+                <expand-box name="Selected Reference Details">
+                    <template v-slot:label>
+                        <div style="display: flex; align-items: center;">
+                            <span>Selected Isoform Details</span>
+                            <hover-help style="margin-left: 4px;">
+                                Detailed information about the currently selected reference transcript. It includes
+                                various attributes and metrics that describe the isoform's characteristics and its
+                                support
+                                evidence from original annotation GTF/GFF file.
+                            </hover-help>
+                        </div>
+                    </template>
                     <div class="outline-box" style="overflow-y: auto; max-height: 400px; min-height: 100px;">
                         <div v-show="sel_anno_idx!=null">
 
@@ -251,20 +247,124 @@
 
     <expand-box name="Selected Isoform Details">
 
+
         <div class="outline-box" style="overflow-y: auto; max-height: 400px; min-height: 100px;">
             <div v-show="sel_isoform_idx!= null">
-                <!-- {{this.sel_isoform_data}} -->
 
-                <div v-for="item in Object.entries(sel_isoform_data)" :key="item">
+                <chip>
+                    <template v-slot:label>Position</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.chr1}}:
+                        {{sel_isoform_data && sel_isoform_data.pos1}}-{{sel_isoform_data && sel_isoform_data.pos2}}
+                    </template>
+                </chip>
 
-                    <chip
-                        v-if="item[0] != 'splice_sites' && item[0] != 'splice_junction' && item[0] != 'positive_samples'  && item[0] !='pass' && item[0] != 'init_idx' && item[0] != '_row'">
-                        <template v-slot:label>{{item[0]}}</template>
-                        <template v-slot:content>{{item[1]}}</template>
-                    </chip>
-                </div>
+                <chip>
+                    <template v-slot:label>Support reads</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.total_evidence}}</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Avg CPM</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.cpm}}</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>#Exons in the isoform</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.n_exon}}</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Query region distance to splice sites</template>
+                    <template v-slot:content>
+                        left: {{sel_isoform_data && sel_isoform_data.dist_to_match_1}}
+                        right: {{sel_isoform_data && sel_isoform_data.dist_to_match_2}}
+                    </template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Query region matched splice junction</template>
+                    <template v-slot:content>the {{sel_isoform_data && sel_isoform_data.match_sj_idx}}th from
+                        left</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Left read span region
+                        <hover-help>
+                            The genomic coordinates covered by the 5' position of all
+                            supporting reads of the isoform. This region provides insights into the extent of
+                            read coverage on the left side of the isoform.
+                        </hover-help>
+
+                    </template>
+                    <template v-slot:content>
+                        {{sel_isoform_data && sel_isoform_data.chr1}}:
+                        {{sel_isoform_data && sel_isoform_data.start_pos_left}}-
+                        {{sel_isoform_data && sel_isoform_data.start_pos_right}}
+                    </template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Right read span region
+
+                        <hover-help>
+                            The genomic coordinates covered by the 3' position of all
+                            supporting reads of the isoform. This region provides insights into the extent of
+                            read coverage on the right side of the isoform.
+                        </hover-help>
+                    </template>
+                    <template v-slot:content>
+                        {{sel_isoform_data && sel_isoform_data.chr1}}:
+                        {{sel_isoform_data && sel_isoform_data.end_pos_left}}-
+                        {{sel_isoform_data && sel_isoform_data.end_pos_right}}
+                    </template>
+                </chip>
 
 
+                <expand-box name="Splice Sites" :expanded="false">
+
+                    <template v-slot:label>
+
+                        <chip style="padding-left:6px; padding-right:0px;">
+                            <template v-slot:label>Splice Junctions</template>
+                            <template v-slot:content>({{sel_isoform_data.splice_junction &&
+                                sel_isoform_data.splice_junction.length || 0}})</template>
+                        </chip>
+                    </template>
+                    <div v-for="(sj, idx) in sel_isoform_data && sel_isoform_data.splice_junction" :key="idx">
+                        {{sj[0]}}-{{sj[1]}}
+                    </div>
+
+                </expand-box>
+
+                <expand-box>
+                    <template v-slot:label>
+                        <chip style="padding-left:6px; padding-right:0px;">
+                            <template v-slot:label>Positive Samples</template>
+                            <template v-slot:content>({{sel_isoform_data && sel_isoform_data.positive_sample_size ||
+                                0}})</template>
+                        </chip>
+                    </template>
+
+                    <expand-box :expanded="false"
+                        v-for="(sample, idx) in sel_isoform_data && sel_isoform_data.positive_samples" :key="idx">
+
+                        <template v-slot:label>
+                            {{sample.sample}} <br /> {{sample.count}} reads <br /> CPM: {{sample.cpm}}
+                        </template>
+                        <div>
+
+                            <table>
+                                <tbody>
+                                    <tr v-for="(item, index) in meta && meta.data && meta.data[sample.sample]"
+                                        :key="index">
+                                        <td>{{meta &&meta.attrs[index]}}</td>
+                                        <td>{{item}}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </expand-box>
+                </expand-box>
             </div>
 
         </div>
@@ -746,7 +846,7 @@
 
 
                     this.renderQueryRegion();
-                    this.renderHighlightBox();
+                    // this.renderHighlightBox();
                 },
 
                 zoomOut() {
@@ -1225,10 +1325,6 @@
                     const xRight = Math.max(x1, x2);
                     this.query_left = xLeft;
                     this.query_right = xRight;
-                    // console.log("iso0", iso0, xLeft, xRight);
-
-                    // this.query_chr = iso0.chr1;
-                    // console.log("query_chr", this.query_chr);
                     this.gContent
                         .selectAll("rect.query-region")
                         .data([{ x1: xLeft, x2: xRight }])
