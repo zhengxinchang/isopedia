@@ -1,6 +1,4 @@
-use std::{
-    cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf,
-};
+use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;

@@ -52,7 +52,6 @@ t2:build
 t3:build
 	target/release/isopedia-idx  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
-
 t4:build
 	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
 

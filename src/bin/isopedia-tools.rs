@@ -227,8 +227,7 @@ fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
 }
 
 /// merge seprated manifest files into one
-fn split_manifest(file:&PathBuf,outprefix:&PathBuf,each_size:usize)->Result<()> {
-
+fn split_manifest(file: &PathBuf, outprefix: &PathBuf, each_size: usize) -> Result<()> {
     // open the file
     let mut reader = BufReader::new(File::open(file)?);
 
@@ -278,12 +277,10 @@ fn split_manifest(file:&PathBuf,outprefix:&PathBuf,each_size:usize)->Result<()> 
     Ok(())
 }
 
-
-fn merge_manifest(files:&Vec<PathBuf>,out_path:&PathBuf) ->Result<()> {
+fn merge_manifest(files: &Vec<PathBuf>, out_path: &PathBuf) -> Result<()> {
     todo!("Implement merge_manifest");
     Ok(())
 }
-
 
 #[derive(Parser, Clone, Debug, Serialize, Deserialize)]
 #[command(name = "isopedia-tool")]
@@ -410,7 +407,6 @@ fn greetings(args: &ToolCli) {
     }
 }
 
-
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(after_long_help = "
 
@@ -419,12 +415,11 @@ Examples:
 isopedia-tool split-manifest --input <INPUT> --output_prefix <OUTPUT_PREFIX> --each_size <EACH_SIZE>
 ")]
 pub struct ManifestSplit {
-
     #[arg(short, long)]
     pub input: PathBuf,
     #[arg(short, long)]
     pub output_prefix: PathBuf,
-    #[arg(short='c', long)]
+    #[arg(short = 'c', long)]
     pub each_size: usize,
 }
 
@@ -445,8 +440,6 @@ impl Validate for ManifestSplit {
         is_ok
     }
 }
-
-
 
 fn main() {
     env_logger::Builder::from_env(
@@ -494,8 +487,12 @@ fn main() {
                 std::process::exit(1);
             }
 
-            split_manifest(&split_args.input, &split_args.output_prefix, split_args.each_size)
-                .expect("Failed to split manifest");
+            split_manifest(
+                &split_args.input,
+                &split_args.output_prefix,
+                split_args.each_size,
+            )
+            .expect("Failed to split manifest");
         }
     }
 }

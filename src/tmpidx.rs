@@ -231,14 +231,12 @@ impl Tmpindex {
 
             interim_rec.record_ptr.offset = new_offset;
 
-
             // write to tmpidx
             tmpidx_writer
                 .write_all(&interim_rec.to_bytes())
                 .expect("Can not write to tmpidx file");
 
             new_offset += interim_rec.record_ptr.length as u64;
-
         }
 
         let mut _curr_offset = 0;
@@ -253,7 +251,11 @@ impl Tmpindex {
         // self.meta.data_size = total_idx_n;
         // dbg!(&self.meta.data_size, &total_idx_n);
 
-        info!("Total {} index records written, total {} unique records in the record data file", total_idx_n, offset_mapping.len());
+        info!(
+            "Total {} index records written, total {} unique records in the record data file",
+            total_idx_n,
+            offset_mapping.len()
+        );
 
         if self.meta.data_size != total_idx_n {
             panic!("The total index records merged does not match the original size, consider the index is corrupted?");
@@ -291,7 +293,6 @@ impl Tmpindex {
         // // remove old record data file
         // fs::remove_file(record_data_path).expect("Can not remove old record data file");
     }
-
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::open(file_name).expect("Can not open file");

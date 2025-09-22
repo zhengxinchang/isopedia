@@ -7,7 +7,7 @@ Isopedia is a scalable tool that evaluates novel isoforms by leveraging populati
 <details>
 <summary>Table of Content</summary>
 
-- [Quick Q&A](#quick-qa)
+
 - [Quick Start](#quick-start)
 - [How it works](#how-it-works)
 - [Usage](#usage)
@@ -15,9 +15,9 @@ Isopedia is a scalable tool that evaluates novel isoforms by leveraging populati
   - [Annotate (search) fusion genes](#annotate-search-fusion-genes)
   - [Find potential fusion genes](#find-potential-fusion-genes)
 - [Installation](#installation)
+- [Quick Q&A](#quick-qa)
+
 </details>
-
-
 
 # Quick Start
 

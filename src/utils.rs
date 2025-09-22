@@ -141,41 +141,51 @@ pub fn u64diff2i32(a: u64, b: u64) -> i32 {
     }
 }
 
-
 pub fn check_index_dir(path: &Path) -> bool {
-
     if !path.is_dir() {
-        error!("Index directory {:?} is not a directory",path);
+        error!("Index directory {:?} is not a directory", path);
         return false;
     }
 
     if !path.exists() {
-        error!("Index directory {:?} does not exist",path);
+        error!("Index directory {:?} does not exist", path);
         return false;
     }
 
     if !path.join(MERGED_FILE_NAME).exists() {
-        error!("Index directory {:?} does not contain {}",path,MERGED_FILE_NAME);
+        error!(
+            "Index directory {:?} does not contain {}",
+            path, MERGED_FILE_NAME
+        );
         return false;
     }
 
     if !path.join("bptree_0.idx").exists() {
-        error!("Index directory {:?} does not contain the tree files",path);
+        error!("Index directory {:?} does not contain the tree files", path);
         return false;
     }
 
     if !path.join(CHROM_FILE_NAME).exists() {
-        error!("Index directory {:?} does not contain {}",path,CHROM_FILE_NAME);
+        error!(
+            "Index directory {:?} does not contain {}",
+            path, CHROM_FILE_NAME
+        );
         return false;
     }
 
     if !path.join(DATASET_INFO_FILE_NAME).exists() {
-        error!("Index directory {:?} does not contain {}",path,DATASET_INFO_FILE_NAME);
+        error!(
+            "Index directory {:?} does not contain {}",
+            path, DATASET_INFO_FILE_NAME
+        );
         return false;
     }
 
     if !path.join(META_FILE_NAME).exists() {
-        error!("Index directory {:?} does not contain {}",path,META_FILE_NAME);
+        error!(
+            "Index directory {:?} does not contain {}",
+            path, META_FILE_NAME
+        );
         return false;
     }
 

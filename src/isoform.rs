@@ -254,8 +254,7 @@ impl MergedIsoform {
     pub fn gz_decode(bytes: &[u8]) -> Result<MergedIsoform, bincode::Error> {
         let mut decoder = flate2::bufread::GzDecoder::new(bytes);
         let mut bytes = Vec::new();
-        decoder
-            .read_to_end(&mut bytes)?;
+        decoder.read_to_end(&mut bytes)?;
 
         bincode::deserialize(&bytes[..])
     }
@@ -426,7 +425,11 @@ impl MergedIsoform {
     }
 
     /// Function to get the confidence value of the isoform based on the evidence
-    pub fn get_confidence_value(evidence_arr: Vec<u32>, total_size:usize, sample_total_evidence_vec: &Vec<u32>) -> f64 {
+    pub fn get_confidence_value(
+        evidence_arr: Vec<u32>,
+        total_size: usize,
+        sample_total_evidence_vec: &Vec<u32>,
+    ) -> f64 {
         let mut total = 0;
         let mut sorted_evidence = Vec::new();
         let mut evidence_frac_vec = Vec::new();
@@ -445,9 +448,8 @@ impl MergedIsoform {
             total += evidence_arr[idx];
 
             if evidence_arr[idx] > 0 {
-                let frac = evidence_arr[idx] as f64
-                    / sample_total_evidence_vec[idx] as f64
-                    * 1000000.0;
+                let frac =
+                    evidence_arr[idx] as f64 / sample_total_evidence_vec[idx] as f64 * 1000000.0;
                 evidence_frac_vec.push(frac.ln());
             }
         }
@@ -612,7 +614,11 @@ mod tests {
         dataset_info.sample_size = evidence_arr.len();
         dataset_info.sample_total_evidence_vec = vec![10000, 20000, 30000, 40000];
 
-        let confidence = MergedIsoform::get_confidence_value(evidence_arr, dataset_info.get_size(), &dataset_info.sample_total_evidence_vec);
+        let confidence = MergedIsoform::get_confidence_value(
+            evidence_arr,
+            dataset_info.get_size(),
+            &dataset_info.sample_total_evidence_vec,
+        );
 
         dbg!(confidence);
     }
