@@ -393,14 +393,6 @@ fn main() -> Result<()> {
         &cli.outdir.join(TMPIDX_FILE_NAME).display()
     );
 
-    // tmpidx._sort_records(); // must sort before dump, it is mutable but below is immutable
-
-    // info!("Rewriting sorted records...");
-    // tmpidx.rewrite_sorted_records(
-    //     &cli.outdir.join(merged_file_name_pre),
-    //     &cli.outdir.join(MERGED_FILE_NAME),
-    // );
-
     info!(
         "The memory size of tmpidx in MB: {}",
         tmpidx.memory_usage_mb()
