@@ -11,9 +11,56 @@
         /* Add your custom styles here */
         /* set font size of all button */
         button {
-            font-size: 10px;
+            font-size: 11px;
             margin-left: 2px;
             margin-right: 2px;
+        }
+
+        .sub-item-title {
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .outline-box {
+            font-size: 11px;
+            border-radius: 5px;
+            border: #424141 solid 1px;
+            margin-top: 5px;
+            padding: 4px;
+        }
+
+        /* .highlight-isoform {
+            stroke: blue !important;
+            opacity: 0.2 !important;
+            stroke-width: 6 !important;
+        }
+
+        .highlight-reference {
+            stroke: blue !important;
+            opacity: 0.2 !important;
+            stroke-width: 6 !important;
+        } */
+
+        .line-exon {
+            stroke: black;
+            stroke-width: 6;
+        }
+
+        .line-readspan {
+            stroke: gray;
+            stroke-width: 4;
+        }
+
+        .line-ref-exon {
+            stroke: green;
+            stroke-width: 6;
+
+        }
+
+        .line-ref-utrs {
+
+            stroke: orange;
+            stroke-width: 6;
         }
     </style>
 </head>
@@ -23,10 +70,11 @@
         <div id='header'
             style="z-index:11;box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); color:#ba7027;  padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 2.5vh;  position: relative;">
 
-            <a href="https://github.com/zhengxinchang/isopedia" style="color:#ba7027;text-decoration: none;" target="_blank">
+            <a href="https://github.com/zhengxinchang/isopedia" style="color:#ba7027;text-decoration: none;"
+                target="_blank">
                 <h4 style="margin: 0;">Isopedia Splice View</h4>
             </a>
-            
+
 
             <div>ver. 1.0.0</div>
 
@@ -40,7 +88,6 @@
 
                 <expand-box name="Data Info" :expanded="true">
                     1. query information<br>
-                    2. sample size<br>
                     3. isoform count<br>
                     4. reference annotation count<br>
                 </expand-box>
@@ -51,6 +98,16 @@
                 </expand-box>
 
                 <expand-box name="Selected Reference Transcript">
+
+                </expand-box>
+
+                <expand-box name="Index Info" :expanded="true">
+                    1. query information<br>
+                    3. isoform count<br>
+                    4. reference annotation count<br>
+                </expand-box>
+
+                <expand-box name="Sample Metadata">
 
                 </expand-box>
 
@@ -73,51 +130,123 @@
                 </expand-box>
 
 
-                <expand-box name ="Filter&Sort Reference Annotation">
+                <expand-box name="Filter&Sort">
 
-                    <div>
-                        <div>Genes to show</div>
 
-                        <div>Only show query regionoverlapped transcripts</div>
-                        <div v-for="transcript in transcripts" :key="transcript.id">
+                    <div class="outline-box">
+                        <div class="sub-item-title">Reference Annotation(upper)</div>
+
+                        <label style="display: flex; align-items: center;">
+                            <input v-model="flt_ref_overlap_query" type="checkbox" name="agree">
+                            Overlap query region
+                        </label>
+                        <div>
+                            <button @click="filter_ref">Apply</button>
+                            <button @click="reset_filter_ref">Reset</button>
                         </div>
+
                     </div>
 
-                    <div style="display: flex; justify-content: space-between;align-items: center;">
-                        <button @click="filterIsopediaIndex">Apply</button>
-                        <button @click="resetIsopediaIndex">Reset</button>
+                    <div class="outline-box">
+
+                        <div class="sub-item-title">Isoform Signals(bottom)</div>
+
+                        <range-filter-box name="Support Read Range" :min="evidence_range[0]" :max="evidence_range[1]"
+                            v-model="flt_evidence_range">
+                            Support Read Range
+                            <hover-help>
+                                This filter allows you to select isoforms based on the number of supporting reads.
+                                Adjust the range to include isoforms that have a specific number of reads supporting
+                                their structure.
+                            </hover-help>
+                        </range-filter-box>
+
+                        <range-filter-box name="Support Sample Range" :min="positive_sample_range[0]"
+                            :max="positive_sample_range[1]" v-model="flt_sample_size_range">
+
+                            Support Sample Range
+                            <hover-help>
+                                This filter allows you to select isoforms based on the number of samples that support
+                                them. Adjust the range to include isoforms that are supported by a specific number of
+                                samples.
+                            </hover-help>
+
+                        </range-filter-box>
+
+                        <div style="margin-top: 5px;">
+                            <button @click="filter_isoform">Apply</button>
+                            <button @click="reset_filter_isoform">Reset</button>
+                        </div>
+
+
                     </div>
 
                 </expand-box>
 
-                <expand-box name="Filter&Sort Isopedia Index">
+                <expand-box name="Selected Reference">
+                    <div class="outline-box" style="overflow-y: auto; max-height: 400px; min-height: 100px;">
+                        <div v-show="sel_anno_idx!=null">
 
-                    Lorem ipsum dolor sit amet consectetur, adipisicing elit. Aliquid inventore quibusdam eaque? Facere ipsum accusamus debitis delectus, ad aperiam quas laboriosam eaque sed accusantium nemo voluptatem id cupiditate, deserunt optio.
+                            <div v-for="item in Object.entries(sel_anno_data)" :key="item">
+                                <chip v-if="item[0] != 'elements' && item[0] != 'pass' && item[0] != 'init_idx'">
+                                    <template v-slot:label>{{item[0]}}</template>
+                                    <template v-slot:content>{{item[1]}}</template>
+                                </chip>
 
-                    <div style="display: flex; justify-content: space-between;align-items: center;">
-                        <button @click="filterIsopediaIndex">Apply</button>
-                        <button @click="resetIsopediaIndex">Reset</button>
-                    </div>
-                    
+                                <expand-box name="Elements" v-if="item[0] == 'elements'">
+                                    <div v-for="(el, idx) in item[1]" :key="idx"
+                                        style="margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
+                                        <div><strong>Feature:</strong> {{el.feature}}</div>
+                                        <div><strong>Start:</strong> {{el.start}}</div>
+                                        <div><strong>End:</strong> {{el.end}}</div>
+                                    </div>
+                                </expand-box>
+
                 </expand-box>
+            </div>
+        </div>
+    </div>
 
-                <expand-box name="Legend&Help">
-                </expand-box>
+    </expand-box>
+
+    <expand-box name="Selected Isoform Details">
+
+        <div class="outline-box" style="overflow-y: auto; max-height: 400px; min-height: 100px;">
+            <div v-show="sel_isoform_idx!= null">
+                <!-- {{this.sel_isoform_data}} -->
+
+                  <div v-for="item in Object.entries(sel_isoform_data)" :key="item">   
+
+                                <chip v-if="item[0] != 'splice_sites' && item[0] != 'splice_junction' && item[0] != 'positive_samples'  && item[0] !='pass' && item[0] != 'init_idx' && item[0] != '_row'">
+                                    <template v-slot:label>{{item[0]}}</template>
+                                    <template v-slot:content>{{item[1]}}</template>
+                                </chip>
+                  </div>
 
 
             </div>
 
         </div>
+    </expand-box>
 
-        <div id='footer'
-            style="z-index:12; box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.2); padding-left: 10px; display: flex; height:2.5vh;  justify-content: center; align-items: center; ">
 
-            <div>
-                <a href="https://fritzsedlazeck.github.io/"
-                    style="text-decoration: none; color:blueviolet; padding-right: 5px;" target="_blank">@Sedlazeck
-                    Lab, Baylor College of Medicine</a>
-            </div>
+    </div>
+
+    </div>
+
+    <div id='footer'
+        style="z-index:12; box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.2); padding-left: 10px; display: flex; height:2.5vh;  justify-content: center; align-items: center; ">
+
+        <div>
+            <a href="https://fritzsedlazeck.github.io/"
+                style="text-decoration: none; color:blueviolet; padding-right: 5px;" target="_blank">@Sedlazeck
+                Lab, Baylor College of Medicine</a>
         </div>
+    </div>
+
+    <div id="tooltip" style="position:absolute; display:none; padding:4px; background:black; color:white;
+                    border-radius:4px; font-size:12px; pointer-events:none; z-index:9999;">
+    </div>
     </div>
 
     <script>
@@ -129,6 +258,12 @@
                     meta: null,
                     annotation: null,
                     isoforms: null,
+                    ann_transcript: [],
+                    ann_gene: {},
+
+                    query_left: null,
+                    query_right: null,
+                    query_chr: null,
 
                     svg: null,
                     svgW: 0,
@@ -141,15 +276,11 @@
                     x0: null,
                     xz: null,
 
-                    // Bottom（连续 + band）
-                    y0: null,      // 连续基准（行号 0..N）
-                    yBand: null,   // 可视域 band（range 固定 [0, bodyH]）
+                    yBand: null,
 
-                    // Top（连续 + band）
-                    y0Ref: null,
                     yRefBand: null,
 
-                    // 分组/轴
+                    // g elements
                     gRoot: null,
                     gTop: null,
                     gBottom: null,
@@ -159,24 +290,44 @@
                     gContent: null,
                     gContentRef: null,
 
-                    // 尺寸拆分
+                    // heights
                     refH: 160,
                     bodyH: 0,
 
-                    // 数据
+                    // data
                     sjData: [],
                     exonData: [],
                     readspanData: [],
+                    // highlight_box_isoform: [],
+                    ref_labels: [],
                     ref_exons: [],
                     ref_cds: [],
                     ref_stop_codons: [],
                     ref_start_codons: [],
                     ref_utrs: [],
                     ref_tx_count: 0,
+                    // highlight_box_ref: [],
                     isoform_count: 0,
 
                     kShared: 1,
                     xShared: 0,
+
+                    // filter
+                    flt_ref_overlap_query: false,
+                    flt_evidence_range: [0, 0],
+                    flt_sample_size_range: [0, 0],
+
+                    // overall infos
+
+                    evidence_range: [0, 0],
+                    positive_sample_range: [0, 0],
+
+
+                    // selected
+                    sel_isoform_idx: null,
+                    sel_isoform_data: {},
+                    sel_anno_idx: null,
+                    sel_anno_data: {},
                 };
             },
 
@@ -194,18 +345,47 @@
                             this.isoforms = data.isoforms;
                             // console.log("loaded...", this.meta, this.annotation, this.isoforms);
 
-                            this.isoforms.forEach(isofrom => {
-                                console.log("isofrom", isofrom);
+                            this.isoforms.forEach((isofrom, idx) => {
+                                // console.log("isofrom", isofrom);
+                                // console.log(idx, isofrom);
                                 isofrom.pass = true;
+                                isofrom.init_idx = idx;
                             });
 
-                            this.annotation.forEach(ann => {
-                                console.log("ann", ann);
+                            let curr_tx_idx = 0;
+                            this.annotation.forEach(gene => {
+                                // console.log("ann", gene);
                                 // ann.transcripts is a dict
 
-                                Object.keys(ann.transcripts).forEach(txId => {
-                                    const tx = ann.transcripts[txId];
-                                    tx.pass = true;
+                                console.log("gene", gene);
+
+                                this.ann_gene[gene.gene_id] = {
+                                    gene_id: gene.gene_id,
+                                    gene_name: gene.gene_name,
+                                    chrom: gene.chr,
+                                    strand: gene.strand,
+                                    tx_count: Object.keys(gene.transcripts).length,
+                                    ...gene.attributes
+                                }
+
+                                Object.keys(gene.transcripts).forEach(txId => {
+
+                                    const transcript = gene.transcripts[txId];
+
+                                    this.ann_transcript.push({
+                                        tx_id: txId,
+                                        init_idx: curr_tx_idx,
+                                        gene_id: gene.gene_id,
+                                        gene_name: gene.gene_name,
+                                        chrom: gene.chr,
+                                        strand: gene.strand,
+                                        tx_start: transcript.start,
+                                        tx_end: transcript.end,
+                                        ...transcript.attributes,
+                                        elements: transcript.elements,
+                                        pass: true
+                                    });
+                                    curr_tx_idx += 1;
                                 });
                             });
                         })
@@ -215,48 +395,99 @@
                         });
                 },
 
-                // transform -> visible rows
-                visibleRowsFromTransform(t, baseY, panelH, maxRow) {
-                    // console.log("baseY", baseY);
-                    console.log("baseY domain", baseY.domain());
-                    const yScaled = t.rescaleY(baseY);     // domain -> pixel（在当前变换下）
-                    let start = Math.floor(yScaled.invert(0));          // 像素 0 对应的 domain
-                    let end = Math.ceil(yScaled.invert(panelH));      // 像素 panelH 对应的 domain
+                filter_ref() {
+                    console.log(this.flt_ref_overlap_query);
 
-                    // console.log("visibleRowsFromTransform", t, panelH, maxRow, start, end);
-                    console.log("prev start,end", start, end);
+                    this.ann_transcript.forEach(tx => {
+                        let passed = true;
+                        if (this.flt_ref_overlap_query) {
+                            if (tx.tx_end < this.query_left || tx.tx_start > this.query_right) {
+                                passed = false;
+                            }
+                        }
+                        tx.pass = passed;
+                    });
 
-                    start = Math.max(0, Math.min(maxRow - 1, start));
-                    end = Math.max(1, Math.min(maxRow, end));
+                    // console.log("this.ann_transcript", this.ann_transcript);
 
-                    console.log("after start,end", start, end);
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    // this.drawHighlightBox();
+                    this.enableDrag();
 
-                    if (end <= start) end = Math.min(maxRow, start + 1);
+                },
+                reset_filter_ref() {
+                    this.ann_transcript.forEach(tx => {
+                        tx.pass = true;
+                    });
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    // this.drawHighlightBox();
+                    this.enableDrag();
+                },
+                filter_isoform() {
 
-                    // 转为 1..maxRow 的整数行号
-                    // const rows = [];
-                    // for (let r = start + 1; r <= end; r++) rows.push(r);
-                    const rows = d3.range(start + 1, end + 1);
-                    return rows;
+                    // console.log(this.flt_evidence_range, this.flt_sample_size_range);
+
+                    this.isoforms.forEach(iso => {
+                        let passed = true;
+                        if (this.flt_evidence_range) {
+                            if (iso.total_evidence < this.flt_evidence_range[0] || iso.total_evidence > this.flt_evidence_range[1]) {
+                                passed = false;
+                            }
+                        }
+                        if (this.flt_sample_size_range) {
+                            if (iso.positive_sample_size < this.flt_sample_size_range[0] || iso.positive_sample_size > this.flt_sample_size_range[1]) {
+                                passed = false;
+                            }
+                        }
+                        iso.pass = passed;
+                    });
+
+                    // console.log("this.isoforms", this.isoforms);
+
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    // this.drawHighlightBox();
+                    this.enableDrag();
+
+
+                },
+                reset_filter_isoform() {
+                    this.isoforms.forEach(iso => {
+                        iso.pass = true;
+                    });
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    // this.drawHighlightBox();
+                    this.drawQueryRegion();
+                    this.enableDrag();
                 },
 
                 visibleRowsFromBand(bandScale, panelH, maxRow, rate) {
                     const domain = bandScale.domain();
                     if (!domain.length) return domain;
 
-                    // step 是相邻带的起点间距（含 padding），比 bandwidth 更合适用来估计“每屏能放几行”
+                    // step
                     let step = typeof bandScale.step === "function" ? bandScale.step() : bandScale.bandwidth();
                     const first = domain[0];                  // 当前顶部行（1-based）
                     step = step * (rate || 1);
-                    console.log("step,first,panelH", step, first, panelH);
+
                     const visible = Math.max(1, Math.floor(panelH / step));
-                    console.log("visible", visible);
+
                     const last = Math.min(maxRow, first + visible - 1);
-                    console.log("last", last);
+
                     return d3.range(first, last + 1);
                 },
 
-                // 控制 y 轴刻度密度：按可视域长度与像素高度限流
+
                 bandTicks(bandScale, panelH) {
                     const domain = bandScale.domain();
                     const maxTicks = Math.min(50, Math.max(3, Math.floor(panelH / 22)));
@@ -266,8 +497,8 @@
                     return ticks;
                 },
 
-                // 绘制/更新 X 轴
-                updateXAxis() {
+
+                renderXAxis() {
 
                     const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
                     this.xz = tId.rescaleX(this.x0);
@@ -275,14 +506,15 @@
                     this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
                 },
 
-                // 刷新 Top：根据 yRefBand.domain 定位；域外隐藏
+
                 renderTop() {
                     const ticks = this.bandTicks(this.yRefBand, this.refH);
                     this.gYAxisRef.call(d3.axisLeft(this.yRefBand).tickValues(ticks));
                     this.updateLines(this.gContentRef.selectAll("line.ref-exon"), this.xz, this.yRefBand);
                     this.updateLines(this.gContentRef.selectAll("line.ref-utrs"), this.xz, this.yRefBand);
                     this.updateLines(this.gContentRef.selectAll("line.ref-introns"), this.xz, this.yRefBand);
-                    // this.updateLines(this.gContentRef.selectAll("rect.query-region"), this.xz, this.yRefBand);
+                    this.updateText(this.gContentRef.selectAll("text.ref-labels"), this.xz, this.yRefBand);
+
                 },
 
                 // 刷新 Bottom：根据 yBand.domain 定位；域外隐藏
@@ -312,10 +544,42 @@
                         });
                 },
 
+                // renderHighlightBox() {
+
+                //     this.gContent.selectAll("rect.highlight-box-isoform")
+                //         .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
+                //         .attr("width", d => {
+                //             const w = this.xz(d.x2) - this.xz(d.x1);
+                //             return Math.max(1, w);           // ✅ 防止 0/负宽度
+                //         })
+                //         .attr("y", d => {
+                //             const y = this.yBand(d.row);
+                //             if (y == null) return null;
+                //             return y + this.yBand.bandwidth() * 0.1;
+                //         })
+                //         .attr("height", d => {
+                //             return this.yBand.bandwidth() * 0.8;
+                //         });
+                //     this.gContentRef.selectAll("rect.highlight-box-ref")
+                //         .attr("x", d => this.xz(d.x1))     // ✅ 用缩放后的 x
+                //         .attr("width", d => {
+                //             const w = this.xz(d.x2) - this.xz(d.x1);
+                //             return Math.max(1, w);           // ✅ 防止 0/负宽度
+                //         })
+
+                //         .attr("y", d => {
+                //             const y = this.yBand(d.row);
+                //             if (y == null) return null;
+                //             return y + this.yRefBand.bandwidth() * 0.1;
+                //         })
+                //         .attr("height", d => {
+                //             return this.yRefBand.bandwidth() * 0.8;
+                //         })
+                // },
+
+
                 updateLines(sel, xScale, yScale) {
-                    // console.log(sel);
-                    // sel.attr("x1", d => xScale(d.coord[0]))
-                    //     .attr("x2", d => xScale(d.coord[1]))
+
 
                     const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
                     this.xz = tId.rescaleX(this.x0);
@@ -323,15 +587,10 @@
                     sel
                         .attr("x1", d => this.xz(d.coord[0]))
                         .attr("x2", d => this.xz(d.coord[1]))
-                        // .attr("x1", d => d.coord[0])
-                        // .attr("x2", d => d.coord[1])
+                        // cursor: pointer; user-select: none;
+                        .style("cursor", "pointer")
+                        .style("user-select", "none")
                         .each((d, i, nodes) => {
-
-                            // if (i < 5) {
-                            //     console.log("updating line", d.coord, i);
-                            // }
-
-
                             const y = yScale(d.row);
 
                             const el = d3.select(nodes[i]);
@@ -344,13 +603,109 @@
                         });
                 },
 
-                bindLines(sel, data, cls, color, width) {
+                bindLines(sel, data, cls, color, width, addDataTags = false) {
+
+                    if (addDataTags) {
+
+                        sel.data(data)
+                            .join("line")
+                            .attr("class", cls)
+                            .attr("stroke", color)
+                            .attr("stroke-width", width)
+                            .attr("vector-effect", "non-scaling-stroke")
+                            .attr("data-row", d => d.row)        // 打上 row
+                            .attr("data-category", d => d.category) // 打上类型
+                            .on("mouseover", (event, d) => this.showTooltip(event, d))
+                            // .on("mousemove", (event, d) => this.moveTooltip(event, d))
+                            .on("mouseout", () => this.hideTooltip())
+                            .on("dblclick", (event, d) => {
+                                console.log("dblclick", d);
+
+                                this.highlightRow(d);
+                            });
+                    } else {
+                        sel.data(data)
+                            .join("line")
+                            .attr("class", cls)
+                            .attr("stroke", color)
+                            .attr("stroke-width", width)
+                            .attr("vector-effect", "non-scaling-stroke")
+                            .on("mouseover", (event, d) => this.showTooltip(event, d))
+                            // .on("mousemove", (event, d) => this.moveTooltip(event, d))
+                            .on("mouseout", () => this.hideTooltip())
+                            .on("dblclick", (event, d) => {
+                                console.log("dblclick", d);
+
+                                this.highlightRow(d);
+                            });
+                    }
+
+
+                },
+
+                bindText(sel, data, cls, color, size) {
                     sel.data(data)
-                        .join("line")
+                        .join("text")
+                        .text(d => `${d.gene_name}    (${d.tx_id})`)
                         .attr("class", cls)
-                        .attr("stroke", color)
-                        .attr("stroke-width", width)
+                        .attr("fill", color)
+                        .attr("font-size", size)
                         .attr("vector-effect", "non-scaling-stroke");
+                },
+
+                updateText(sel, xScale, yScale) {
+
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    this.xz = tId.rescaleX(this.x0);
+
+                    sel
+                        .attr("x", d => this.xz(d.end))
+                        .attr("y", d => d.row)
+                        .each((d, i, nodes) => {
+                            const y = yScale(d.row);
+
+                            const el = d3.select(nodes[i]);
+                            if (y == null) {
+                                el.style("display", "none").attr("y", null);
+                            } else {
+                                const ym = y + yScale.bandwidth() / 2;
+                                el.style("display", null).attr("y", ym);
+                            }
+                        });
+                },
+
+                showTooltip(event, d) {
+                    // console.log("showTooltip", event.pageX, event.pageY, d);
+                    const [x, y] = d3.pointer(event, document.body);
+
+                    d3.select("#tooltip")
+                        .style("display", "block")
+                        .html(d.text)
+                        .style("left", x + 10 + "px")
+                        .style("top", y + 10 + "px");
+                },
+                hideTooltip() {
+                    d3.select("#tooltip").style("display", "none");
+                },
+
+                highlightRow(d) {
+                    const selector = `line[data-row='${d.row}'][data-category='${d.category}']`;
+                    if (d.category === "isoform") {
+
+                        this.gContent.selectAll("line.exon").attr("stroke", "black");
+                        this.gContent.selectAll("line.readspan").attr("stroke", "blue");
+                        this.gContent.selectAll(selector).attr("stroke", "red");
+
+                        this.sel_isoform_idx = d.init_idx - 1;
+                        this.sel_isoform_data = this.isoforms[this.sel_isoform_idx];
+                    } else if (d.category === "reference") {
+
+                        this.gContentRef.selectAll("line.ref-exon").attr("stroke", "black");
+                        this.gContentRef.selectAll("line.ref-utrs").attr("stroke", "orange");
+                        this.gContentRef.selectAll(selector).attr("stroke", "blue");
+                        this.sel_anno_idx = d.init_idx - 1;
+                        this.sel_anno_data = this.ann_transcript[this.sel_anno_idx];
+                    }
                 },
 
                 zoomIn() {
@@ -360,9 +715,6 @@
                     this.xShared = this.xShared - (this.innerW / 2) * (newK - this.kShared) / newK;
                     const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
 
-                    // 顶部
-                    console.log("y0Ref", this.y0Ref);
-                    console.log("y0", this.y0);
 
                     startDomainRef = this.yRefBand.domain().map(d => d);
                     startDomainData = this.yBand.domain().map(d => d);
@@ -381,10 +733,11 @@
 
                     // X 轴
                     this.xz = tId.rescaleX(this.x0);
-                    this.updateXAxis();
+                    this.renderXAxis();
 
 
                     this.renderQueryRegion();
+                    this.renderHighlightBox();
                 },
 
                 zoomOut() {
@@ -406,26 +759,23 @@
 
                     // X 轴
                     this.xz = tId.rescaleX(this.x0);
-                    this.updateXAxis();
+                    this.renderXAxis();
 
                     this.renderQueryRegion();
+                    this.renderHighlightBox();
                 },
 
                 resetView() {
 
                     const xdomain = [this.meta.left_most, this.meta.right_most];
 
-                    // X（共享）
+                    // X
                     this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
                     this.xz = this.x0.copy();
 
-                    // Bottom Y 连续基准（domain 0..N，range 0..bodyH）
-                    this.y0 = d3.scaleLinear().domain([0, this.isoform_count]).range([0, this.bodyH]);
-                    // Bottom Y band（range 固定 0..bodyH，domain 初始化为全部行 1..N）
+
                     this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
 
-                    // Top Y 连续基准
-                    this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
                     // Top Y band（range 固定 0..refH，domain 初始化为全部行 1..M）
                     this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
 
@@ -439,7 +789,7 @@
                     this.renderQueryRegion();
 
                     // 初始一次完整渲染（等价于 identity 变换）
-                    this.updateXAxis();
+                    this.renderXAxis();
 
                     // 顶部
 
@@ -485,10 +835,11 @@
                         this.xz = this.x0.copy()
                             .range([0, this.innerW].map(d => this.kShared * d + this.xShared));
 
-                        this.updateXAxis();
+                        this.renderXAxis();
                         this.renderQueryRegion();
                         this.renderTop();
                         this.renderBottom();
+                        // this.renderHighlightBox();
 
 
                         let gNode = event.target.closest("g");
@@ -511,6 +862,7 @@
                                 if (shiftedRef.length > 0) {
                                     this.yRefBand.domain(shiftedRef);
                                     this.renderTop();
+
                                 }
                             }
 
@@ -519,12 +871,6 @@
 
                                 let shiftedData = startDomainData.map(r => r - Math.round(dy / this.yBand.bandwidth()));
 
-                                // console.log("startDomainData[0]", startDomainData[0]);
-                                // console.log("startDomainData[-1]", startDomainData[startDomainData.length - 1]);
-                                // console.log("startDomainData", startDomainData);
-                                // console.log("shiftedData", shiftedData);
-
-
                                 if (startDomainData[0] == 1 && shiftedData[0] <= 1) return;
                                 if (startDomainData[startDomainData.length - 1] == this.isoform_count && shiftedData[shiftedData.length - 1] >= this.isoform_count) return;
 
@@ -532,8 +878,11 @@
                                 if (shiftedData.length > 0) {
                                     this.yBand.domain(shiftedData);
                                     this.renderBottom();
+
                                 }
                             }
+
+                            // this.renderHighlightBox();
                         }
                     });
 
@@ -541,12 +890,10 @@
                     d3.select(window).on("mouseup", () => {
                         isDragging = false;
                     });
+
                 },
 
-
-
-
-                prepare() {
+                process_data() {
                     // 1) 预处理 reference
                     this.ref_tx_count = 0;
                     this.ref_exons = [];
@@ -555,60 +902,194 @@
                     this.ref_start_codons = [];
                     this.ref_utrs = [];
                     this.ref_introns = [];
-
-                    this.annotation.forEach(gene => {
-                        Object.values(gene.transcripts).forEach(tx => {
-                            this.ref_tx_count += 1;
-                            let intron = [];
-                            tx.elements.forEach(el => {
-                                const push = (arr) => arr.push({
-                                    feature: el.feature,
-                                    row: this.ref_tx_count,
-                                    coord: [el.start, el.end],
-                                    tx_id: el.transcript_id,
-                                    gene_id: el.gene_id
-                                });
-                                if (el.feature === 'exon') {
-                                    push(this.ref_exons)
-                                    intron.push(el.start);
-                                    intron.push(el.end);
-                                }
-                                else if (el.feature === 'CDS') push(this.ref_cds);
-                                else if (el.feature === 'stop_codon') push(this.ref_stop_codons);
-                                else if (el.feature === 'start_codon') push(this.ref_start_codons);
-                                else if (el.feature === 'UTR') push(this.ref_utrs);
-                            });
-
-                            // remove the first and last element (not intron)
-                            intron = intron.slice(1, -1);
-                            for (let i = 0; i < intron.length; i += 2) {
-                                this.ref_introns.push({ coord: [intron[i], intron[i + 1]], row: this.ref_tx_count });
-                            }
+                    this.ref_labels = [];
+                    // this.highlight_box_ref = [];
+                    this.isoform_count = 0;
+                    // let that = this;    
+                    // console.log("that.query_chr", this.query_chr);
+                    this.ann_transcript.forEach(tx => {
+                        if (tx.pass == false) return;
+                        this.ref_tx_count += 1;
+                        this.ref_labels.push({
+                            tx_id: tx.tx_id,
+                            gene_id: tx.gene_id,
+                            gene_name: tx.gene_name,
+                            row: this.ref_tx_count,
+                            start: tx.tx_start,
+                            end: tx.tx_end,
                         });
+
+                        let intron = [];
+
+                        tx.elements.forEach(el => {
+                            const push = (arr) => arr.push({
+                                init_idx: tx.init_idx,
+                                feature: el.feature,
+                                row: this.ref_tx_count,
+                                coord: [el.start, el.end],
+                                tx_id: el.transcript_id,
+                                gene_id: el.gene_id,
+                                category: 'reference',
+                                gene_name: el.attributes && el.attributes.gene_name || 'NA',
+                                text: `
+                                <div><strong>Type: ${el.feature}</strong> </div>
+                                <div>Position: ${tx.chrom}: ${el.start} - ${el.end}</div>
+                                <div>Transcript ID: ${el.transcript_id}</div>
+                                <div>Gene ID: ${el.gene_id}</div>
+                                <div>Gene Name: ${el.attributes && el.attributes.gene_name || 'NA'}</div>
+                                `
+
+                            });
+                            if (el.feature === 'exon') {
+                                push(this.ref_exons)
+                                intron.push(el.start);
+                                intron.push(el.end);
+                            }
+                            else if (el.feature === 'CDS') push(this.ref_cds);
+                            else if (el.feature === 'stop_codon') push(this.ref_stop_codons);
+                            else if (el.feature === 'start_codon') push(this.ref_start_codons);
+                            else if (el.feature === 'UTR') push(this.ref_utrs);
+                        });
+
+                        // remove the first and last element (not intron)
+                        intron = intron.slice(1, -1);
+                        for (let i = 0; i < intron.length; i += 2) {
+                            this.ref_introns.push({
+                                coord: [intron[i], intron[i + 1]], row: this.ref_tx_count,
+                                category: 'reference',
+                                text: `
+                                <div><strong>Type: Intron</strong> </div>
+                                <div>Position: ${tx.chrom}: ${intron[i]} - ${intron[i + 1]}</div>
+                                <div>Transcript ID: ${tx.tx_id}</div>
+                                <div>Gene ID: ${tx.gene_id}</div>
+                                <div>Gene Name: ${tx.gene_name}</div>
+                                `
+                            });
+                        }
+
                     });
 
-
-                    // 2) 预处理 bottom（isoforms）
+                    // 2 isoform
                     this.sjData = [];
                     this.exonData = [];
                     this.readspanData = [];
                     this.isoforms.forEach((iso, i) => { iso._row = i + 1; });
+                    // this.highlight_box_isoform = [];
 
                     this.isoforms.forEach(iso => {
+                        if (iso.pass == false) return;
+                        this.isoform_count += 1;
+
+                        // this.highlight_box_isoform.push({
+                        //     x1: iso.start_pos_left,
+                        //     x2: iso.end_pos_right,
+                        //     row: iso._row
+                        // });
+
+                        iso._row = this.isoform_count;
                         (iso.splice_junction || []).forEach(sj => {
-                            this.sjData.push({ coord: sj, row: iso._row });
+                            this.sjData.push({
+                                coord: sj,
+                                row: iso._row,
+                                category: 'isoform',
+                                init_idx: iso.init_idx,
+                                text: `
+                                <div><strong>Type: Splice Junction</strong> </div>
+                                <div>Position: ${iso.chr1}: ${sj[0]} - ${sj[1]}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+                            });
                         });
                         const splice_sites = (iso.splice_sites || []).slice();
                         splice_sites.unshift(iso.start_pos_right);
                         splice_sites.push(iso.end_pos_left);
                         splice_sites.forEach((pos, i) => {
                             if (i % 2 === 0 && splice_sites[i + 1] != null) {
-                                this.exonData.push({ coord: [pos, splice_sites[i + 1]], row: iso._row });
+                                this.exonData.push({
+                                    coord: [pos, splice_sites[i + 1]],
+                                    row: iso._row,
+                                    init_idx: iso.init_idx,
+                                    category: 'isoform',
+                                    text: `
+                                <div><strong>Type: Exon</strong> </div>
+                                <div>Position: ${iso.chr1}: ${pos} - ${splice_sites[i + 1]}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+
+                                });
                             }
                         });
-                        this.readspanData.push({ coord: [iso.start_pos_left, iso.start_pos_right], row: iso._row });
-                        this.readspanData.push({ coord: [iso.end_pos_left, iso.end_pos_right], row: iso._row });
+                        this.readspanData.push({
+                            coord: [iso.start_pos_left, iso.start_pos_right],
+                            row: iso._row,
+                            init_idx: iso.init_idx,
+                            category: 'isoform',
+                            text: `
+                                <div><strong>Type: Reads Left Covered Region</strong> </div>
+                                <div>Position: ${iso.chr1}: ${iso.start_pos_left} - ${iso.start_pos_right}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+                        });
+                        this.readspanData.push({
+                            coord: [iso.end_pos_left, iso.end_pos_right],
+                            row: iso._row,
+                            category: 'isoform',
+                            init_idx: iso.init_idx,
+                            text: `
+                                <div><strong>Type: Reads Right Covered Region</strong> </div>
+                                <div>Position: ${iso.chr1}: ${iso.end_pos_left} - ${iso.end_pos_right}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+                        });
                     });
+
+                },
+
+                firstTimeInit() {
+                    // collect query info
+                    // collect reference info
+                    // collect maximal sample count from each isoform
+                    let that = this;
+                    this.query_chr = this.isoforms[0].chr1;
+                    console.log("this.query_chr", this.query_chr);
+                    this.isoforms.forEach(iso => {
+
+                        if (that.evidence_range[0] == 0 || iso.total_evidence < that.evidence_range[0]) {
+                            that.evidence_range[0] = iso.total_evidence;
+                        }
+                        if (that.evidence_range[1] == 0 || iso.total_evidence > that.evidence_range[1]) {
+                            that.evidence_range[1] = iso.total_evidence;
+                        }
+                        if (that.positive_sample_range[0] == 0 || iso.positive_sample_size < this.positive_sample_range[0]) {
+                            that.positive_sample_range[0] = iso.positive_sample_size;
+                        }
+                        if (that.positive_sample_range[1] == 0 || iso.positive_sample_size > that.positive_sample_range[1]) {
+                            that.positive_sample_range[1] = iso.positive_sample_size;
+                        }
+
+                    });
+
+                    // collect meta info
+
+                },
+
+                init() {
 
                     // 3) 尺寸
                     const { width, height } = this.svg.node().getBoundingClientRect();
@@ -618,25 +1099,21 @@
                     this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
                     this.bodyH = Math.max(10, this.innerH - this.refH);
 
-                    // 4) 尺度
-                    this.isoform_count = this.isoforms.length;
+                    // this.isoform_count = this.isoforms.length;
                     const xdomain = [this.meta.left_most, this.meta.right_most];
 
-                    // X（共享）
+                    // X
                     this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
                     this.xz = this.x0.copy();
 
-                    // Bottom Y 连续基准（domain 0..N，range 0..bodyH）
-                    this.y0 = d3.scaleLinear().domain([0, this.isoform_count]).range([0, this.bodyH]);
-                    // Bottom Y band（range 固定 0..bodyH，domain 初始化为全部行 1..N）
+
+
                     this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
 
-                    // Top Y 连续基准
-                    this.y0Ref = d3.scaleLinear().domain([0, this.ref_tx_count]).range([0, this.refH]);
-                    // Top Y band（range 固定 0..refH，domain 初始化为全部行 1..M）
+                    // Top Y band
                     this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
 
-                    // 5) SVG & 分组
+
                     this.svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
 
                     this.gRoot = this.svg.append("g")
@@ -650,7 +1127,7 @@
                         .attr("class", "bottom-body")
                         .attr("transform", `translate(0,${this.refH})`);
 
-                    // 只裁内容，不裁轴
+                    // crop region
                     const defs = this.svg.append("defs");
                     defs.append("clipPath").attr("id", "clipTop")
                         .append("rect").attr("x", 0).attr("y", 0)
@@ -659,7 +1136,7 @@
                         .append("rect").attr("x", 0).attr("y", 0)
                         .attr("width", this.innerW).attr("height", this.bodyH);
 
-                    // 轴组
+
                     this.gXAxis = this.gTop.append("g")
                         .attr("class", "x-axis")
                         .attr("transform", "translate(0,0)")
@@ -668,7 +1145,7 @@
                     this.gYAxisRef = this.gTop.append("g").attr("class", "y-axis-ref");
                     this.gYAxis = this.gBottom.append("g").attr("class", "y-axis");
 
-                    // 内容组（clip）
+                    // clip region
                     this.gContentRef = this.gTop.append("g").attr("class", "content-ref")
                         .attr("clip-path", "url(#clipTop)");
 
@@ -678,10 +1155,9 @@
                         .attr("y", 0)
                         .attr("width", this.innerW)
                         .attr("height", this.refH)
-                        // .style("fill", "transparent")
                         .attr("fill", "lightblue")
-                        .attr("fill-opacity", 0.1)   // 调整透明度
-                        .style("pointer-events", "all");   // 透明但能接收事件
+                        .attr("fill-opacity", 0.1)
+                        .style("pointer-events", "all");   // make sure the event is captured
 
 
                     this.gContent = this.gBottom.append("g").attr("class", "content")
@@ -694,7 +1170,7 @@
                         .attr("width", this.innerW)
                         .attr("height", this.bodyH)
                         .attr("fill", "lightpink")
-                        .attr("fill-opacity", 0.1)   // 调整透明度
+                        .attr("fill-opacity", 0.1)
                         .style("pointer-events", "all");
 
                     // y labels
@@ -702,9 +1178,9 @@
                     // 给顶部 Y 轴加 label
                     this.gYAxisRef.append("text")
                         .attr("class", "y-label-ref")
-                        .attr("transform", "rotate(-90)")       // 旋转 90 度
-                        .attr("y", -50)                         // 调整位置（负数往左）
-                        .attr("x", -this.refH / 2)              // 垂直居中
+                        .attr("transform", "rotate(-90)")       // rotate left
+                        .attr("y", -50)                         // left shift 50
+                        .attr("x", -this.refH / 2)              // vertical center
                         .attr("dy", "1em")
                         .style("text-anchor", "middle")
                         .style("fill", "black")
@@ -715,7 +1191,7 @@
                         .attr("class", "y-label-data")
                         .attr("transform", "rotate(-90)")
                         .attr("y", -50)
-                        .attr("x", -this.bodyH / 2)             // 垂直居中
+                        .attr("x", -this.bodyH / 2)            // vertical center
                         .attr("dy", "1em")
                         .style("text-anchor", "middle")
                         .style("fill", "black")
@@ -738,6 +1214,12 @@
                     const x2 = +iso0.pos2;
                     const xLeft = Math.min(x1, x2);
                     const xRight = Math.max(x1, x2);
+                    this.query_left = xLeft;
+                    this.query_right = xRight;
+                    // console.log("iso0", iso0, xLeft, xRight);
+
+                    // this.query_chr = iso0.chr1;
+                    // console.log("query_chr", this.query_chr);
                     this.gContent
                         .selectAll("rect.query-region")
                         .data([{ x1: xLeft, x2: xRight }])
@@ -771,38 +1253,31 @@
                         .style("pointer-events", "none");
                 },
 
-                draw() {
 
-                    // 取一个 isoform 的左右边界（你可以按需求换成 right/left 的组合）
+                draw() {
 
 
                     this.drawQueryRegion();
-
+                    // this.drawHighlightBox();
                     this.bindLines(this.gContent.selectAll("line.splice"), this.sjData, "splice", "pink", 0.8);
-                    this.bindLines(this.gContent.selectAll("line.exon"), this.exonData, "exon", "black", 4);
-                    this.bindLines(this.gContent.selectAll("line.readspan"), this.readspanData, "readspan", "blue", 4);
+                    this.bindLines(this.gContent.selectAll("line.exon"), this.exonData, "exon", "black", 4, true);
+                    this.bindLines(this.gContent.selectAll("line.readspan"), this.readspanData, "readspan", "blue", 4, true);
                     this.bindLines(this.gContentRef.selectAll("line.ref-introns"), this.ref_introns, "ref-introns", "green", 0.8);
-                    this.bindLines(this.gContentRef.selectAll("line.ref-exon"), this.ref_exons, "ref-exon", "black", 4);
-                    this.bindLines(this.gContentRef.selectAll("line.ref-utrs"), this.ref_utrs, "ref-utrs", "orange", 4);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-exon"), this.ref_exons, "ref-exon", "black", 4, true);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-utrs"), this.ref_utrs, "ref-utrs", "orange", 4, true);
+                    this.bindText(this.gContentRef.selectAll("text.ref-labels"), this.ref_labels, "ref-labels", "black", 6);
 
-
-
-
-
-                    // 让两个面板都以 identity 计算可视域
+                    // make sure shared transform is identity
                     const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
 
-                    // 初始一次完整渲染（等价于 identity 变换）
-                    this.updateXAxis();
-
-                    // 顶部
-
+                    // initial render
+                    this.renderXAxis();
 
                     const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1);
 
                     this.yRefBand.domain(rowsTop);
                     this.renderTop();
-                    // 底部
+
                     const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1);
                     this.yBand.domain(rowsBottom);
                     this.renderBottom();
@@ -812,20 +1287,17 @@
 
             mounted() {
                 this.svg = d3.select(this.$refs.svg);
+
                 this.fetchJSON().then(() => {
-                    this.prepare();
+                    this.process_data();
+                    this.firstTimeInit();
+                    this.init();
                     this.draw();
                     this.enableDrag();
                 });
             }
         });
 
-
-
-
-
-
-        // 注册组件
         app.component('expand-box', {
 
             data() {
@@ -847,8 +1319,8 @@
                 this.curr_expanded = this.expanded;
             },
             template: `
-                <div style="margin-top:1px;">
-                    <div @click="toggle" style="box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); padding-left:2px;padding-right:2px; background-color: lightgray; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;"> {{ name }} <span v-if="curr_expanded">[&minus;]</span><span v-else>[+]</span></div>
+                <div style="margin-top:4px;">
+                    <div @click="toggle" style="font-size:12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); padding-left:2px;padding-right:2px; background-color: lightgray; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;"> {{ name }} <span v-if="curr_expanded">[&minus;]</span><span v-else>[+]</span></div>
                     <div v-if="curr_expanded" style="margin-left: 10px; margin-top: 5px;">
                         <slot></slot>
                     </div>
@@ -860,6 +1332,150 @@
                 }
             }
         });
+
+        app.component("range-filter-box", {
+            data() {
+                return {
+                    local_min: 0,
+                    local_max: 0,
+                    record_min: 0,
+                    record_max: 0,
+                }
+            },
+            props: {
+                'name': {
+                    type: String,
+                    required: true
+                },
+                'min': {
+                    type: Number,
+                    required: true
+                },
+                'max': {
+                    type: Number,
+                    required: true
+                },
+                'modelValue': {
+                    type: Array,
+                    required: true
+                }
+            },
+            mounted() {
+
+                console.log("range filter box mounted", this.min, this.max, this.modelValue);
+                this.local_min = this.min;
+                this.local_max = this.max;
+                this.record_min = this.min;
+                this.record_max = this.max;
+
+            },
+            emits: ['update:modelValue'],
+            template: `
+                <div style="font-size: 11px;">
+                    
+
+                    <slot >
+                        <div>{{name}}:</div>
+                    </slot>
+
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input  type="number" v-model.number="local_min" :min="min" :max="max" style="width: 60px;font-size:11px" />
+                        <span> - </span>
+                        <input type="number" v-model.number="local_max" :min="min" :max="max" style="width: 60px;font-size:11px;" />
+                        <span style="cursor:pointer;" @click='reset'> &#8634; </span>
+                    </div>
+                </div>
+            `,
+            watch: {
+                local_max(newVal) {
+                    this.$emit('update:modelValue', [this.local_min, this.local_max]);
+                },
+                local_min(newVal) {
+                    this.$emit('update:modelValue', [this.local_min, this.local_max]);
+                },
+                min(newVal) {
+                    this.local_min = newVal;
+                    this.record_min = newVal;
+                },
+                max(newVal) {
+                    this.local_max = newVal;
+                    this.record_max = newVal;
+                }
+            },
+            methods: {
+                reset() {
+                    this.local_min = this.record_min;
+                    this.local_max = this.record_max;
+                    this.$emit('update:modelValue', [this.local_min, this.local_max]);
+                }
+            }
+
+        });
+
+        // credit to chatgpt
+        app.component('hover-help', {
+            template: `
+            <div style="display: inline-block; position: relative; cursor: help; user-select: none;">
+            <span style="border-bottom: 1px dotted black;">[?]</span>
+            <div class="hover-help-text"
+                style="display: none; position: fixed; z-index: 9999; background-color: black; color: #fff;
+                        text-align: left; border-radius: 6px; padding: 5px; width: max-content; max-width: 300px;">
+                <slot></slot>
+
+            </div>
+            </div>
+        `,
+            mounted() {
+                const trigger = this.$el.querySelector("span");
+                const helpText = this.$el.querySelector(".hover-help-text");
+
+                trigger.addEventListener("mouseenter", () => {
+                    helpText.style.display = "block";
+
+                    const rect = trigger.getBoundingClientRect();
+                    const padding = 8;
+
+                    let top = rect.top - helpText.offsetHeight - padding;
+                    let left = rect.left;
+
+
+                    if (top < 0) {
+
+                        top = rect.bottom + padding;
+                    }
+
+                    if (left + helpText.offsetWidth > window.innerWidth) {
+                        left = window.innerWidth - helpText.offsetWidth - padding;
+                    }
+                    if (left < 0) left = padding;
+
+                    helpText.style.top = top + "px";
+                    helpText.style.left = left + "px";
+                });
+
+                trigger.addEventListener("mouseleave", () => {
+                    helpText.style.display = "none";
+                });
+            }
+        });
+
+
+        app.component('chip', {
+
+            template: `
+                <div style="display: flex; justify-content: space-between; align-items: center;
+                            background-color: lightgray; border-radius: 4px; padding: 2px 8px; margin-top:4px; font-size: 10px">
+                <span style="text-align: left;">
+                   <strong> <slot name="label"></slot> </strong>
+                </span>
+
+                <span style="margin-left: auto; text-align: right;">
+                    <slot name="content"></slot>
+                </span>
+                </div>
+            `,
+
+        })
 
         app.mount('#app');
 
