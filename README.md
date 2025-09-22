@@ -55,7 +55,7 @@ isopedia-anno-fusion  -i index/ -g gene.gtf -o fusion.discovery.tsv
 Isopedia supports building local index in your own datasets. prerequests are listed below:
 
 1. latest isopedia binaries
-2. A set of mapped bam files(sorted bam are note required)
+2. A set of mapped bam files(sorted bam are not required)
 3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format
 
 

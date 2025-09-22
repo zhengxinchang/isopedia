@@ -108,7 +108,7 @@
                 </expand-box>
 
                 <expand-box name="Sample Metadata Table">
-                    <div class="outline-box" style="overflow: auto; max-height: 300px;max-width: 100%;">
+                    <div class="outline-box" style="overflow: auto; max-height: 500px;max-width: 100%;">
                         <table>
                             <thead>
                                 <tr>
@@ -124,6 +124,13 @@
                         </table>
                     </div>
                 </expand-box>
+
+
+                <expand-box name="Help">
+
+
+                </expand-box>
+
             </div>
 
             <div id="middle" style="z-index:9; width: 70%; background-color: lightblue; border: 0px solid black;">
@@ -214,7 +221,15 @@
                                     <template v-slot:content>{{item[1]}}</template>
                                 </chip>
 
-                                <expand-box name="Elements" v-if="item[0] == 'elements'">
+                                <expand-box v-if="item[0] == 'elements'">
+
+                                    <template v-slot:label>
+                                        <chip style="padding-left:6px; padding-right:0px;">
+                                            <template v-slot:label>Elements</template>
+                                            <template v-slot:content>({{item[1].length || 0}})</template>
+                                        </chip>
+                                    </template>
+
                                     <div v-for="(el, idx) in item[1]" :key="idx"
                                         style="margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
                                         <div><strong>Feature:</strong> {{el.feature}}</div>
@@ -333,8 +348,11 @@
                     <expand-box :expanded="false"
                         v-for="(sample, idx) in sel_isoform_data && sel_isoform_data.positive_samples" :key="idx">
 
-                        <template v-slot:label>
-                            {{sample.sample}} <br /> {{sample.count}} reads <br /> CPM: {{sample.cpm}}
+                        <template style="font-size:10px" v-slot:label>
+                            <div style="font-size: 10px;">
+                                {{sample.sample}} <br /> {{sample.count}} reads <br /> CPM: {{sample.cpm}}
+                            </div>
+
                         </template>
                         <div>
 

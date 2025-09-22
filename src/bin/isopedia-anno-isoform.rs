@@ -7,7 +7,6 @@ use std::{
 };
 
 use anyhow::Result;
-use bincode::de;
 use clap::{command, Parser};
 use isopedia::{
     bptree::BPForest,
@@ -366,9 +365,6 @@ fn main() -> Result<()> {
         BufReader::new(std::fs::File::open(cli.gtf).expect("can not read gtf")),
     );
 
-    // create the base output object
-
-    // load indexes one by one
 
     for (i, idx_dir) in idx_dirs.iter().enumerate() {
         info!("Annotating index shard {}/{}", i+1, idx_dirs.len());
@@ -383,8 +379,6 @@ fn main() -> Result<()> {
         info!("Warmup index file");
         let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
         warmup(&idx_dir.clone().join(MERGED_FILE_NAME), max_gb)?;
-
-        
     }
 
 
