@@ -1,7 +1,9 @@
-use crate::constants::{MAGIC, ORDER, TMPIDX_CHUNK_SIZE};
+use crate::constants::{MAGIC, ORDER};
+use clap::error;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::info;
+use log::error;
 use memmap2::Mmap;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -77,22 +79,20 @@ impl Tmpindex {
     pub fn add_one(&mut self, interim_record: MergedIsoformOffsetPlusGenomeLoc) {
         self.meta.data_size += 1;
         self.offsets.push(interim_record);
-        if self.offsets.len() >= TMPIDX_CHUNK_SIZE {
-            self._sort_records();
-            self._dump_chunk();
-        }
     }
 
-    fn _dump_chunk(&mut self) {
-        // dump current offsets
+    pub fn dump_chunk(&mut self, chunk_idx: usize) {
+
+        if chunk_idx != self.chunks {
+            error!("The chunk index of isoform archive does not match the current tmpidx chunk index");
+            std::process::exit(1);
+        }
+
+        self._sort_records();
         let chunk_file_name_path = self
             .file_name
             .with_extension(format!("chunk{}", self.chunks));
-        // info!(
-        //     "Dumping chunk {} to disk: {}",
-        //     self.chunks,
-        //     chunk_file_name_path.display()
-        // );
+
         let mut writer = BufWriter::new(
             fs::File::create(&chunk_file_name_path)
                 .expect("Can not create chunk file for interim index file"),
@@ -117,12 +117,11 @@ impl Tmpindex {
     /// the final output would be a sorted tmpidx file , a rewritten record data file
     ///
     /// this function is the replace for the previous dump_to_disk function and rewrite_sorted_records function
-    pub fn finalize(&mut self, record_data_path: &PathBuf, new_record_data_path: &PathBuf) {
-        // final sort for last chunk
-        if self.offsets.len() > 0 {
-            self._sort_records();
-            self._dump_chunk();
-        }
+    pub fn finalize(&mut self, new_record_data_path: &PathBuf) {
+        // 同步写入新的 tmpdix和 record data file 
+        // 明天只需要work on这个函数就可以了
+        
+
 
         info!(
             "Merging {} chunk files to final tmpidx file: {}",
@@ -249,9 +248,6 @@ impl Tmpindex {
                 .insert(*chrom_id, (_curr_offset, *count));
             _curr_offset += *count;
         }
-
-        // self.meta.data_size = total_idx_n;
-        // dbg!(&self.meta.data_size, &total_idx_n);
 
         info!("Total {} index records written, total {} unique records in the record data file", total_idx_n, offset_mapping.len());
 

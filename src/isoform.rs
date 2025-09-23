@@ -40,6 +40,7 @@ pub struct MergedIsoform {
     // Stores the starting index of each sample’s read-level differences (ReadDiffSlim) within the shared isoform_diffs_slim_vec array.
     pub sample_offset_arr: Vec<u32>,
     pub chrom: String,
+    pub chrom_id: u16,
     pub rec_type: RecordType, // indicate the status of the aggr isoform, also reserved for SV.
     pub splice_junctions_vec: Vec<(u64, u64)>,
     pub isoform_reads_slim_vec: Vec<ReadDiffSlim>,
@@ -67,7 +68,7 @@ impl Ord for MergedIsoform {
 }
 
 impl MergedIsoform {
-    pub fn init(aggr_isofrom: AggrRead, sample_size: usize, sample_idx: u32) -> MergedIsoform {
+    pub fn init(aggr_isofrom: AggrRead, sample_size: usize, sample_idx: u32,chrom_id:u16) -> MergedIsoform {
         let mut aggr_record = MergedIsoform {
             signature: aggr_isofrom.signature,
             total_evidence: aggr_isofrom.evidence,
@@ -75,6 +76,7 @@ impl MergedIsoform {
             sample_evidence_arr: vec![0; sample_size],
             sample_offset_arr: vec![0; sample_size],
             chrom: aggr_isofrom.chrom.clone(),
+            chrom_id: chrom_id,
             rec_type: RecordType::UnK,
             splice_junctions_vec: Vec::new(),
             isoform_reads_slim_vec: Vec::new(),
@@ -307,6 +309,13 @@ impl MergedIsoform {
                 .map(|window| (window[0].1, window[1].0))
                 .collect()
         }
+    }
+
+    pub fn get_start_pos(&self) -> u64 {
+        self.splice_junctions_vec
+            .first()
+            .map(|sj| sj.0)
+            .unwrap_or(0)
     }
 
     pub fn find_fusion_by_breakpoints(
