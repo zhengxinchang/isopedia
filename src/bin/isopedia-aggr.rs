@@ -1,13 +1,14 @@
 use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
 
 use anyhow::Result;
+use chrono::offset;
 use clap::Parser;
 use isopedia::{
     chromosome::ChromMapping,
     constants::*,
     dataset_info::DatasetInfo,
     isoform::MergedIsoform,
-    isoformarchive::IsoformArchive,
+    isoformarchive::IsoformArchiveWriter,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
 };
@@ -208,8 +209,10 @@ fn main() -> Result<()> {
 
     // new the heap
     let mut heap: BinaryHeap<Reverse<HeapItem<AggrRead>>> = BinaryHeap::new();
+    
     // init the merge buffer
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
+<<<<<<< HEAD
 
     // init the output file
     let mut merged_file_name_pre = PathBuf::from(MERGED_FILE_NAME);
@@ -217,9 +220,14 @@ fn main() -> Result<()> {
 
     let mut isoform_archive = IsoformArchive::create(&cli.outdir.join(&merged_file_name_pre));
 
+=======
+    
+>>>>>>> main
     let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME));
 
-    let mut merged_offset = 0;
+    let mut isoform_archive_base = &cli.outdir.join(MERGED_FILE_NAME);
+
+    
     // init the heap
     for (idx, reader) in file_readers.iter_mut().enumerate() {
         if let Some(rec) = reader.next_rec() {
@@ -235,24 +243,21 @@ fn main() -> Result<()> {
     }
 
     let mut need_deleted = Vec::new();
-    // let mut buf = Vec::new();
-
-    // let mut processed = 0;
-    let mut curr_batch = 0;
-    let batch_size = 1_000_000;
-    let mut batches = 0;
+    let mut curr_chunk_size = 0;
+    let mut chunks = 0;
+    let mut tmp_vec = Vec::new();
     while let Some(Reverse(HeapItem {
         rec,
         file_idx,
         signature,
     })) = heap.pop()
     {
-        curr_batch += 1;
+        curr_chunk_size += 1;
 
         if let Some(merged_isoform) = merged_map.get_mut(&signature) {
             merged_isoform.add(rec, file_idx as u32);
         } else {
-            let merged_isoform = MergedIsoform::init(rec, dataset_info.get_size(), file_idx as u32);
+            let merged_isoform = MergedIsoform::init(rec, dataset_info.get_size(), file_idx as u32, chroms.get_chrom_idx(rec.chrom.as_str()).unwrap());
             merged_map.insert(signature, merged_isoform);
         }
         if let Some(rec) = file_readers[file_idx].next_rec() {
@@ -269,24 +274,91 @@ fn main() -> Result<()> {
         }
 
         // dump the buffer to disk
-        if curr_batch >= batch_size {
+        if curr_chunk_size >= TMP_CHUNK_SIZE {
+
+            
+            // 1. got the merged_isoforms to vector and sort them by the first position
+            // 2. dump the merged_isoform to disk and get the offset and length 
+
+            
+
+
+
             for (_, merged_isoform_rec) in merged_map.iter() {
                 //ignore the current aggr_record which might not be the final one
                 if merged_isoform_rec.signature == signature {
                     continue;
                 }
                 // calculate the bytes length of the merged_isoform record
-                let bytes_len = isoform_archive.dump_to_disk(&merged_isoform_rec);
+                // let bytes_len = isoform_archive.dump_to_disk(&merged_isoform_rec);
+
+                tmp_vec.push(merged_isoform_rec);
 
                 need_deleted.push(merged_isoform_rec.signature);
-                // buf.clear();
 
+                // let sjs = merged_isoform_rec.get_common_splice_sites();
+                // sjs.iter().for_each(|sj| {
+                //     let offset_plus_genomeloc = MergedIsoformOffsetPlusGenomeLoc {
+                //         chrom_id: chroms
+                //             .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+                //             .unwrap(),
+                //         pos: *sj,
+                //         record_ptr: MergedIsoformOffsetPtr {
+                //             offset: merged_offset,
+                //             length: bytes_len,
+                //             n_splice_sites: sjs.len() as u32,
+                //         },
+                //     };
+
+                //     tmpidx.add_one(offset_plus_genomeloc);
+                // });
+
+                // // add the left and right position of a single read
+                // let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+                // read_ref_spans.iter().for_each(|position| {
+                //     let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
+                //         MergedIsoformOffsetPlusGenomeLoc {
+                //             chrom_id: chroms
+                //                 .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+                //                 .unwrap(),
+                //             pos: *position,
+                //             record_ptr: MergedIsoformOffsetPtr {
+                //                 offset: merged_offset,
+                //                 length: bytes_len,
+                //                 n_splice_sites: 0,
+                //             },
+                //         };
+                //     tmpidx.add_one(offset_plus_genomeloc);
+                // });
+
+                // merged_offset += bytes_len as u64;
+            }
+
+            // sort the tmp_vec by the first position
+            tmp_vec.sort_by(|a, b| {
+                let a_pos = a.get_start_pos();
+                let b_pos = b.get_start_pos();
+                if a.chrom_id == b.chrom_id {
+                    a_pos.cmp(&b_pos)
+                } else {
+                    a.chrom_id.cmp(&b.chrom_id)
+                }
+            });
+
+                // init the output file
+            // let mut merged_file_name_pre = PathBuf::from(MERGED_FILE_NAME);
+            // merged_file_name_pre.set_extension("tmp");
+
+            let mut isoform_archive_writer = IsoformArchiveWriter::create(&isoform_archive_base.with_extension(format!("tmp{}", chunks)));
+
+            // dump the sorted records to disk
+            let mut merged_offset = 0;
+            for merged_isoform_rec in tmp_vec.iter() {
+                let bytes_len = isoform_archive_writer.dump_to_disk(&merged_isoform_rec);
                 let sjs = merged_isoform_rec.get_common_splice_sites();
                 sjs.iter().for_each(|sj| {
-                    let offset_plus_genomeloc = MergedIsoformOffsetPlusGenomeLoc {
-                        chrom_id: chroms
-                            .get_chrom_idx(merged_isoform_rec.chrom.as_str())
-                            .unwrap(),
+                    let interim_record = MergedIsoformOffsetPlusGenomeLoc {
+                        chrom_id: merged_isoform_rec.chrom_id,
                         pos: *sj,
                         record_ptr: MergedIsoformOffsetPtr {
                             offset: merged_offset,
@@ -294,18 +366,15 @@ fn main() -> Result<()> {
                             n_splice_sites: sjs.len() as u32,
                         },
                     };
-
-                    tmpidx.add_one(offset_plus_genomeloc);
+                    tmpidx.add_one(interim_record);
                 });
 
-                // add the left and right position of a single read
+                // add the left and right position of a single read, this ensure the detection of fusion gene.
                 let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
                 read_ref_spans.iter().for_each(|position| {
                     let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
                         MergedIsoformOffsetPlusGenomeLoc {
-                            chrom_id: chroms
-                                .get_chrom_idx(merged_isoform_rec.chrom.as_str())
-                                .unwrap(),
+                            chrom_id: merged_isoform_rec.chrom_id,
                             pos: *position,
                             record_ptr: MergedIsoformOffsetPtr {
                                 offset: merged_offset,
@@ -318,34 +387,96 @@ fn main() -> Result<()> {
 
                 merged_offset += bytes_len as u64;
             }
+            tmp_vec.clear();
 
-            batches += 1;
+            tmpidx.dump_chunk(chunks);
+
+            chunks += 1;
             info!(
                 "Processed: {} records",
-                (batch_size * batches).to_formatted_string(&Locale::en)
+                (TMP_CHUNK_SIZE * chunks).to_formatted_string(&Locale::en)
             );
-            curr_batch = 0;
+            curr_chunk_size = 0;
             for sig in need_deleted.iter() {
                 merged_map.remove(sig);
             }
 
-            if batches % 10 == 0 {
+            if chunks % 10 == 0 {
                 // info!("Processed {} batches", batches);
                 merged_map.shrink_to_fit();
             }
 
             need_deleted.clear();
+            isoform_archive_writer.close_file()?;
         }
     }
 
+   
+    let merged_offset = 0;
+
     for (_, merged_isoform_rec) in &merged_map {
-        let bytes_len = isoform_archive.dump_to_disk(&merged_isoform_rec);
+        // let bytes_len = isoform_archive.dump_to_disk(&merged_isoform_rec);
+        // let sjs = merged_isoform_rec.get_common_splice_sites();
+        // sjs.iter().for_each(|sj| {
+        //     let interim_record = MergedIsoformOffsetPlusGenomeLoc {
+        //         chrom_id: chroms
+        //             .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+        //             .unwrap(),
+        //         pos: *sj,
+        //         record_ptr: MergedIsoformOffsetPtr {
+        //             offset: merged_offset,
+        //             length: bytes_len,
+        //             n_splice_sites: sjs.len() as u32,
+        //         },
+        //     };
+        //     tmpidx.add_one(interim_record);
+              // });
+        tmp_vec.push(merged_isoform_rec);
+
+
+  
+
+        // add the left and right position of a single read, this ensure the detection of fusion gene.
+        // let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+        // read_ref_spans.iter().for_each(|position| {
+        //     let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
+        //         MergedIsoformOffsetPlusGenomeLoc {
+        //             chrom_id: chroms
+        //                 .get_chrom_idx(merged_isoform_rec.chrom.as_str())
+        //                 .unwrap(),
+        //             pos: *position,
+        //             record_ptr: MergedIsoformOffsetPtr {
+        //                 offset: merged_offset,
+        //                 length: bytes_len,
+        //                 n_splice_sites: 0,
+        //             },
+        //         };
+        //     tmpidx.add_one(offset_plus_genomeloc);
+        // });
+
+        // merged_offset += bytes_len as u64;
+    }
+
+    let mut isoform_archive_writer = IsoformArchiveWriter::create(&isoform_archive_base.with_extension(format!("tmp{}", chunks)));
+    // dump the sorted records to disk
+
+    tmp_vec.sort_by(|a, b| {
+        let a_pos = a.get_start_pos();
+        let b_pos = b.get_start_pos();
+        if a.chrom_id == b.chrom_id {
+            a_pos.cmp(&b_pos)
+        } else {
+            a.chrom_id.cmp(&b.chrom_id)
+        }
+    });
+
+    let mut merged_offset = 0;
+    for merged_isoform_rec in tmp_vec.iter() {
+        let bytes_len = isoform_archive_writer.dump_to_disk(&merged_isoform_rec);
         let sjs = merged_isoform_rec.get_common_splice_sites();
         sjs.iter().for_each(|sj| {
             let interim_record = MergedIsoformOffsetPlusGenomeLoc {
-                chrom_id: chroms
-                    .get_chrom_idx(merged_isoform_rec.chrom.as_str())
-                    .unwrap(),
+                chrom_id: merged_isoform_rec.chrom_id,
                 pos: *sj,
                 record_ptr: MergedIsoformOffsetPtr {
                     offset: merged_offset,
@@ -355,15 +486,14 @@ fn main() -> Result<()> {
             };
             tmpidx.add_one(interim_record);
         });
+        // merged_offset += bytes_len as u64;
 
-        // add the left and right position of a single read
+        // add the left and right position of a single read, this ensure the detection of fusion gene.
         let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
         read_ref_spans.iter().for_each(|position| {
             let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
                 MergedIsoformOffsetPlusGenomeLoc {
-                    chrom_id: chroms
-                        .get_chrom_idx(merged_isoform_rec.chrom.as_str())
-                        .unwrap(),
+                    chrom_id: merged_isoform_rec.chrom_id,
                     pos: *position,
                     record_ptr: MergedIsoformOffsetPtr {
                         offset: merged_offset,
@@ -376,9 +506,14 @@ fn main() -> Result<()> {
 
         merged_offset += bytes_len as u64;
     }
+
+    isoform_archive_writer.close_file()?;
+
+    tmpidx.dump_chunk(chunks);
+
     info!(
         "Processed: {} records",
-        (batch_size * batches + 1 + curr_batch).to_formatted_string(&Locale::en)
+        (TMP_CHUNK_SIZE * chunks + 1 + curr_chunk_size).to_formatted_string(&Locale::en)
     );
 
     info!(
@@ -386,7 +521,7 @@ fn main() -> Result<()> {
         &cli.outdir.join(MERGED_FILE_NAME).display()
     );
 
-    isoform_archive.close_file()?;
+    
 
     info!(
         "Dump tmpidx chunks to disk: {}",
@@ -401,8 +536,8 @@ fn main() -> Result<()> {
     info!("Dumping tmpidx to disk...");
 
     tmpidx.finalize(
-        &cli.outdir.join(merged_file_name_pre),
-        &cli.outdir.join(MERGED_FILE_NAME),
+   
+        isoform_archive_base,
     );
 
     // write the chromsome map file

@@ -6,17 +6,17 @@ use std::{
 
 use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffsetPtr};
 
-pub struct IsoformArchive {
+pub struct IsoformArchiveWriter {
     writer: BufWriter<File>,
     buf: Vec<u8>,
 }
 
-impl IsoformArchive {
-    pub fn create(path: &Path) -> IsoformArchive {
+impl IsoformArchiveWriter {
+    pub fn create(path: &Path) -> IsoformArchiveWriter {
         let file = File::create(path).expect("Failed to open file");
         let writer = BufWriter::new(file);
         let buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-        IsoformArchive { writer, buf }
+        IsoformArchiveWriter { writer, buf }
     }
 
     pub fn dump_to_disk(&mut self, record: &MergedIsoform) -> u32 {
