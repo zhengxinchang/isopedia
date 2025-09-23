@@ -1,3 +1,4 @@
+use crate::constants::TMP_CHUNK_SIZE;
 use crate::constants::{MAGIC, ORDER};
 use clap::error;
 use indexmap::IndexMap;
@@ -5,6 +6,7 @@ use itertools::Itertools;
 use log::info;
 use log::error;
 use memmap2::Mmap;
+use num_format::{Locale, ToFormattedString};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -117,11 +119,11 @@ impl Tmpindex {
     /// the final output would be a sorted tmpidx file , a rewritten record data file
     ///
     /// this function is the replace for the previous dump_to_disk function and rewrite_sorted_records function
-    pub fn finalize(&mut self, new_record_data_path: &PathBuf) {
+    pub fn finalize(&mut self, merged_data_name_base: &PathBuf) {
         // 同步写入新的 tmpdix和 record data file 
         // 明天只需要work on这个函数就可以了
         
-
+        info!("{}",&merged_data_name_base.display());
 
         info!(
             "Merging {} chunk files to final tmpidx file: {}",
@@ -130,9 +132,12 @@ impl Tmpindex {
         );
 
         // tmpidx writer
-        let mut tmpidx_writer =
-            fs::File::create(&self.file_name).expect("Can not create tmpidx file");
-
+        // let mut tmpidx_writer =
+        //     fs::File::create(&self.file_name).expect("Can not create tmpidx file");
+        let mut tmpidx_writer = BufWriter::with_capacity(
+            64 * 1024 * 1024,
+            fs::File::create(&self.file_name).expect("Can not create tmpidx file"),
+        );
         tmpidx_writer
             .seek(std::io::SeekFrom::Start(8))
             .expect("Can not move the cursor to start after write interim index file..");
@@ -140,14 +145,14 @@ impl Tmpindex {
         let mut chrom_count_map = IndexMap::new();
 
         // k-way merge the chunk files
-        let file_list = (0..self.chunks)
+        let tmp_file_list = (0..self.chunks)
             .map(|i| self.file_name.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
-        let mut readers = file_list
+        let mut readers = tmp_file_list
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
-                let reader = BufReader::new(file);
+                let reader = BufReader::with_capacity(10* 1024 * 1024, file);
                 reader
             })
             .collect::<Vec<_>>();
@@ -155,15 +160,40 @@ impl Tmpindex {
         let mut total_idx_n = 0;
 
         // let mut processed_offsets = FxHashSet::default();
-        let mut offset_mapping: FxHashMap<u64, u64> = FxHashMap::default();
+        let mut offset_mapping_vec: Vec<FxHashMap<u64, u64>> = Vec::new();
+
+        for _ in 0..self.chunks {
+            offset_mapping_vec.push(FxHashMap::default());
+        }
 
         // mmap the input file
-        let data_file = fs::File::open(record_data_path).expect("Can not open record data file");
-        let mmap = unsafe { Mmap::map(&data_file).expect("mmap failed") };
 
+        let merged_data_file_list = (0..self.chunks)
+            .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
+            .collect::<Vec<_>>();
+
+        // dbg!(&merged_data_file_list);
+
+        let data_mmaps = merged_data_file_list
+            .iter()
+            .map(|path| {
+                let file = fs::File::open(path).expect("Can not open chunk file");
+                let mmap = unsafe { Mmap::map(&file).expect("mmap failed") };
+                mmap.advise(memmap2::Advice::Sequential).expect("Can not set mmap advice");
+                mmap
+
+            })
+            .collect::<Vec<_>>();
+
+            // advice to seqeuntial read
+            // for mmap in data_mmaps.iter() {
+            //     mmap.advise(memmap2::Advice::Sequential).expect("Can not set mmap advice");
+            // }
         // prepare writer
-        let mut data_writer = BufWriter::new(
-            fs::File::create(new_record_data_path).expect("Can not create new record data file"),
+
+        let mut data_writer = BufWriter::with_capacity(
+            64 * 1024 * 1024, // 64MB
+            fs::File::create(merged_data_name_base).expect("Can not create new record data file"),
         );
 
         let mut new_offset: u64 = 0;
@@ -191,6 +221,10 @@ impl Tmpindex {
 
             total_idx_n += 1;
 
+            if total_idx_n % TMP_CHUNK_SIZE as u64 == 0 {
+                info!("write {} offsets...", total_idx_n.to_formatted_string(&Locale::en));
+            }
+
             if let Some(rec) = readers[idx]
                 .by_ref()
                 .bytes()
@@ -207,7 +241,7 @@ impl Tmpindex {
             let mut interim_rec = interim_rec.clone();
             let old_offset = interim_rec.record_ptr.offset;
 
-            if let Some(&mapped_offset) = offset_mapping.get(&old_offset) {
+            if let Some(&mapped_offset) = offset_mapping_vec[idx].get(&old_offset) {
                 interim_rec.record_ptr.offset = mapped_offset;
 
                 tmpidx_writer
@@ -218,11 +252,11 @@ impl Tmpindex {
             }
 
             // first time seeing this record
-            offset_mapping.insert(old_offset, new_offset);
+            offset_mapping_vec[idx].insert(old_offset, new_offset);
 
             let length = interim_rec.record_ptr.length as usize;
 
-            let slice = &mmap[old_offset as usize..old_offset as usize + length];
+            let slice = &data_mmaps[idx][old_offset as usize..old_offset as usize + length];
 
             data_writer
                 .write_all(slice)
@@ -248,7 +282,7 @@ impl Tmpindex {
         }
 
 
-        info!("Total {} index records written, total {} unique records in the record data file", total_idx_n, offset_mapping.len());
+        info!("Total {} index records written", total_idx_n);
 
         if self.meta.data_size != total_idx_n {
             panic!("The total index records merged does not match the original size, consider the index is corrupted?");
@@ -278,18 +312,24 @@ impl Tmpindex {
 
         info!("Clean up temporary files...");
 
-        // // remove chunk files
-        // for path in file_list.iter() {
-        //     fs::remove_file(path).expect("Can not remove chunk file after merge");
-        // }
+        // remove chunk files
+        for path in tmp_file_list.iter() {
+            fs::remove_file(path).expect("Can not remove chunk file after merge");
+        }
 
-        // // remove old record data file
+        // remove old record data file
+
+        for path in merged_data_file_list.iter() {
+            fs::remove_file(path).expect("Can not remove old record data chunk file");
+        }
+
         // fs::remove_file(record_data_path).expect("Can not remove old record data file");
     }
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::open(file_name).expect("Can not open file");
-        let mut reader = BufReader::new(fs::File::open(file_name).expect("Can not open file"));
+        let mut reader = BufReader::with_capacity( 64 *1024 *1024, file);
+        let file2 = fs::File::open(file_name).expect("Can not open file");
         let mut interim_index = Tmpindex {
             meta_start: 0,
             meta: TmpindexMeta {
@@ -298,7 +338,7 @@ impl Tmpindex {
                 data_size: 0,
             },
             offsets: Vec::new(),
-            file: file,
+            file: file2,
             file_name: file_name.clone(),
             chunks: 0,
         };

@@ -101,8 +101,12 @@ fn main() -> Result<()> {
 
     info!("Loading...");
     let mut tmpidx = Tmpindex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
-
+    // info!("Indexing...");
+    let nchrs = chrom_map.get_size();
+    let mut cur_chr = 0;
     for chrom_id in chrom_map.get_chrom_idxs() {
+        cur_chr += 1;
+        info!("Indexing {}/{}th chromosome", cur_chr, nchrs);
         let blocks = tmpidx.get_blocks(chrom_id);
         if blocks.len() == 0 {
             continue;

@@ -465,7 +465,7 @@ impl SingleSampleReader {
     pub fn new(file_path: &str) -> SingleSampleReader {
         let file = File::open(file_path).expect("Can not read file...");
         let decoder = GzDecoder::new(file);
-        let reader = BufReader::new(decoder);
+        let reader = BufReader::with_capacity(10*1024*1024, decoder);
         let mut agg_file_reader = SingleSampleReader {
             file_name: file_path.to_string(),
             offset: 0,

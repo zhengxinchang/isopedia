@@ -60,7 +60,7 @@ impl ChromMapping {
         }
     }
 
-    pub fn udpate_from_string(&mut self, string: &str) {
+    pub fn update_from_string(&mut self, string: &str) {
         for chrom in string.trim().split('\t').filter(|x| !x.is_empty()) {
             self.add_chrom(chrom.to_string());
         }

@@ -277,6 +277,7 @@ fn split_manifest(file: &PathBuf, outprefix: &PathBuf, each_size: usize) -> Resu
     Ok(())
 }
 
+#[allow(dead_code)]
 fn merge_manifest(files: &Vec<PathBuf>, out_path: &PathBuf) -> Result<()> {
     todo!("Implement merge_manifest");
     Ok(())

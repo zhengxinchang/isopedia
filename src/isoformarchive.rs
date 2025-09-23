@@ -14,7 +14,7 @@ pub struct IsoformArchiveWriter {
 impl IsoformArchiveWriter {
     pub fn create(path: &Path) -> IsoformArchiveWriter {
         let file = File::create(path).expect("Failed to open file");
-        let writer = BufWriter::new(file);
+        let writer = BufWriter::with_capacity(10 * 1024 * 1024, file);
         let buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
         IsoformArchiveWriter { writer, buf }
     }
