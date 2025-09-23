@@ -365,7 +365,7 @@ fn main() -> Result<()> {
             info!(
                 "Processed: {} chunks, {} records",
                 chunks.to_formatted_string(&Locale::en),
-                (TMP_CHUNK_SIZE * chunks ).to_formatted_string(&Locale::en)
+                (TMP_CHUNK_SIZE * chunks).to_formatted_string(&Locale::en)
             );
             curr_chunk_size = 0;
             for sig in &signatures_to_remove {
@@ -388,7 +388,6 @@ fn main() -> Result<()> {
         ));
     }
 
-
     // dump the sorted records to disk
 
     tmp_vec.sort_by(|a, b| {
@@ -398,7 +397,7 @@ fn main() -> Result<()> {
             a.0.cmp(&b.0)
         }
     });
-    
+
     let mut isoform_archive_writer = IsoformArchiveWriter::create(
         &isoform_archive_base.with_extension(format!("chunk{}", chunks)),
     );

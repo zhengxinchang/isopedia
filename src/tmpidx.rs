@@ -3,8 +3,8 @@ use crate::constants::{MAGIC, ORDER};
 use clap::error;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use log::info;
 use log::error;
+use log::info;
 use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -84,9 +84,10 @@ impl Tmpindex {
     }
 
     pub fn dump_chunk(&mut self, chunk_idx: usize) {
-
         if chunk_idx != self.chunks {
-            error!("The chunk index of isoform archive does not match the current tmpidx chunk index");
+            error!(
+                "The chunk index of isoform archive does not match the current tmpidx chunk index"
+            );
             std::process::exit(1);
         }
 
@@ -120,10 +121,10 @@ impl Tmpindex {
     ///
     /// this function is the replace for the previous dump_to_disk function and rewrite_sorted_records function
     pub fn finalize(&mut self, merged_data_name_base: &PathBuf) {
-        // 同步写入新的 tmpdix和 record data file 
+        // 同步写入新的 tmpdix和 record data file
         // 明天只需要work on这个函数就可以了
-        
-        info!("{}",&merged_data_name_base.display());
+
+        info!("{}", &merged_data_name_base.display());
 
         info!(
             "Merging {} chunk files to final tmpidx file: {}",
@@ -152,7 +153,7 @@ impl Tmpindex {
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
-                let reader = BufReader::with_capacity(10* 1024 * 1024, file);
+                let reader = BufReader::with_capacity(10 * 1024 * 1024, file);
                 reader
             })
             .collect::<Vec<_>>();
@@ -179,16 +180,16 @@ impl Tmpindex {
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
                 let mmap = unsafe { Mmap::map(&file).expect("mmap failed") };
-                mmap.advise(memmap2::Advice::Sequential).expect("Can not set mmap advice");
+                mmap.advise(memmap2::Advice::Sequential)
+                    .expect("Can not set mmap advice");
                 mmap
-
             })
             .collect::<Vec<_>>();
 
-            // advice to seqeuntial read
-            // for mmap in data_mmaps.iter() {
-            //     mmap.advise(memmap2::Advice::Sequential).expect("Can not set mmap advice");
-            // }
+        // advice to seqeuntial read
+        // for mmap in data_mmaps.iter() {
+        //     mmap.advise(memmap2::Advice::Sequential).expect("Can not set mmap advice");
+        // }
         // prepare writer
 
         let mut data_writer = BufWriter::with_capacity(
@@ -222,7 +223,10 @@ impl Tmpindex {
             total_idx_n += 1;
 
             if total_idx_n % TMP_CHUNK_SIZE as u64 == 0 {
-                info!("write {} offsets...", total_idx_n.to_formatted_string(&Locale::en));
+                info!(
+                    "write {} offsets...",
+                    total_idx_n.to_formatted_string(&Locale::en)
+                );
             }
 
             if let Some(rec) = readers[idx]
@@ -281,7 +285,6 @@ impl Tmpindex {
             _curr_offset += *count;
         }
 
-
         info!("Total {} index records written", total_idx_n);
 
         if self.meta.data_size != total_idx_n {
@@ -328,7 +331,7 @@ impl Tmpindex {
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::open(file_name).expect("Can not open file");
-        let mut reader = BufReader::with_capacity( 64 *1024 *1024, file);
+        let mut reader = BufReader::with_capacity(64 * 1024 * 1024, file);
         let file2 = fs::File::open(file_name).expect("Can not open file");
         let mut interim_index = Tmpindex {
             meta_start: 0,

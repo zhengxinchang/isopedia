@@ -68,7 +68,12 @@ impl Ord for MergedIsoform {
 }
 
 impl MergedIsoform {
-    pub fn init(aggr_isofrom: &AggrRead, sample_size: usize, sample_idx: u32,chrom_id:u16) -> MergedIsoform {
+    pub fn init(
+        aggr_isofrom: &AggrRead,
+        sample_size: usize,
+        sample_idx: u32,
+        chrom_id: u16,
+    ) -> MergedIsoform {
         let mut aggr_record = MergedIsoform {
             signature: aggr_isofrom.signature,
             total_evidence: aggr_isofrom.evidence,
