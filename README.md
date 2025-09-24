@@ -26,13 +26,13 @@ isopeida consists of multiple binaries that have prefix isopedia-*. This naming 
 
 **Download prebuild index and run**
 ```bash
-isopedia-anno-isoform -i index/ -g query.gtf -o isoform.anno.tsv
+isopedia isoform -i index/ -g query.gtf -o isoform.anno.tsv
 
-isopedia-anno-fusion  -i index/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
+isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
 
-isopedia-anno-fusion  -i index/ -P fusion_query.bed -o fusion.anno.tsv
+isopedia fusion  -i index/ -P fusion_query.bed -o fusion.anno.tsv
 
-isopedia-anno-fusion  -i index/ -g gene.gtf -o fusion.discovery.tsv
+isopedia fusion  -i index/ -g gene.gtf -o fusion.discovery.tsv
 ```
 
 **Build your own index**
@@ -58,19 +58,19 @@ You can find example files and commands at here [click to expand]
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
 # extract isoform signals on each bam individually
-isopedia-extr -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
-isopedia-extr -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
+isopedia extr -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
+isopedia extr -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 
 # make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
 
 # aggregate, only first two column will be read in this step.
-isopedia-aggr  -i manifest.tsv -o index/
+isopedia aggr -i manifest.tsv -o index/
 
 # build index. provide the same manifest file, the rest of meta columns will be read.
 isopedia-idx  -i index/ -m manifest.tsv 
 
 # test your index by run a small annotation task.
-isopedia-anno-isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.tsv
+isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.tsv
 
 ```
 </details>
@@ -93,7 +93,7 @@ search transcripts from input gtf file and return how many samples in the index 
 ### Example:
 
 ```bash
-isopedia-anno-isoform -i index/ -g query.gtf -f 15 -o out.tsv.gz
+isopedia isoform -i index/ -g query.gtf -f 15 -o out.tsv.gz
 ```
 
 key parameters:
@@ -112,7 +112,7 @@ All parameters:
 </summary>
 
 ```bash
-Usage: isopedia-anno-isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF>
+Usage: isopedia isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF>
 
 Options:
   -i, --idxdir <IDXDIR>
@@ -202,10 +202,10 @@ search fusion from the index and report evidence.
 
 ```bash
 # query a single fusion
-isopedia-anno-fusion -i index/ -f 10 -p chr1:pos1,chr2:pos2 -o fusion.anno.bed.gz
+isopedia fusion -i index/ -f 10 -p chr1:pos1,chr2:pos2 -o fusion.anno.bed.gz
 
 # query multiple fusions at the same time
-isopedia-anno-fusion -i index/ -f 10 -P fusion_breakpoints.bed -o fusion_all.anno.bed.gz
+isopedia fusion -i index/ -f 10 -P fusion_breakpoints.bed -o fusion_all.anno.bed.gz
 ```
 
 <details>
@@ -216,7 +216,7 @@ All parameters:
 
 ```bash
 
-Usage: isopedia-anno-fusion [OPTIONS] --idxdir <IDXDIR> --output <OUTPUT>
+Usage: isopedia fusion [OPTIONS] --idxdir <IDXDIR> --output <OUTPUT>
 
 Options:
   -i, --idxdir <IDXDIR>
@@ -284,7 +284,7 @@ search fusion from the index and report evidence.
 
 ```bash
 
-isopedia-anno-fusion -i index/  -G gene.gtf -o fusion.discovery.out.gz
+isopedia fusion -i index/  -G gene.gtf -o fusion.discovery.out.gz
 ```
 
 key parameters:
@@ -325,7 +325,7 @@ This command is designed for cases where you have a specific splice junction of 
 ### Example:
 
 ```bash
-isopedia-anno-splice \
+isopedia splice \
   -i index/ \
   -g gencode.v47.basic.chr22.gtf \
   -p chr22:41100500-41101500 \
@@ -381,9 +381,9 @@ https://zhengxinchang.github.io/isopedia/
 ## ENCODE long-read RNA-seq datasets(107 samples)
 | Step                       | Peak Memory Usage (GB) |
 |----------------------------|------------------------|
-| isopedia-aggr              | 7.12                   |
+| isopedia aggr             | 7.12                   |
 | isopedia-idx               | 3.84                   |
-| isopedia-anno-isoform(158K transcripts from GENCODE)      | 15.82                  |
+| isopedia isoform(158K transcripts from GENCODE)      | 15.82                  |
 
 
 
