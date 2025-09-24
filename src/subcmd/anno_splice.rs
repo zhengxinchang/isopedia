@@ -1,13 +1,13 @@
 use anyhow::Result;
 use clap::{arg, Parser};
-use isopedia::bptree::BPForest;
-use isopedia::breakpoints::{self, BreakPointPair};
-use isopedia::dataset_info::DatasetInfo;
-use isopedia::isoform::MergedIsoform;
-use isopedia::isoformarchive::read_record_from_mmap;
-use isopedia::utils::{get_total_memory_bytes, warmup};
-use isopedia::writer::MyGzWriter;
-use isopedia::{constants::*, meta, utils};
+use crate::bptree::BPForest;
+use crate::breakpoints::{self, BreakPointPair};
+use crate::dataset_info::DatasetInfo;
+use crate::isoform::MergedIsoform;
+use crate::isoformarchive::read_record_from_mmap;
+use crate::utils::{get_total_memory_bytes, warmup};
+use crate::writer::MyGzWriter;
+use crate::{constants::*, meta, utils};
 use log::{error, info, warn};
 use memmap2::Mmap;
 use serde::Serialize;
@@ -27,7 +27,7 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.
 
 ")]
-struct AnnSpliceCli {
+pub struct AnnSpliceCli {
     /// Path to the index directory
     #[arg(short, long)]
     pub idxdir: PathBuf,
@@ -149,10 +149,9 @@ fn greetings(args: &AnnSpliceCli) {
     eprintln!("Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.");
 }
 
-fn main() -> Result<()> {
+pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
-    let cli = AnnSpliceCli::parse();
     cli.validate();
     greetings(&cli);
 
@@ -187,7 +186,7 @@ fn main() -> Result<()> {
             BreakPointPair::parse_string(&splice_str).expect("Can not parse splice junction...");
         vec![bp]
     } else if cli.splice_bed.is_some() {
-        let splice_bed_path = cli.splice_bed.unwrap();
+        let splice_bed_path = cli.splice_bed.clone().unwrap();
         info!(
             "parse breakpoints pairs from file {}",
             &splice_bed_path.display()

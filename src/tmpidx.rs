@@ -1,4 +1,4 @@
-use crate::constants::TMP_CHUNK_SIZE;
+use crate::constants::{BUF_SIZE, LARGE_BUF_SIZE, TMP_CHUNK_SIZE};
 use crate::constants::{MAGIC, ORDER};
 use clap::error;
 use indexmap::IndexMap;
@@ -153,7 +153,7 @@ impl Tmpindex {
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
-                let reader = BufReader::with_capacity(10 * 1024 * 1024, file);
+                let reader = BufReader::with_capacity(BUF_SIZE, file);
                 reader
             })
             .collect::<Vec<_>>();
@@ -331,7 +331,7 @@ impl Tmpindex {
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::open(file_name).expect("Can not open file");
-        let mut reader = BufReader::with_capacity(64 * 1024 * 1024, file);
+        let mut reader = BufReader::with_capacity(LARGE_BUF_SIZE, file);
         let file2 = fs::File::open(file_name).expect("Can not open file");
         let mut interim_index = Tmpindex {
             meta_start: 0,

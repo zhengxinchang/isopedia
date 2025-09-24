@@ -1,8 +1,8 @@
 [package]
 name = "isopedia"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-
+authors = [ "Xinchang Zheng", "Fritz J Sedlazeck"]
 
 [dependencies]
 lru="0.12.5"

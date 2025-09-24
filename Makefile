@@ -19,25 +19,25 @@ push:
 
 t1:build
 
-	target/release/isopedia-extr \
+	target/release/isopedia extr \
 	-i /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
 	-o flnc.isoform.out
 
 t11:build
-	target/release/isopedia-extr \
+	target/release/isopedia extr \
 	-i test/bams/hg002.directrna.B-Lymphocyte.bam  \
 	-o test/ont.isoform.out
 
-	target/release/isopedia-extr \
+	target/release/isopedia extr \
 	-i test/bams/hg002.pbcluster.bam \
 	-o test/clustered.mapped.isoform.out
 
-	target/release/isopedia-extr \
+	target/release/isopedia extr \
 	-i test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out
 
-t1111:build 
-	target/release/isopedia-extr \
+t1111:build
+	target/release/isopedia extr \
 	-i test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out -d 
 
@@ -50,13 +50,13 @@ scp2bcm:
 
 
 t2:build
-	/usr/bin/time -v target/release/isopedia-aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
+	/usr/bin/time -v target/release/isopedia aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
 
 t3:build
-	target/release/isopedia-idx  -i test/HG002_idx/ -m test/HG002.manifest.txt
+	target/release/isopedia idx  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
 t4:build
-	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
+	target/release/isopedia isoform -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt
 
 t41:build
 	target/release/isopedia-anno-isoform -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.txt

@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
-use isopedia::{
+use crate::{
     bptree::BPForest,
     constants::*,
     dataset_info::DatasetInfo,
@@ -50,7 +50,7 @@ chr2 \t 50795173 \t chr17 \t 61368325 \t BCAS4:BCAS3,UHR(optional)
 isopedia-anno-fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.txt
 
 "#)]
-struct AnnFusionCli {
+pub struct AnnFusionCli {
     /// index directory
     #[arg(short, long)]
     pub idxdir: PathBuf,
@@ -266,7 +266,7 @@ fn anno_single_fusion(
     // process the right targets
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform: isopedia::isoform::MergedIsoform =
+        let merged_isoform: MergedIsoform =
             isoformarchive::read_record_from_mmap(&archive_mmap, &target, archive_buf);
         let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
             &breakpoints.0 .0,
@@ -340,8 +340,7 @@ fn parse_bed(line: &str) -> Result<BreakpointType> {
     Ok(((chr1, pos1), (chr2, pos2), fusion_id))
 }
 
-fn main() -> Result<()> {
-    let cli = AnnFusionCli::parse();
+pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
     cli.validate();
     greetings(&cli);
 

@@ -11,13 +11,14 @@ use rustc_hash::FxHashMap;
 use std::env;
 use std::path::PathBuf;
 
-use isopedia::{
+use crate::{
     reads::{AggrRead, SingleRead},
     writer::MyGzWriter,
 };
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Strand {
@@ -76,7 +77,7 @@ impl Strand {
 #[command(about = "
 Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 ", long_about = None)]
-struct ExtrCli {
+pub struct ExtrCli {
     /// Input file in BAM/CRAM format
     #[arg(short = 'i', long = "bam")]
     pub bam: PathBuf,
@@ -103,7 +104,7 @@ struct ExtrCli {
 }
 
 impl ExtrCli {
-    fn validate(&self) {
+    pub fn validate(&self) {
         let mut is_ok = true;
         if !self.bam.exists() {
             error!("--bam: input file {} does not exist", self.bam.display());
@@ -133,11 +134,11 @@ fn greetings(args: &ExtrCli) {
     }
 }
 
-fn main() {
+pub fn run_extr(cli: &ExtrCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
-    let cli = ExtrCli::parse();
+    // let cli = ExtrCli::parse();
     cli.validate();
     greetings(&cli);
     let bam_path = &cli.bam;
@@ -360,4 +361,5 @@ fn main() {
         skipped_records.to_formatted_string(&Locale::en)
     );
     info!("Finished");
+    Ok(())
 }

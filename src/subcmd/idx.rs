@@ -2,7 +2,7 @@ use std::{env, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
-use isopedia::{
+use crate::{
     bptree::BPTree, chromosome::ChromMapping, constants::*, dataset_info::DatasetInfo, meta::Meta,
     tmpidx::Tmpindex,
 };
@@ -32,7 +32,7 @@ sample1     15             A
 sample2     37             B
 
 ")]
-struct IdxCli {
+pub struct IdxCli {
     #[arg(
         short,
         long,
@@ -86,11 +86,10 @@ fn greetings(args: &IdxCli) {
     }
 }
 
-fn main() -> Result<()> {
+pub fn run_idx(cli: &IdxCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
-    let cli = IdxCli::parse();
     cli.validate();
     greetings(&cli);
 

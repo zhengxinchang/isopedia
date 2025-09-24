@@ -1,14 +1,14 @@
 use std::{
     env,
     fs::File,
-    io::{BufReader, BufWriter},
+    io::{BufReader},
     path::PathBuf,
     vec,
 };
 
 use anyhow::Result;
 use clap::{command, Parser};
-use isopedia::{
+use crate::{
     bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker, isoform::{self, MergedIsoform}, isoformarchive::read_record_from_mmap, meta::Meta, output, tmpidx::MergedIsoformOffsetPtr, utils::{self, get_total_memory_bytes, warmup}, writer::MyGzWriter
 };
 use log::{error, info};
@@ -25,7 +25,7 @@ Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
 ", long_about = None)]
 #[clap(after_long_help = "
 ")]
-struct AnnIsoCli {
+pub struct AnnIsoCli {
     /// Path to the index directory
     #[arg(short, long)]
     pub idxdir: PathBuf,
@@ -128,11 +128,10 @@ fn greetings(args: &AnnIsoCli) {
     }
 }
 
-fn main() -> Result<()> {
+pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
-    let cli = AnnIsoCli::parse();
     cli.validate();
     greetings(&cli);
 
@@ -142,7 +141,7 @@ fn main() -> Result<()> {
 
     info!("Search by gtf/gff file");
     let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
-        BufReader::new(std::fs::File::open(cli.gtf).expect("can not read gtf")),
+        BufReader::new(std::fs::File::open(cli.gtf.clone()).expect("can not read gtf")),
     );
 
     let gtf = TranscriptChunker::new(gtfreader);

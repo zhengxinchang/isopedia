@@ -11,6 +11,7 @@ pub mod isoformarchive;
 pub mod meta;
 pub mod output;
 pub mod reads;
+pub mod subcmd;
 pub mod tmpidx;
 pub mod utils;
 pub mod writer;

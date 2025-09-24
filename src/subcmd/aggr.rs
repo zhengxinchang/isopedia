@@ -2,7 +2,7 @@ use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, p
 
 use anyhow::Result;
 use clap::Parser;
-use isopedia::{
+use crate::{
     chromosome::ChromMapping,
     constants::*,
     dataset_info::DatasetInfo,
@@ -16,6 +16,8 @@ use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::collections::HashSet;
+
+use crate::constants::{CHROM_FILE_NAME, DATASET_INFO_FILE_NAME, MERGED_FILE_NAME, TMPIDX_FILE_NAME, TMP_CHUNK_SIZE};
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-aggr")]
@@ -38,7 +40,7 @@ Run aggregation:
 stix-iso aggr --input input.tsv --outdir index_dir
 
 ")]
-struct AggrCli {
+pub struct AggrCli {
     #[arg(
         short,
         long,
@@ -180,11 +182,10 @@ impl Display for HeapItem<AggrRead> {
     }
 }
 
-fn main() -> Result<()> {
+pub fn run_aggr(cli: &AggrCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
-    let cli = AggrCli::parse();
     cli.validate();
     greetings(&cli);
 
