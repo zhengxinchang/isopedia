@@ -1,16 +1,20 @@
-use std::{
-    env,
-    fs::File,
-    io::{BufReader},
-    path::PathBuf,
-    vec,
-};
+use std::{env, fs::File, io::BufReader, path::PathBuf, vec};
 
+use crate::{
+    bptree::BPForest,
+    constants::*,
+    dataset_info::DatasetInfo,
+    gtf::TranscriptChunker,
+    isoform::{self, MergedIsoform},
+    isoformarchive::read_record_from_mmap,
+    meta::Meta,
+    output,
+    tmpidx::MergedIsoformOffsetPtr,
+    utils::{self, get_total_memory_bytes, warmup},
+    writer::MyGzWriter,
+};
 use anyhow::Result;
 use clap::{command, Parser};
-use crate::{
-    bptree::BPForest, constants::*, dataset_info::DatasetInfo, gtf::TranscriptChunker, isoform::{self, MergedIsoform}, isoformarchive::read_record_from_mmap, meta::Meta, output, tmpidx::MergedIsoformOffsetPtr, utils::{self, get_total_memory_bytes, warmup}, writer::MyGzWriter
-};
 use log::{error, info};
 use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
@@ -21,7 +25,7 @@ use serde::Serialize;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+[Annotation] Annotate provided gtf file(transcripts/isoforms) with the index.
 ", long_about = None)]
 #[clap(after_long_help = "
 ")]
@@ -160,7 +164,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     mywriter.write_all_bytes("#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\tdetected\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes())?;
 
     dataset_info.get_sample_names().iter().for_each(|x| {
-
         mywriter
             .write_all_bytes(format!("\t{}", x).as_bytes())
             .expect("Failed to write sample header");
@@ -256,7 +259,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
             let mut outline = format!(
                 "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t{}\t",
-                        trans.chrom,
+                trans.chrom,
                 trans.start,
                 trans.end,
                 trans.get_transcript_length(),
@@ -268,49 +271,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
                 dataset_info.get_size(),
                 trans.get_attributes(),
-                FORMAT);
-
-            // write!(
-            //     writer,
-            //     "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t{}\t",
-            //     trans.chrom,
-            //     trans.start,
-            //     trans.end,
-            //     trans.get_transcript_length(),
-            //     trans.get_exon_count(),
-            //     trans.trans_id,
-            //     trans.gene_id,
-            //     confidence,
-            //     &cli.min_read,
-            //     acc_pos_count.iter().filter(|&&x| x > 0).count(),
-            //     dataset_info.get_size(),
-            //     trans.get_attributes(),
-            //     FORMAT
-            // )?;
-
-            // mywriter.write_all_bytes(
-            //     format!(
-            //         "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\tyes\t{}\t{}/{}\t{}\t{}\t",
-            //         trans.chrom,
-            //         trans.start,
-            //         trans.end,
-            //         trans.get_transcript_length(),
-            //         trans.get_exon_count(),
-            //         trans.trans_id,
-            //         trans.gene_id,
-            //         confidence,
-            //         &cli.min_read,
-            //         acc_pos_count.iter().filter(|&&x| x > 0).count(),
-            //         dataset_info.get_size(),
-            //         trans.get_attributes(),
-            //         FORMAT
-            //     )
-            //     .as_bytes(),
-            // )?;
+                FORMAT
+            );
             for (i, val) in acc_sample_evidence_arr.iter().enumerate() {
                 if i > 0 {
                     // write!(writer, "\t")?;
-                    outline.push('\t'  );
+                    outline.push('\t');
                 }
 
                 let cpm = utils::calc_cpm(val, &dataset_info.sample_total_evidence_vec[i]);
@@ -322,10 +288,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             outline.push('\n');
             mywriter.write_all_bytes(outline.as_bytes())?;
         } else {
-
             let mut output = format!(
                 "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\t0/{}\t{}\t{}\t",
-                                trans.chrom,
+                trans.chrom,
                 trans.start,
                 trans.end,
                 trans.get_transcript_length(),
@@ -338,32 +303,15 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 FORMAT
             );
 
-            // write!(
-            //     writer,
-            //     "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\t0/{}\t{}\t{}\t",
-            //     trans.chrom,
-            //     trans.start,
-            //     trans.end,
-            //     trans.get_transcript_length(),
-            //     trans.get_exon_count(),
-            //     trans.trans_id,
-            //     trans.gene_id,
-            //     &cli.min_read,
-            //     dataset_info.get_size(),
-            //     trans.get_attributes(),
-            //     FORMAT
-            // )?;
             let sample_count = dataset_info.get_sample_names().len();
             for i in 0..sample_count {
                 if i > 0 {
-                    // write!(writer, "\t")?;
                     output.push('\t');
                 }
-                // write!(writer, "0:0")?;
+
                 output.push_str("0:0");
             }
 
-            // write!(writer, "\n")?;
             output.push('\n');
             mywriter.write_all_bytes(output.as_bytes())?;
         }

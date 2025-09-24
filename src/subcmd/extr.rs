@@ -15,10 +15,10 @@ use crate::{
     reads::{AggrRead, SingleRead},
     writer::MyGzWriter,
 };
+use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Strand {
@@ -75,7 +75,7 @@ impl Strand {
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+[build index, step1] Extract raw isoform signals from each single BAM/CRAM file.
 ", long_about = None)]
 pub struct ExtrCli {
     /// Input file in BAM/CRAM format

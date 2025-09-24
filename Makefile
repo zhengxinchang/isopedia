@@ -10,7 +10,7 @@ strip:
 	
 pack: build 
 
-	tar -zcvf isopedia-`date +%Y%m%d`.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia-extr isopedia-aggr isopedia-idx isopedia-anno-isoform isopedia-anno-fusion isopedia-anno-splice isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
+	tar -zcvf isopedia-`date +%Y%m%d`.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
 
 
 push:

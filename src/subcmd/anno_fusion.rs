@@ -7,8 +7,6 @@ use std::{
     vec,
 };
 
-use anyhow::{anyhow, Context, Result};
-use clap::{command, Parser};
 use crate::{
     bptree::BPForest,
     constants::*,
@@ -20,6 +18,8 @@ use crate::{
     utils,
     writer::MyGzWriter,
 };
+use anyhow::{anyhow, Context, Result};
+use clap::{command, Parser};
 
 use log::{debug, error, info, warn};
 use memmap2::{Advice, Mmap};
@@ -31,7 +31,7 @@ use serde::Serialize;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+[Annotation/discovery] Annotate provided fusion breakpoints or discover potential gene fusion events(from provided GTF file) with the index.
 ", long_about = None)]
 #[clap(after_long_help = r#"
 Examples:

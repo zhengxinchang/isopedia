@@ -1,11 +1,11 @@
 use std::{env, path::PathBuf};
 
-use anyhow::Result;
-use clap::Parser;
 use crate::{
     bptree::BPTree, chromosome::ChromMapping, constants::*, dataset_info::DatasetInfo, meta::Meta,
     tmpidx::Tmpindex,
 };
+use anyhow::Result;
+use clap::Parser;
 use log::{error, info, warn};
 use serde::Serialize;
 
@@ -14,7 +14,7 @@ use serde::Serialize;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+[build index, step3] Build the tree index on the aggregated index folder.
 ", long_about = None)]
 #[clap(after_long_help = "
 

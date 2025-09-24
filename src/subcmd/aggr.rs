@@ -1,7 +1,5 @@
 use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
 
-use anyhow::Result;
-use clap::Parser;
 use crate::{
     chromosome::ChromMapping,
     constants::*,
@@ -11,20 +9,24 @@ use crate::{
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
 };
+use anyhow::Result;
+use clap::Parser;
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::collections::HashSet;
 
-use crate::constants::{CHROM_FILE_NAME, DATASET_INFO_FILE_NAME, MERGED_FILE_NAME, TMPIDX_FILE_NAME, TMP_CHUNK_SIZE};
+use crate::constants::{
+    CHROM_FILE_NAME, DATASET_INFO_FILE_NAME, MERGED_FILE_NAME, TMPIDX_FILE_NAME, TMP_CHUNK_SIZE,
+};
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-aggr")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+[build index, step2] Aggregate multiple samples(isoform signal file) into one index(folder).
 ", long_about = None)]
 #[clap(after_long_help = "Exmaple:
 

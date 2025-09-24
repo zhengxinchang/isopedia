@@ -1,5 +1,3 @@
-use anyhow::Result;
-use clap::{arg, Parser};
 use crate::bptree::BPForest;
 use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
@@ -8,6 +6,8 @@ use crate::isoformarchive::read_record_from_mmap;
 use crate::utils::{get_total_memory_bytes, warmup};
 use crate::writer::MyGzWriter;
 use crate::{constants::*, meta, utils};
+use anyhow::Result;
+use clap::{arg, Parser};
 use log::{error, info, warn};
 use memmap2::Mmap;
 use serde::Serialize;
@@ -20,7 +20,7 @@ use std::path::PathBuf;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-Contact: Xinchang Zheng <zhengxc93@gmail.com>, <xinchang.zheng@bcm.edu>
+[Annotation/visualization] Search all isoforms overlapping with the provided splice junction(s) and visualize the results.
 ", long_about = None)]
 #[clap(after_long_help = "
 
