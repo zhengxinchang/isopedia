@@ -34,6 +34,8 @@ clean up file path in meta object when buiding the index, and also remove the he
 vis tool, find reference isoform, dont overlap with min-max, instead overlap with splice sites?
 
 
+parse more comprehensively  of manifest. 
+
 
 AS 1 query
 

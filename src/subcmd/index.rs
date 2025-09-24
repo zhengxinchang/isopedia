@@ -32,7 +32,7 @@ sample1     15             A
 sample2     37             B
 
 ")]
-pub struct IdxCli {
+pub struct IndexCli {
     #[arg(
         short,
         long,
@@ -44,7 +44,7 @@ pub struct IdxCli {
     pub meta: Option<PathBuf>,
 }
 
-impl IdxCli {
+impl IndexCli {
     fn validate(&self) {
         let mut is_ok = true;
         if !self.idxdir.exists() {
@@ -78,7 +78,7 @@ impl IdxCli {
     }
 }
 
-fn greetings(args: &IdxCli) {
+fn greetings(args: &IndexCli) {
     eprintln!("\nIsopedia: [Indexing merged isoform signals]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
@@ -86,7 +86,7 @@ fn greetings(args: &IdxCli) {
     }
 }
 
-pub fn run_idx(cli: &IdxCli) -> Result<()> {
+pub fn run_idx(cli: &IndexCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 

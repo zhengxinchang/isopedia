@@ -1,6 +1,9 @@
 
 SHELL := /bin/bash
 
+VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+
+
 build:
 	cargo build --release
 	cargo build --release --target x86_64-unknown-linux-musl
@@ -10,8 +13,7 @@ strip:
 	
 pack: build 
 
-	tar -zcvf isopedia-`date +%Y%m%d`.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
-
+	tar -zcvf ver_release/isopedia-$(VERSION).musl.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
 
 push:
 	cargo fmt && git add . && git commit -m "WIP" && git push
@@ -19,41 +21,41 @@ push:
 
 t1:build
 
-	target/release/isopedia extr \
+	target/release/isopedia profile \
 	-i /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
 	-o flnc.isoform.out
 
 t11:build
-	target/release/isopedia extr \
+	target/release/isopedia profile \
 	-i test/bams/hg002.directrna.B-Lymphocyte.bam  \
 	-o test/ont.isoform.out
 
-	target/release/isopedia extr \
+	target/release/isopedia profile \
 	-i test/bams/hg002.pbcluster.bam \
 	-o test/clustered.mapped.isoform.out
 
-	target/release/isopedia extr \
+	target/release/isopedia profile \
 	-i test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out
 
 t1111:build
-	target/release/isopedia extr \
+	target/release/isopedia profile \
 	-i test/bams/hg002.flnc.minimap2.sorted.bam \
 	-o test/flnc.isoform.out -d 
 
 
 scp2bcm:
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-extr  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-profile  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
 	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-tool  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-aggr  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-idx  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-merge  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
+	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-index  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
 
 
 t2:build
-	/usr/bin/time -v target/release/isopedia aggr  -i test/HG002.manifest.txt -o test/HG002_idx/
+	/usr/bin/time -v target/release/isopedia merge  -i test/HG002.manifest.txt -o test/HG002_idx/
 
 t3:build
-	target/release/isopedia idx  -i test/HG002_idx/ -m test/HG002.manifest.txt
+	target/release/isopedia index  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
 t4:build
 	target/release/isopedia isoform -i test/HG002_idx/ -f 5 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.txt

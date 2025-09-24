@@ -191,3 +191,7 @@ pub fn check_index_dir(path: &Path) -> bool {
 
     true
 }
+
+pub fn line2fields(line: &str) -> Vec<String> {
+    line.split_whitespace().map(|s| s.to_string()).collect()
+}

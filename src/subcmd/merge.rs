@@ -8,10 +8,11 @@ use crate::{
     isoformarchive::IsoformArchiveWriter,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
+    utils::line2fields,
 };
 use anyhow::Result;
 use clap::Parser;
-use log::{error, info};
+use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -42,7 +43,7 @@ Run aggregation:
 stix-iso aggr --input input.tsv --outdir index_dir
 
 ")]
-pub struct AggrCli {
+pub struct MergeCli {
     #[arg(
         short,
         long,
@@ -52,12 +53,16 @@ pub struct AggrCli {
     )]
     pub input: PathBuf,
 
+    /// Chunk size for merging
+    #[arg(short = 'c', long, default_value_t = 1_000_000)]
+    pub chunk_size: usize,
+
     /// Output index directory
     #[arg(short, long)]
     pub outdir: PathBuf,
 }
 
-impl AggrCli {
+impl MergeCli {
     fn validate(&self) {
         let mut is_ok = true;
 
@@ -75,7 +80,12 @@ impl AggrCli {
             let mut uniq_path = HashSet::new();
             let mut uniq_name = HashSet::new();
             for (idx, line) in content.lines().enumerate() {
-                let fields: Vec<&str> = line.split('\t').collect();
+                let fields = line2fields(line);
+                if fields.is_empty() {
+                    warn!("Skipping empty line {} in input file", idx + 1);
+                    continue;
+                }
+
                 if fields.len() < 2 {
                     error!("--input: line {}: at least 2 columns required.", idx + 1);
                     is_ok = false;
@@ -90,7 +100,7 @@ impl AggrCli {
                 }
 
                 if idx > 0 {
-                    if !PathBuf::from(fields[1]).exists() {
+                    if !PathBuf::from(&fields[1]).exists() {
                         error!(
                             "--input: line {}: file {} does not exist, use absolute path",
                             idx + 1,
@@ -99,7 +109,7 @@ impl AggrCli {
                         is_ok = false;
                     }
 
-                    if uniq_name.contains(fields[0]) {
+                    if uniq_name.contains(&fields[0]) {
                         error!(
                             "--input: line {}: sample name {} is duplicated.",
                             idx + 1,
@@ -107,10 +117,10 @@ impl AggrCli {
                         );
                         is_ok = false;
                     } else {
-                        uniq_name.insert(fields[0]);
+                        uniq_name.insert(fields[0].clone());
                     }
 
-                    if uniq_path.contains(fields[1]) {
+                    if uniq_path.contains(&fields[1]) {
                         error!(
                             "--input: line {}: sample path {} is duplicated.",
                             idx + 1,
@@ -118,7 +128,7 @@ impl AggrCli {
                         );
                         is_ok = false;
                     } else {
-                        uniq_path.insert(fields[1]);
+                        uniq_path.insert(fields[1].clone());
                     }
                 }
             }
@@ -139,7 +149,7 @@ impl AggrCli {
     }
 }
 
-fn greetings(args: &AggrCli) {
+fn greetings(args: &MergeCli) {
     eprintln!("\nIsopedia: [Aggregate multiple samples]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
@@ -184,7 +194,7 @@ impl Display for HeapItem<AggrRead> {
     }
 }
 
-pub fn run_aggr(cli: &AggrCli) -> Result<()> {
+pub fn run_merge(cli: &MergeCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
@@ -219,7 +229,7 @@ pub fn run_aggr(cli: &AggrCli) -> Result<()> {
     // init the merge buffer
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
 
-    let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME));
+    let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME),cli.chunk_size);
 
     let isoform_archive_base = &cli.outdir.join(MERGED_FILE_NAME);
 
@@ -274,7 +284,7 @@ pub fn run_aggr(cli: &AggrCli) -> Result<()> {
         }
 
         // dump the buffer to disk
-        if curr_chunk_size >= TMP_CHUNK_SIZE {
+        if curr_chunk_size >= cli.chunk_size {
             info!("Processing chunk {}...", chunks);
 
             // First collect records to process and signatures to remove
@@ -368,7 +378,7 @@ pub fn run_aggr(cli: &AggrCli) -> Result<()> {
             info!(
                 "Processed: {} chunks, {} records",
                 chunks.to_formatted_string(&Locale::en),
-                (TMP_CHUNK_SIZE * chunks).to_formatted_string(&Locale::en)
+                (cli.chunk_size * chunks).to_formatted_string(&Locale::en)
             );
             curr_chunk_size = 0;
             for sig in &signatures_to_remove {
@@ -449,7 +459,7 @@ pub fn run_aggr(cli: &AggrCli) -> Result<()> {
     info!(
         "Processed: {} chunks, {} records",
         chunks.to_formatted_string(&Locale::en),
-        (TMP_CHUNK_SIZE * chunks + 1 + curr_chunk_size).to_formatted_string(&Locale::en)
+        (cli.chunk_size * chunks + 1 + curr_chunk_size).to_formatted_string(&Locale::en)
     );
 
     info!(

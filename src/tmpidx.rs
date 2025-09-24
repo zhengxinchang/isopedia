@@ -1,13 +1,12 @@
 use crate::constants::{BUF_SIZE, LARGE_BUF_SIZE, TMP_CHUNK_SIZE};
 use crate::constants::{MAGIC, ORDER};
-use clap::error;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::error;
 use log::info;
 use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Reverse,
@@ -43,6 +42,7 @@ pub struct Tmpindex {
     pub file_name: PathBuf,
     pub file: File,
     pub chunks: usize,
+    pub chunk_size: usize,
 }
 
 impl Tmpindex {
@@ -60,7 +60,7 @@ impl Tmpindex {
         self.memory_usage_bytes() as f64 / (1024.0 * 1024.0)
     }
 
-    pub fn create(file_name: &PathBuf) -> Tmpindex {
+    pub fn create(file_name: &PathBuf, chunk_size: usize) -> Tmpindex {
         let file = fs::File::create(file_name).expect("Can not create file");
         let interim_index = Tmpindex {
             meta_start: 0,
@@ -73,6 +73,7 @@ impl Tmpindex {
             file: file,
             file_name: file_name.clone(),
             chunks: 0,
+            chunk_size,
         };
 
         interim_index
@@ -121,9 +122,6 @@ impl Tmpindex {
     ///
     /// this function is the replace for the previous dump_to_disk function and rewrite_sorted_records function
     pub fn finalize(&mut self, merged_data_name_base: &PathBuf) {
-        // 同步写入新的 tmpdix和 record data file
-        // 明天只需要work on这个函数就可以了
-
         info!("{}", &merged_data_name_base.display());
 
         info!(
@@ -132,9 +130,6 @@ impl Tmpindex {
             self.file_name.display()
         );
 
-        // tmpidx writer
-        // let mut tmpidx_writer =
-        //     fs::File::create(&self.file_name).expect("Can not create tmpidx file");
         let mut tmpidx_writer = BufWriter::with_capacity(
             64 * 1024 * 1024,
             fs::File::create(&self.file_name).expect("Can not create tmpidx file"),
@@ -186,12 +181,6 @@ impl Tmpindex {
             })
             .collect::<Vec<_>>();
 
-        // advice to seqeuntial read
-        // for mmap in data_mmaps.iter() {
-        //     mmap.advise(memmap2::Advice::Sequential).expect("Can not set mmap advice");
-        // }
-        // prepare writer
-
         let mut data_writer = BufWriter::with_capacity(
             64 * 1024 * 1024, // 64MB
             fs::File::create(merged_data_name_base).expect("Can not create new record data file"),
@@ -222,7 +211,7 @@ impl Tmpindex {
 
             total_idx_n += 1;
 
-            if total_idx_n % TMP_CHUNK_SIZE as u64 == 0 {
+            if total_idx_n % self.chunk_size as u64 == 0 {
                 info!(
                     "write {} offsets...",
                     total_idx_n.to_formatted_string(&Locale::en)
@@ -344,6 +333,7 @@ impl Tmpindex {
             file: file2,
             file_name: file_name.clone(),
             chunks: 0,
+            chunk_size: 0,
         };
         let mut buffer = [0u8; 8];
         reader

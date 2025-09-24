@@ -1,17 +1,17 @@
 use clap::{Parser, Subcommand};
 
-use isopedia::subcmd::aggr::run_aggr;
-use isopedia::subcmd::aggr::AggrCli;
 use isopedia::subcmd::anno_fusion::run_anno_fusion;
 use isopedia::subcmd::anno_fusion::AnnFusionCli;
 use isopedia::subcmd::anno_isoform::run_anno_isoform;
 use isopedia::subcmd::anno_isoform::AnnIsoCli;
 use isopedia::subcmd::anno_splice::run_anno_splice;
 use isopedia::subcmd::anno_splice::AnnSpliceCli;
-use isopedia::subcmd::extr::run_extr;
-use isopedia::subcmd::extr::ExtrCli;
-use isopedia::subcmd::idx::run_idx;
-use isopedia::subcmd::idx::IdxCli;
+use isopedia::subcmd::index::run_idx;
+use isopedia::subcmd::index::IndexCli;
+use isopedia::subcmd::merge::run_merge;
+use isopedia::subcmd::merge::MergeCli;
+use isopedia::subcmd::profile::run_extr;
+use isopedia::subcmd::profile::ProfileCli;
 
 #[derive(Parser)]
 #[command(
@@ -31,9 +31,9 @@ enum Commands {
     Isoform(AnnIsoCli),
     Splice(AnnSpliceCli),
     Fusion(AnnFusionCli),
-    Extr(ExtrCli),
-    Aggr(AggrCli),
-    Idx(IdxCli),
+    Profile(ProfileCli),
+    Merge(MergeCli),
+    Index(IndexCli),
 }
 
 fn main() {
@@ -55,17 +55,17 @@ fn main() {
                 eprintln!("Error running annotation fusion: {}", e);
             }
         }
-        Commands::Extr(ref extr_cli) => {
-            if let Err(e) = run_extr(extr_cli) {
+        Commands::Profile(ref profile_cli) => {
+            if let Err(e) = run_extr(profile_cli) {
                 eprintln!("Error running extraction: {}", e);
             }
         }
-        Commands::Aggr(ref aggr_cli) => {
-            if let Err(e) = run_aggr(aggr_cli) {
-                eprintln!("Error running aggregation: {}", e);
+        Commands::Merge(ref merge_cli) => {
+            if let Err(e) = run_merge(merge_cli) {
+                eprintln!("Error running merge: {}", e);
             }
         }
-        Commands::Idx(ref idx_cli) => {
+        Commands::Index(ref idx_cli) => {
             if let Err(e) = run_idx(idx_cli) {
                 eprintln!("Error running indexing: {}", e);
             }

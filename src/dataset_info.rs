@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::warn;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,6 +8,8 @@ use std::{
     path::{Path, PathBuf},
     vec,
 };
+
+use crate::utils::line2fields;
 
 #[derive(Serialize, Deserialize, Debug)]
 
@@ -33,11 +36,13 @@ impl DatasetInfo {
     pub fn parse_manifest(path: &PathBuf) -> Result<DatasetInfo> {
         let content = std::fs::read_to_string(path)?;
         let mut dbinfo = DatasetInfo::new();
-        for line in content.lines().skip(1) {
-            let fields = line
-                .split('\t')
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>();
+        for (i, line) in content.lines().skip(1).enumerate() {
+            let fields = line2fields(line);
+
+            if fields.is_empty() {
+                warn!("Skipping empty line {} in manifest", i + 1);
+                continue;
+            }
 
             if fields.len() < 2 {
                 return Err(anyhow::anyhow!("Invalid line in manifest: {}", line));

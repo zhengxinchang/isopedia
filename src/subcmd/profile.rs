@@ -77,7 +77,7 @@ impl Strand {
 #[command(about = "
 [build index, step1] Extract raw isoform signals from each single BAM/CRAM file.
 ", long_about = None)]
-pub struct ExtrCli {
+pub struct ProfileCli {
     /// Input file in BAM/CRAM format
     #[arg(short = 'i', long = "bam")]
     pub bam: PathBuf,
@@ -103,7 +103,7 @@ pub struct ExtrCli {
     pub debug: bool,
 }
 
-impl ExtrCli {
+impl ProfileCli {
     pub fn validate(&self) {
         let mut is_ok = true;
         if !self.bam.exists() {
@@ -126,7 +126,7 @@ impl ExtrCli {
     }
 }
 
-fn greetings(args: &ExtrCli) {
+fn greetings(args: &ProfileCli) {
     eprintln!("\nIsopedia: [Extract raw isoform singals from BAM/CRAM]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
@@ -134,7 +134,7 @@ fn greetings(args: &ExtrCli) {
     }
 }
 
-pub fn run_extr(cli: &ExtrCli) -> Result<()> {
+pub fn run_extr(cli: &ProfileCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
     env_logger::init();
 
