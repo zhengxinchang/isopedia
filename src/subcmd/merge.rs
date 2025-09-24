@@ -18,29 +18,27 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::collections::HashSet;
 
-use crate::constants::{
-    CHROM_FILE_NAME, DATASET_INFO_FILE_NAME, MERGED_FILE_NAME, TMPIDX_FILE_NAME, TMP_CHUNK_SIZE,
-};
-
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-aggr")]
+#[command(name = "isopedia merge")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
 [build index, step2] Aggregate multiple samples(isoform signal file) into one index(folder).
 ", long_about = None)]
-#[clap(after_long_help = "Exmaple:
+#[clap(after_long_help = "Example:
 
-The input file example(tab-separated)
-(required)  (required)
-----------  ---------------------------
-name        path
-sample1     /path/to/sample1.isoform.gz
-sample2     /path/to/sample2.isoform.gz
+The manifest file example(tab-separated)
+(required)  (required)                   (optional) (optional)
+----------  ---------------------------  ---------- ---------
+name        path                          meta1      meta2
+sample1     /path/to/sample1.isoform.gz    A         15
+sample2     /path/to/sample2.isoform.gz    B         37
 
 Run aggregation:
 
-stix-iso aggr --input input.tsv --outdir index_dir
+isopedia merge -i manifest.tsv -o index_dir
+
+Note that if the optional metadata columns are present, it will be used in the indexing step directly.
 
 ")]
 pub struct MergeCli {
@@ -229,7 +227,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     // init the merge buffer
     let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
 
-    let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME),cli.chunk_size);
+    let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME), cli.chunk_size);
 
     let isoform_archive_base = &cli.outdir.join(MERGED_FILE_NAME);
 

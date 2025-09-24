@@ -10,7 +10,7 @@ use log::{error, info, warn};
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-aggr")]
+#[command(name = "isopedia-index")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
@@ -18,18 +18,18 @@ use serde::Serialize;
 ", long_about = None)]
 #[clap(after_long_help = "
 
-Example: isopedia-idx -i /path/to/index/dir [--meta /path/to/meta.tsv]
+Example: isopedia index -i /path/to/index/dir [--meta /path/to/meta.tsv]
 
 The meta file is optional.
 
 The format of the meta file is tab-separated with the first line as header.
 
 Example of meta file:
-(required)  (optional)  (optional)
----------  ----------  ---------
-name       meta1         meta2
-sample1     15             A
-sample2     37             B
+(required) (required)  (optional)  (optional)
+---------  ----------  ----------  ---------
+name       path           meta1         meta2
+sample1    /a/b/c         15             A
+sample2    /a/b/d         37             B
 
 ")]
 pub struct IndexCli {

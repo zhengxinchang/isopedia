@@ -8,7 +8,6 @@ use crate::{
     isoform::{self, MergedIsoform},
     isoformarchive::read_record_from_mmap,
     meta::Meta,
-    output,
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, get_total_memory_bytes, warmup},
     writer::MyGzWriter,

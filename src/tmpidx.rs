@@ -1,4 +1,4 @@
-use crate::constants::{BUF_SIZE, LARGE_BUF_SIZE, TMP_CHUNK_SIZE};
+use crate::constants::{BUF_SIZE, LARGE_BUF_SIZE};
 use crate::constants::{MAGIC, ORDER};
 use indexmap::IndexMap;
 use itertools::Itertools;

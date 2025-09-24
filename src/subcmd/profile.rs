@@ -71,12 +71,19 @@ impl Strand {
 }
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-extr")]
+#[command(name = "isopedia profile")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-[build index, step1] Extract raw isoform signals from each single BAM/CRAM file.
+[build index, step1] Profile raw isoform signals from each single BAM/CRAM file.
 ", long_about = None)]
+#[clap(after_long_help = "
+
+Example: isopedia profile -i /path/to/bam/file.bam -o /path/to/output/isoform.gz
+
+Note that if you are using CRAM file, you must provide the reference fasta file with --reference option.
+
+")]
 pub struct ProfileCli {
     /// Input file in BAM/CRAM format
     #[arg(short = 'i', long = "bam")]
