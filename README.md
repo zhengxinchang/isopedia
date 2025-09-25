@@ -424,7 +424,6 @@ A: Isopedia introduces several innovations for scalable and efficient isoform ev
 A: Isopedia is designed to be integrated into standard long-read transcriptome analysis pipelines. After isoforms are identified using tools like IsoQuant, FLAMES, TALON, or others, their output GTF files can be passed to Isopedia. It then evaluates the isoforms against a background index constructed from hundreds of publicly available long-read transcriptome datasets, providing a scalable and population-aware assessment.
 
 
-
 # Contact
 
 * zhengxc93@gmail.com
