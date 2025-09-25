@@ -8,7 +8,7 @@ use crate::{
     isoformarchive::IsoformArchiveWriter,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
-    utils::line2fields,
+    utils::{self, line2fields},
 };
 use anyhow::Result;
 use clap::Parser;
@@ -74,7 +74,8 @@ impl MergeCli {
             // check the format of the input file
             let content = std::fs::read_to_string(&self.input).unwrap();
             let header = content.lines().next().unwrap();
-            let field_size: usize = header.split('\t').count();
+            let header = utils::line2fields(header);
+            let field_size: usize = header.len();
             let mut uniq_path = HashSet::new();
             let mut uniq_name = HashSet::new();
             for (idx, line) in content.lines().enumerate() {

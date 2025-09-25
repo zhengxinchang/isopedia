@@ -34,7 +34,14 @@ clean up file path in meta object when buiding the index, and also remove the he
 vis tool, find reference isoform, dont overlap with min-max, instead overlap with splice sites?
 
 
-parse more comprehensively  of manifest. 
+[x] parse more comprehensively  of manifest. 
+
+[ ] reduce MergedIsoformOffsetPtr with 40 + 24 1 TiB 16 MB to reduce the bptree size
+[ ] xz compression to reduce the .dat file size 
+[ ] index need a generator to read tmpidx instead of load entire chromsome in mem.
+[ ] sharding related functions 
+[ ] index without -m cause bug
+
 
 
 AS 1 query

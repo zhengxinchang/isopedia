@@ -184,7 +184,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         .advise(memmap2::Advice::Sequential)
         .expect("Failed to set mmap advice");
 
-    info!("Start to process transcripts");
+    info!("Processing transcripts");
     let mut iter_count = 0;
     let mut batch = 0;
     let mut acc_pos_count = vec![0u32; dataset_info.get_size()];

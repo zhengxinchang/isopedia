@@ -6,7 +6,9 @@ use std::{
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use log::info;
+use log::{info, warn};
+
+use crate::utils;
 
 #[derive(Debug, Clone)]
 pub struct MetaEntry {
@@ -33,19 +35,23 @@ pub struct Meta {
     pub samples: Vec<String>,
     pub header: Vec<String>,
     pub records: IndexMap<String, MetaEntry>,
+    is_empty: bool,
 }
 
 impl Meta {
     pub fn new_empty(sample_names: Vec<String>) -> Self {
         let mut records = IndexMap::new();
-        let header = vec!["Sample".to_string()];
+        let header = vec!["Sample".to_string(),"Path".to_string()];
         for sample in &sample_names {
-            records.insert(sample.clone(), MetaEntry::new(sample.clone()));
+            let mut entry = MetaEntry::new(sample.clone());
+            entry.add("Path".to_string(), "Fake_path".to_string()).expect("Failed to add Path field");
+            records.insert(sample.clone(), entry);
         }
         Self {
             samples: sample_names,
             header,
             records,
+            is_empty: true,
         }
     }
     pub fn parse<P: AsRef<Path>>(path: P) -> Result<Meta> {
@@ -55,11 +61,12 @@ impl Meta {
         let mut records = IndexMap::new();
         reader.read_line(&mut header)?;
 
-        let header = header
-            .trim_end()
-            .split('\t')
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
+        // let header = header
+        //     .trim_end()
+        //     .split('\t')
+        //     .map(|s| s.to_string())
+        //     .collect::<Vec<String>>();
+        let header = utils::line2fields(&header);
 
         info!("Parsed {} fields from header: {:?}", header.len(), header);
         let mut samples = Vec::new();
@@ -67,12 +74,18 @@ impl Meta {
         for line in reader.lines() {
             let line = line?;
             line_no += 1;
-            let parts: Vec<String> = line
-                .trim_end()
-                .split('\t')
-                // .into_iter()
-                .map(|part| part.to_string())
-                .collect();
+            // let parts: Vec<String> = line
+            //     .trim_end()
+            //     .split('\t')
+            //     // .into_iter()
+            //     .map(|part| part.to_string())
+            //     .collect();
+
+            let parts = utils::line2fields(&line);
+            if parts.len() == 0 {
+                warn!("Skipping empty line at {}", line_no);
+                continue;
+            }
 
             if parts.len() != header.len() {
                 return Err(anyhow::anyhow!(
@@ -96,6 +109,7 @@ impl Meta {
             samples,
             header,
             records,
+            is_empty: false,
         })
     }
 
@@ -106,6 +120,9 @@ impl Meta {
     }
 
     pub fn get_record_by_name(&self, name: &str) -> Option<&MetaEntry> {
+        if self.is_empty {
+            return None;
+        }
         self.records.get(name)
     }
 
@@ -114,6 +131,7 @@ impl Meta {
     }
 
     pub fn get_meta_table(&self, prefix: Option<&str>) -> String {
+
         let mut table = String::new();
         let mut header_clean = self.header.clone();
         header_clean.remove(1); // remove the path

@@ -976,38 +976,6 @@ impl BPForest {
     }
 }
 
-// pub fn find_common(vecs: &[Vec<MergedIsoformOffsetPtr>]) -> Vec<MergedIsoformOffsetPtr> {
-//     if vecs.is_empty() {
-//         return vec![];
-//     }
-
-//     // 选择最短的向量作为基准,减少初始HashSet大小
-//     let shortest_vec_idx = vecs
-//         .iter()
-//         .enumerate()
-//         .min_by_key(|(_, vec)| vec.len())
-//         .map(|(i, _)| i)
-//         .unwrap_or(0);
-
-//     let mut result: HashSet<_> = vecs[shortest_vec_idx].iter().cloned().collect();
-
-//     // 遍历其他向量
-//     for (i, vec) in vecs.iter().enumerate() {
-//         if i == shortest_vec_idx {
-//             continue;
-//         }
-//         // 使用Vec直接构建临时HashSet,避免多次clone
-//         let vec_set: HashSet<_> = vec.iter().cloned().collect();
-//         result.retain(|item| vec_set.contains(item));
-
-//         // 如果result为空,提前返回
-//         if result.is_empty() {
-//             return vec![];
-//         }
-//     }
-
-//     result.into_iter().collect()
-// }
 
 /// find the common elements in the vecs, if one element appears in at least min_match vecs, it is considered as common
 /// min_match is set to 2 incase the mono exon isoforms
