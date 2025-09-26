@@ -25,6 +25,7 @@ use zerocopy::IntoBytes;
 use zerocopy_derive::FromBytes;
 use zerocopy_derive::Immutable;
 use zerocopy_derive::IntoBytes;
+use itertools::Itertools;
 
 /// within the node header, used to store the offset and length of the isoform offsets in
 /// node payload. the reason why use it beacuse node header is fixed size.
@@ -244,16 +245,7 @@ impl Node {
 
     /// search one key in the node, return the value if found
     pub fn search(&self, key: KeyType) -> Option<ValueType> {
-        // let mut i = 0;
 
-        // while i < self.header.num_keys && self.header.keys[i as usize] < key {
-        //     i += 1;
-        // }
-
-        // if i == self.header.num_keys {
-        //     return None;
-        // }
-        // return Some(self.header.childs[i as usize]);
         match self.header.keys[..self.header.num_keys as usize].binary_search(&key) {
             Ok(idx) => Some(self.header.childs[idx]),
             Err(idx) => {
@@ -269,14 +261,6 @@ impl Node {
 
     /// search one key in the node
     pub fn exact_search(&self, key: KeyType) -> Option<ValueType> {
-        // let mut i = 0;
-        // while i < self.header.num_keys {
-        //     if self.header.keys[i as usize] == key {
-        //         return Some(self.header.childs[i as usize]);
-        //     }
-        //     i += 1;
-        // }
-        // return None;
 
         match self.header.keys[..self.header.num_keys as usize].binary_search(&key) {
             Ok(idx) => Some(self.header.childs[idx]),
@@ -610,7 +594,8 @@ impl BPTree {
     ///  one bptree for one chromosome
     ///  The last key of the nodes is set as the key of the higher level node
     pub fn build_tree(
-        aggr_intrim_rec_vec: Vec<Vec<MergedIsoformOffsetGroup>>,
+        // aggr_intrim_rec_vec: Vec<Vec<MergedIsoformOffsetGroup>>,
+        chr_by_grps: impl Iterator<Item = MergedIsoformOffsetGroup>,
         idx_path: &PathBuf,
         chrom_id: u16,
     ) {
@@ -628,11 +613,13 @@ impl BPTree {
         let mut node_id: u64 = 0;
         let mut num_of_keys: u64 = 0;
 
-        for block in aggr_intrim_rec_vec.iter() {
+        for block in &chr_by_grps.chunks(ORDER as usize) {
+            let block: Vec<MergedIsoformOffsetGroup> = block.collect();
             node_id += 1;
             num_of_keys += block.len() as u64;
             let node: Node = Node::new_leaf_node_from_batch(node_id.clone(), &block);
             node_list.push(node);
+
         }
 
         let mut start_idx = 0;
@@ -846,12 +833,12 @@ impl BPForest {
         let mut count = 0;
         for chrom_id in chromamp.get_chrom_idxs() {
             let mut idx = Tmpindex::load(&intrim_path);
-            let blocks = idx.get_blocks(chrom_id);
-            if blocks.len() == 0 {
-                continue;
-            }
+            // let blocks = idx.get_blocks(chrom_id);
+            let blocks = idx.groups(chrom_id).unwrap();
+            // if blocks.len() == 0 {
+            //     continue;
+            // }
             count += 1;
-            // dbg!(&blocks);
             BPTree::build_tree(blocks, &mut idx_path.clone(), chrom_id);
         }
         println!("Build {} trees", count);

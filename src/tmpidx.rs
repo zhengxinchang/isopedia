@@ -8,6 +8,8 @@ use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::io::{self, BufRead};
+use std::os::unix::fs::FileExt;
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
@@ -24,6 +26,7 @@ use std::hash::Hasher;
 type ChromIdxStartart = u64;
 type ChromIdxLength = u64;
 type ChromId = u16;
+use anyhow::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TmpindexMeta {
@@ -394,6 +397,47 @@ impl Tmpindex {
             .collect();
 
         groups.chunks(ORDER as usize).map(|x| x.to_vec()).collect()
+    }
+
+    pub fn groups(
+        &self,
+        chrom_id: u16,
+    ) -> io::Result<impl Iterator<Item = MergedIsoformOffsetGroup>> {
+        let (chrom_start_idx, chrom_length) = match self.meta.chrom_offsets.get(&chrom_id) {
+            Some((s, l)) => (*s, *l),
+            None => return Ok(Vec::new().into_iter()), // 空迭代器
+        };
+
+        let start_offset = 8 + chrom_start_idx * (MergedIsoformOffsetPlusGenomeLoc::SIZE as u64);
+
+        let mut reader = BufReader::with_capacity(BUF_SIZE_4M, fs::File::open(&self.file_name)?);
+        reader.seek(std::io::SeekFrom::Start(start_offset))?;
+
+        // record iterator
+        let rec_iter = (0..chrom_length).map(move |_| {
+            let mut buf = [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
+            let pos = reader.stream_position().unwrap();
+            reader
+                .get_ref()
+                .read_exact_at(&mut buf, pos)
+                .unwrap();
+            reader.consume(MergedIsoformOffsetPlusGenomeLoc::SIZE);
+            MergedIsoformOffsetPlusGenomeLoc::from_bytes(&buf)
+        });
+
+        // group_by (chrom_id,pos)
+        let binding = rec_iter
+                .chunk_by(|r| (r.chrom_id, r.pos));
+        let group_iter =
+            binding
+                .into_iter()
+                .map(|((chrom, pos), group)| {
+                    let mut g = MergedIsoformOffsetGroup::new();
+                    g.update(chrom, pos, group.map(|r| r.record_ptr).collect());
+                    g
+                });
+
+        Ok(group_iter.collect::<Vec<_>>().into_iter())
     }
 }
 

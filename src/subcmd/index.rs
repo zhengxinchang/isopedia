@@ -110,7 +110,9 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
         if blocks.len() == 0 {
             continue;
         }
-        BPTree::build_tree(blocks, &cli.idxdir, chrom_id);
+
+        let tmpblock = tmpidx.groups(chrom_id)?;
+        BPTree::build_tree(tmpblock, &cli.idxdir, chrom_id);
     }
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;

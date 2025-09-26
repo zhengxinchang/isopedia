@@ -52,11 +52,6 @@ pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
     let writer = std::fs::File::create(output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
 
-    // let mut aggr_reader = std::io::BufReader::new(
-    //     std::fs::File::open(idx.join(MERGED_FILE_NAME))
-    //         .expect("Can not open aggregated records file...exit"),
-    // );
-
     let archive_file_handler =
         File::open(idx.join(MERGED_FILE_NAME)).expect("Can not open aggregated records file...");
     let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
