@@ -1,4 +1,4 @@
-use crate::constants::{BUF_SIZE, LARGE_BUF_SIZE};
+use crate::constants::{BUF_SIZE_4M, BUF_SIZE_64M};
 use crate::constants::{MAGIC, ORDER};
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -116,11 +116,6 @@ impl Tmpindex {
             .sort_by_key(|x: &MergedIsoformOffsetPlusGenomeLoc| (x.chrom_id, x.pos));
     }
 
-    /// finalize the tmpidx, k-way merge the chunk files and rewrite the record data file, update the offsets at the same time.
-    ///
-    /// the final output would be a sorted tmpidx file , a rewritten record data file
-    ///
-    /// this function is the replace for the previous dump_to_disk function and rewrite_sorted_records function
     pub fn finalize(&mut self, merged_data_name_base: &PathBuf) {
         info!("{}", &merged_data_name_base.display());
 
@@ -148,7 +143,7 @@ impl Tmpindex {
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
-                let reader = BufReader::with_capacity(BUF_SIZE, file);
+                let reader = BufReader::with_capacity(BUF_SIZE_4M, file);
                 reader
             })
             .collect::<Vec<_>>();
@@ -168,8 +163,6 @@ impl Tmpindex {
             .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
 
-        // dbg!(&merged_data_file_list);
-
         let data_mmaps = merged_data_file_list
             .iter()
             .map(|path| {
@@ -182,7 +175,7 @@ impl Tmpindex {
             .collect::<Vec<_>>();
 
         let mut data_writer = BufWriter::with_capacity(
-            64 * 1024 * 1024, // 64MB
+            BUF_SIZE_64M,
             fs::File::create(merged_data_name_base).expect("Can not create new record data file"),
         );
 
@@ -320,7 +313,7 @@ impl Tmpindex {
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
         let file = fs::File::open(file_name).expect("Can not open file");
-        let mut reader = BufReader::with_capacity(LARGE_BUF_SIZE, file);
+        let mut reader = BufReader::with_capacity(BUF_SIZE_64M, file);
         let file2 = fs::File::open(file_name).expect("Can not open file");
         let mut interim_index = Tmpindex {
             meta_start: 0,
@@ -338,13 +331,13 @@ impl Tmpindex {
         let mut buffer = [0u8; 8];
         reader
             .read_exact(&mut buffer)
-            .expect("Can not read meata offset from interim index file..");
+            .expect("Can not read meata offset from interim index file...");
         interim_index.meta_start = u64::from_le_bytes(buffer);
-        // dbg!(&interim_index.meta_start);
+
         let mut buffer = Vec::new();
         reader
             .seek(std::io::SeekFrom::Start(interim_index.meta_start))
-            .expect("Can not move the cursor to start after read header of interim index file..");
+            .expect("Can not move the cursor to start after read header of interim index file...");
         reader
             .read_to_end(&mut buffer)
             .expect("Can not read the rest of the file");

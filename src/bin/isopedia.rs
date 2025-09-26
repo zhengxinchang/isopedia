@@ -16,7 +16,7 @@ use isopedia::subcmd::profile::ProfileCli;
 #[derive(Parser)]
 #[command(
     name = "isopedia",
-    about = "Simultaneous exploration of thousands of long-read transcriptomes by read-level indexing\n\nRepository: https://github.com/zhengxinchang/isopedia \nContact: Xinchang Zheng <zhengxc93@gmail.com>",
+    about = "[Isopedia] Simultaneous exploration of thousands of long-read transcriptomes by read-level indexing\n\nRepository: https://github.com/zhengxinchang/isopedia \nContact: Xinchang Zheng <zhengxc93@gmail.com>",
     author,
     version,
     long_about = None,

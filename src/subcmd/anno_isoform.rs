@@ -142,7 +142,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
     let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
-    info!("Search by gtf/gff file");
+    info!("Loading GTF file...");
     let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
         BufReader::new(std::fs::File::open(cli.gtf.clone()).expect("can not read gtf")),
     );
@@ -332,7 +332,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         );
     }
     info!(
-        "Index-wide stats: hit: {}, miss: {}, total: {}, pct: {:.2}%",
+        "Index-wide stats: hit: \n> {}, miss: {}, total: {}, pct: {:.2}%",
         hit_count.to_formatted_string(&Locale::en),
         miss_count.to_formatted_string(&Locale::en),
         (hit_count + miss_count).to_formatted_string(&Locale::en),

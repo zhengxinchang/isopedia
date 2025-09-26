@@ -1,4 +1,4 @@
-use crate::constants::BUF_SIZE;
+use crate::constants::BUF_SIZE_4M;
 use crate::utils::{self, hash_vec};
 use bio_types::strand::ReqStrand;
 use flate2::read::GzDecoder;
@@ -466,7 +466,7 @@ impl SingleSampleReader {
     pub fn new(file_path: &str) -> SingleSampleReader {
         let file = File::open(file_path).expect("Can not read file...");
         let decoder = GzDecoder::new(file);
-        let reader = BufReader::with_capacity(BUF_SIZE, decoder);
+        let reader = BufReader::with_capacity(BUF_SIZE_4M, decoder);
         let mut agg_file_reader = SingleSampleReader {
             file_name: file_path.to_string(),
             offset: 0,

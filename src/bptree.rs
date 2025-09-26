@@ -285,8 +285,8 @@ impl Node {
     }
 
     // type RangeRes=(u64,u64,Vec<ValueType>);
-    /// seach a range of keys in the node, if the key's pos larger than the max_key,
-    /// return (Option<(NodeIDType, u64, u64)>, Vec<ValueType>)
+    // seach a range of keys in the node, if the key's pos larger than the max_key,
+    // return `(Option<(NodeIDType, u64, u64)>, Vec<ValueType>)
     pub fn range_search(&self, start: KeyType, end: KeyType) -> RangeSearchHits {
         let mut ret: RangeSearchHits = (None, Vec::new());
 
