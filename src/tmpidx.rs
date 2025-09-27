@@ -1,5 +1,6 @@
 use crate::constants::{BUF_SIZE_4M, BUF_SIZE_64M};
 use crate::constants::{MAGIC, ORDER};
+use ahash::HashSet;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use log::error;
@@ -8,6 +9,7 @@ use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use serde_json::map::Iter;
 use std::io::{self, BufRead};
 use std::os::unix::fs::FileExt;
 use std::{
@@ -214,18 +216,35 @@ impl Tmpindex {
                 );
             }
 
-            if let Some(rec) = readers[idx]
-                .by_ref()
-                .bytes()
-                .take(MergedIsoformOffsetPlusGenomeLoc::SIZE)
-                .collect::<Result<Vec<u8>, _>>()
-                .ok()
-            {
-                if rec.len() == MergedIsoformOffsetPlusGenomeLoc::SIZE {
-                    let next_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&rec);
+            // if let Some(rec) = readers[idx]
+            //     .by_ref()
+            //     .bytes()
+            //     .take(MergedIsoformOffsetPlusGenomeLoc::SIZE)
+            //     .collect::<Result<Vec<u8>, _>>()
+            //     .ok()
+            // {
+            //     if rec.len() == MergedIsoformOffsetPlusGenomeLoc::SIZE {
+            //         let next_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&rec);
+            //         heap.push(Reverse((next_rec, idx)));
+            //     }
+            // }
+
+            let mut next_buf = [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
+            match readers[idx].read_exact(&mut next_buf) {
+                Ok(_) => {
+                    let next_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&next_buf);
                     heap.push(Reverse((next_rec, idx)));
                 }
+                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    // 该 chunk 正常读完，啥也不做
+                }
+                Err(e) => {
+                    // 非 EOF 的 I/O 错误不要吞掉，至少 warn 一下，避免“静默丢失”
+                    error!("read next record failed for chunk {}: {}", idx, e);
+                    // 这里也可以选择 return Err(e) 提前失败，视你对稳健性的要求而定
+                }
             }
+
 
             let mut interim_rec = interim_rec.clone();
             let old_offset = interim_rec.record_ptr.offset;
@@ -348,96 +367,120 @@ impl Tmpindex {
         interim_index
     }
 
-    pub fn get_blocks(&mut self, chrom_id: u16) -> Vec<Vec<MergedIsoformOffsetGroup>> {
-        let (chrom_start_idx, chrom_length) = match self.meta.chrom_offsets.get(&chrom_id) {
-            Some((start, length)) => (start, length),
-            None => {
-                // chromap.rs has all chromsome in the reference,
-                // while the interim index file only has the chromsome that has records
-                return Vec::new();
-            }
-        };
-
-        let curr_offset: u64 =
-            8u64 + (chrom_start_idx) * MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
-        // dbg!(curr_offset);
-        let mut reader: BufReader<&File> = BufReader::new(&self.file);
-
-        let mut buffer = [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
-
-        reader
-            .seek(std::io::SeekFrom::Start(curr_offset))
-            .expect("Can not move the cursor to start after read header of interim index file..");
-
-        let mut interim_vec = Vec::new();
-
-        for _ in 0..*chrom_length {
-            reader
-                .read_exact(&mut buffer)
-                .expect("Can not read magic from interim index file..");
-            let interim_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&buffer);
-            interim_vec.push(interim_rec);
-        }
-
-        let groups: Vec<MergedIsoformOffsetGroup> = interim_vec
-            .into_iter()
-            .chunk_by(|x| (x.chrom_id, x.pos)) // group by chrom_id and pos
-            .into_iter()
-            .map(|(_, group)| {
-                let mut aggr_intrim_rec: MergedIsoformOffsetGroup = MergedIsoformOffsetGroup::new();
-                for rec in group {
-                    if aggr_intrim_rec.is_emtpy() {
-                        aggr_intrim_rec.update(rec.chrom_id, rec.pos, vec![rec.record_ptr]);
-                    } else {
-                        aggr_intrim_rec.record_ptr_vec.push(rec.record_ptr);
-                    }
-                }
-                aggr_intrim_rec
-            })
-            .collect();
-
-        groups.chunks(ORDER as usize).map(|x| x.to_vec()).collect()
-    }
-
     pub fn groups(
         &self,
         chrom_id: u16,
-    ) -> io::Result<impl Iterator<Item = MergedIsoformOffsetGroup>> {
-        let (chrom_start_idx, chrom_length) = match self.meta.chrom_offsets.get(&chrom_id) {
+    ) -> Option<TmpIdxChunker> {
+        let (chrom_start_idx, chrom_rec_counts) = match self.meta.chrom_offsets.get(&chrom_id) {
             Some((s, l)) => (*s, *l),
-            None => return Ok(Vec::new().into_iter()), // 空迭代器
+            None => return None,
         };
 
         let start_offset = 8 + chrom_start_idx * (MergedIsoformOffsetPlusGenomeLoc::SIZE as u64);
+        let file = fs::File::open(&self.file_name).expect("Can not open file");
 
-        let mut reader = BufReader::with_capacity(BUF_SIZE_4M, fs::File::open(&self.file_name)?);
-        reader.seek(std::io::SeekFrom::Start(start_offset))?;
+        Some(TmpIdxChunker::new(
+            BufReader::with_capacity(BUF_SIZE_4M, file),
+            ORDER as usize,
+            start_offset,
+            chrom_rec_counts,
+        ))
+    }
+}
 
-        // record iterator
-        let rec_iter = (0..chrom_length).map(move |_| {
-            let mut buf = [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
-            let pos = reader.stream_position().unwrap();
-            reader
-                .get_ref()
-                .read_exact_at(&mut buf, pos)
-                .unwrap();
-            reader.consume(MergedIsoformOffsetPlusGenomeLoc::SIZE);
-            MergedIsoformOffsetPlusGenomeLoc::from_bytes(&buf)
-        });
+pub struct TmpIdxChunker {
+    pub file: BufReader<File>,
+    pub order: usize,
+    pub chrom_start_pos: u64,
+    pub chrom_record_counts: u64,
+    pub hold_record: Option<MergedIsoformOffsetPlusGenomeLoc>,
+    buffer: [u8; MergedIsoformOffsetPlusGenomeLoc::SIZE],
+    records_vec: Vec<MergedIsoformOffsetPlusGenomeLoc>,
+    chr_pos_set: HashSet<(u16, u64)>,
+    curr_processed: u64,
+}
 
-        // group_by (chrom_id,pos)
-        let binding = rec_iter
-                .chunk_by(|r| (r.chrom_id, r.pos));
-        let group_iter =
-            binding
-                .into_iter()
-                .map(|((chrom, pos), group)| {
-                    let mut g = MergedIsoformOffsetGroup::new();
-                    g.update(chrom, pos, group.map(|r| r.record_ptr).collect());
-                    g
-                });
+impl TmpIdxChunker {
+    pub fn new(
+        mut file: BufReader<File>,
+        order: usize,
+        chrom_start_pos: u64,
+        chrom_record_counts: u64,
 
-        Ok(group_iter.collect::<Vec<_>>().into_iter())
+    ) -> TmpIdxChunker {
+
+            file.seek(std::io::SeekFrom::Start(chrom_start_pos))
+            .expect("Can not seek to the chrom start pos");
+        TmpIdxChunker {
+            file,
+            order,
+            chrom_start_pos,
+            chrom_record_counts,
+            hold_record: None,
+            buffer: [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE],
+            records_vec: Vec::new(),
+            chr_pos_set: HashSet::default(),
+            curr_processed: 0,
+        }
+    }
+
+    pub fn next_chunk(&mut self) -> Option<Vec<MergedIsoformOffsetGroup>> {
+        if self.curr_processed == self.chrom_record_counts && self.hold_record.is_none() {
+            return None;
+        }
+
+        if let Some(held) = self.hold_record.take() {
+
+            self.chr_pos_set.insert((held.chrom_id, held.pos));
+            self.records_vec.push(held);
+        }
+
+        while self.curr_processed < self.chrom_record_counts  {
+            if let Err(_) = self.file.read_exact(&mut self.buffer) {
+                break;
+            }
+            // records_read_byte_len += MergedIsoformOffsetPlusGenomeLoc::SIZE as u64;
+            self.curr_processed += 1;
+            let record = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&self.buffer);
+            let key = (record.chrom_id, record.pos);
+            if !self.chr_pos_set.contains(&key) && self.chr_pos_set.len() == self.order {
+                // hold the last record for next chunk
+                self.hold_record = Some(record);
+                break;
+            }
+            self.records_vec.push(record);
+            self.chr_pos_set.insert(key);
+            
+        }
+
+        let grouped = self.records_vec
+            .iter()
+            .chunk_by(|r| (r.chrom_id, r.pos))
+            .into_iter()
+            .map(|((chrom, pos), group)| {
+                let mut g = MergedIsoformOffsetGroup::new(
+                    chrom,
+                    pos,
+                );
+                for r in group {
+                    g.record_ptr_vec.push(r.record_ptr.clone());
+                }
+                g
+            })
+            .collect::<Vec<_>>();
+
+        self.records_vec.clear();
+        self.chr_pos_set.clear();
+        Some(grouped)
+    }
+}
+
+
+impl Iterator for TmpIdxChunker {
+    type Item = Vec<MergedIsoformOffsetGroup>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_chunk()
     }
 }
 
@@ -540,21 +583,20 @@ pub struct MergedIsoformOffsetGroup {
 }
 
 impl MergedIsoformOffsetGroup {
-    pub fn new() -> MergedIsoformOffsetGroup {
+    pub fn new(chrom_id: u16, pos: u64) -> MergedIsoformOffsetGroup {
         MergedIsoformOffsetGroup {
-            chrom_id: 0,
-            pos: 0,
+            chrom_id,
+            pos,
             record_ptr_vec: Vec::new(),
         }
     }
 
-    pub fn is_emtpy(&self) -> bool {
-        self.chrom_id == 0 && self.pos == 0
-    }
+    // pub fn is_emtpy(&self) -> bool {
+    //     self.chrom_id == 0 && self.pos == 0
+    // }
 
-    pub fn update(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<MergedIsoformOffsetPtr>) {
-        self.chrom_id = chrom_id;
-        self.pos = pos;
+    pub fn add(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<MergedIsoformOffsetPtr>) {
+        assert!(self.chrom_id == chrom_id && self.pos == pos);
         self.record_ptr_vec = record_ptr_vec;
     }
 }

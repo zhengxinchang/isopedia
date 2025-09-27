@@ -7,6 +7,7 @@ use crate::{
 use anyhow::Result;
 use clap::Parser;
 use log::{error, info, warn};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
@@ -42,6 +43,14 @@ pub struct IndexCli {
 
     #[arg(short, long, help = "Metadata for the samples in the index.")]
     pub meta: Option<PathBuf>,
+
+    #[arg(
+        short,
+        long,
+        help = "Number of threads to use. Default: 1",
+        default_value_t = 4
+    )]
+    pub threads: usize,
 }
 
 impl IndexCli {
@@ -102,17 +111,50 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
     let mut tmpidx = Tmpindex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
     // info!("Indexing...");
     let nchrs = chrom_map.get_size();
-    let mut cur_chr = 0;
-    for chrom_id in chrom_map.get_chrom_idxs() {
-        cur_chr += 1;
-        info!("Indexing {}/{}th chromosome", cur_chr, nchrs);
-        let blocks = tmpidx.get_blocks(chrom_id);
-        if blocks.len() == 0 {
-            continue;
-        }
 
-        let tmpblock = tmpidx.groups(chrom_id)?;
-        BPTree::build_tree(tmpblock, &cli.idxdir, chrom_id);
+    // info!("")
+
+    dbg!(&tmpidx.meta);
+    // change to multi-threaded building of B+ tree
+
+    if cli.threads == 1 {
+        info!("Using single thread for indexing");
+        let mut cur_chr = 0;
+        for chrom_id in chrom_map.get_chrom_idxs() {
+            cur_chr += 1;
+            info!("Indexing {}/{}th chromosome", cur_chr, nchrs);
+
+            let tmpidx_chunker = tmpidx
+                .groups(chrom_id)
+                .expect("Failed to get tmpidx chunker");
+            BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id)?;
+        }
+    } else {
+        info!("Using {} threads for indexing", cli.threads);
+
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(cli.threads)
+            .build()
+            .unwrap();
+
+        pool.install(|| {
+            chrom_map
+                .get_chrom_idxs()
+                .par_iter()
+                .enumerate()
+                .for_each(|(i, &chrom_id)| {
+                    info!("Indexing chromosome {}/{} ", i + 1, nchrs);
+
+                    let tmpidx_chunker = tmpidx
+                        .groups(chrom_id)
+                        .expect(&format!("Failed to get tmpidx chunker for chrom {}", chrom_id));
+
+                    if let Err(e) = BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id) {
+                        error!("Chrom {} failed: {:?}", chrom_id, e);
+                        std::process::exit(1);
+                    }
+                });
+        });
     }
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;

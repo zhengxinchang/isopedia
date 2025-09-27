@@ -332,7 +332,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         );
     }
     info!(
-        "Index-wide stats: hit: \n> {}, miss: {}, total: {}, pct: {:.2}%",
+        "Index-wide stats: hit: {}, miss: {}, total: {}, pct: {:.2}%",
         hit_count.to_formatted_string(&Locale::en),
         miss_count.to_formatted_string(&Locale::en),
         (hit_count + miss_count).to_formatted_string(&Locale::en),

@@ -4,14 +4,16 @@ use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
 use crate::tmpidx::MergedIsoformOffsetGroup;
 use crate::tmpidx::MergedIsoformOffsetPtr;
+use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::Tmpindex;
 use ahash::HashSet;
+use itertools::Itertools;
 use lru::LruCache;
 use memmap2::Mmap;
 use rustc_hash::FxHashMap;
 use std;
 use std::fmt::Debug;
-use std::io::Write;
+use std::fs::OpenOptions;
 use std::num::NonZeroUsize;
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
@@ -25,7 +27,7 @@ use zerocopy::IntoBytes;
 use zerocopy_derive::FromBytes;
 use zerocopy_derive::Immutable;
 use zerocopy_derive::IntoBytes;
-use itertools::Itertools;
+use anyhow::Result;
 
 /// within the node header, used to store the offset and length of the isoform offsets in
 /// node payload. the reason why use it beacuse node header is fixed size.
@@ -171,6 +173,7 @@ impl Node {
 
     pub fn new_leaf_node_from_batch(id: NodeIDType, block: &Vec<MergedIsoformOffsetGroup>) -> Self {
         // init a leaf node
+        // dbg!(&block.len());
         let mut node = Node::new(id, true, 0);
         // add RecordPtrs and update keys and childrens
         let mut curr_idx: u32 = 0;
@@ -245,7 +248,6 @@ impl Node {
 
     /// search one key in the node, return the value if found
     pub fn search(&self, key: KeyType) -> Option<ValueType> {
-
         match self.header.keys[..self.header.num_keys as usize].binary_search(&key) {
             Ok(idx) => Some(self.header.childs[idx]),
             Err(idx) => {
@@ -261,7 +263,6 @@ impl Node {
 
     /// search one key in the node
     pub fn exact_search(&self, key: KeyType) -> Option<ValueType> {
-
         match self.header.keys[..self.header.num_keys as usize].binary_search(&key) {
             Ok(idx) => Some(self.header.childs[idx]),
             Err(_) => None,
@@ -315,37 +316,39 @@ impl Node {
 #[repr(C)]
 pub struct CacheHeader {
     pub magic_number: u64,
-    pub block_id: u64,
-    pub first_data_offset: u64, // 8*u8
-    pub root_node_id: u64,      // 8*u8
-    pub curr_max_offset: u64,   // 8*u8
-    pub total_nodes: u64,       // 8*u8
-    pub leaf_node_count: u64,   // 8*u8
-    pub total_keys: u64,        // 8*u8
-    pub bptree_order: u64,      // 8*u8
-    pub height: u64,            // 8*u8
-    pub chromosome_id: u16,     // 2*u8
+   
+    pub first_node_offset: u64,        // 8*u8 // always 4096
+    pub root_node_id: u64,             // 8*u8 // this id also indicates the number of nodes
+    pub payload_start_offset: usize,       // the start offset of the payload area, always 4096 * (total_nodes + 1)
+    pub curr_payload_offset: u64, // 8*u8 // point to the end of the last node, dont use it when load from disk
+    pub total_nodes: u64,              // 8*u8 // this is the total number of nodes
+    pub leaf_nodes: u64,               // 8*u8 // this is the number of leaf nodes
+    pub num_of_genome_pos: u64,        // 8*u8 // total number of keys in the tree
+    pub bptree_order: u64,             // 8*u8. // equals to ORDER
+    pub height: u64,                   // 8*u8 // height of the tree
+    pub chromosome_id: u16,            // 2*u8 // chromosome id
     _padding: [u8; 4096 - (std::mem::size_of::<u64>() * 10 + std::mem::size_of::<u16>())],
 }
 
 impl CacheHeader {
     pub fn new() -> CacheHeader {
         CacheHeader {
-            magic_number: 9236,
-            block_id: 0,
-            first_data_offset: 0,
+            magic_number: MAGIC,
+            
+            first_node_offset: 0,
             chromosome_id: 0,
             root_node_id: 0,
-            curr_max_offset: 0,
+            curr_payload_offset: 0,
+            payload_start_offset: 0,
             total_nodes: 0,
-            leaf_node_count: 0,
-            total_keys: 0,
-            bptree_order: 0,
+            leaf_nodes: 0,
+            num_of_genome_pos: 0,
+            bptree_order: ORDER,
             height: 0,
             _padding: [0; (4096 - (std::mem::size_of::<u64>() * 10 + std::mem::size_of::<u16>()))],
         }
     }
-    pub fn from_bytes(b: &[u8]) -> io::Result<CacheHeader> {
+    pub fn from_bytes(b: &[u8]) -> Result<CacheHeader> {
         let header: CacheHeader = CacheHeader::read_from_bytes(b).unwrap();
         Ok(header)
     }
@@ -358,80 +361,111 @@ impl CacheHeader {
     }
 }
 
+// type NodeIDType = u64;
+// type KeyType = u64;
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct Cache {
     pub header: CacheHeader,
     pub file: File,
+    pub file_path: PathBuf,
+    pub payload_file: Option<File>,
+    pub payload_file_path: Option<PathBuf>,
     pub mmap: Option<memmap2::Mmap>,
     pub lru: LruCache<u64, Arc<Node>>,
 }
 
 impl Cache {
-    // const CACHE_CAPACITY: usize = 1000; // 1000 nodes
 
-    pub fn new_header(
-        num_nodes: u64,
-        num_leaf_nodes: u64,
-        num_keys: u64,
-        chrom_id: u16,
-        order: u64,
-        height: u64,
-        block_id: u64,
-    ) -> CacheHeader {
-        CacheHeader {
-            magic_number: 9236,
-            block_id: block_id,
-            first_data_offset: 4096,
-            chromosome_id: chrom_id,
-            root_node_id: num_nodes,
-            curr_max_offset: (num_nodes + 1) * 4096, // point at the end of the last node(root node)
-            total_nodes: num_nodes,
-            bptree_order: order,
-            height: height,
-            leaf_node_count: num_leaf_nodes,
-            total_keys: num_keys,
-            _padding: [0; (4096 - (std::mem::size_of::<u64>() * 10 + std::mem::size_of::<u16>()))],
-        }
-    }
-
-    pub fn build_cache(header: CacheHeader, file_path: &PathBuf) -> Cache {
-        let place_holder_lru_size = 10usize;
+    pub fn create(file_path: &PathBuf) -> Self {
+        let header = CacheHeader::new();
         let file = File::create(file_path).unwrap();
+        let payload_file_path = file_path.with_extension("payload");
+        // let payload_file = File::create(&payload_file_path).unwrap();
+
+        let payload_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&payload_file_path)
+            .unwrap();
+
         Cache {
             header,
             file,
+            file_path: file_path.clone(),
+            payload_file: Some(payload_file),
+            payload_file_path: Some(payload_file_path),
             mmap: None,
-            lru: LruCache::new(NonZeroUsize::new(place_holder_lru_size).unwrap()),
+            lru: LruCache::new(NonZeroUsize::new(10).unwrap()),
         }
     }
 
-    pub fn dump_header(&mut self) {
+    pub fn finish(&mut self) ->Result<()> {
+        // update header and write to disk
+        
         let header_bytes = self.header.to_bytes();
-        // self.file.write_all(&header_bytes).unwrap();
         self.file.write_all_at(&header_bytes, 0).unwrap();
+        self.close();
+
+        // copy the payload file to the main file
+        let payload_file = self.payload_file.as_ref().expect("Payload file not found");
+        let payload_size = payload_file.metadata().unwrap().len() as usize; // e.g., 200
+        let mut payload_reader = io::BufReader::new(payload_file);
+        let mut buffer = vec![0; BUF_SIZE_64M];
+        let mut offset = self.header.payload_start_offset; // e.g., 1000
+        let mut write_len = 0;
+
+        while write_len < payload_size {
+            let read_size = std::cmp::min(BUF_SIZE_64M, payload_size - write_len);
+            payload_reader.read_exact(&mut buffer[..read_size])?;
+            self.file.write_all_at(&buffer[..read_size], offset as u64)?;
+            offset += read_size ;
+            write_len += read_size;
+        }
+        // remove the payload file
+        self.payload_file = None;
+        if let Some(payload_file_path) = self.payload_file_path.clone() {
+            std::fs::remove_file(payload_file_path)?;
+        }
+        Ok(())
     }
 
-    pub fn dump_one_node(&mut self, node: &mut Node) {
+    // pub fn update_header(&mut self, header: CacheHeader) {
+    //     self.header = header;
+    // }
+
+    pub fn dump_one_node(&mut self, node: &mut Node)->Result<()> {
         // dump the data first if the node is leaf
-        assert!(std::mem::size_of_val(&node.header) == 4096); // the size of the node should be 4096
+        assert!(std::mem::size_of_val(&node.header) == 4096); // the size of the node header should be 4096
         if node.is_leaf() {
-            let node_data_bytes: Vec<u8> = node.serialize_payload2bytes();
-            let node_data_bytes: &[u8] = node_data_bytes.as_slice();
-            let node_data_bytes_len: usize = node_data_bytes.len();
-            self.file
-                .write_all_at(node_data_bytes, self.header.curr_max_offset)
-                .unwrap();
+            let payload_bytes: Vec<u8> = node.serialize_payload2bytes();
+            let payload_bytes: &[u8] = payload_bytes.as_slice();
+            let payload_bytes_len: usize = payload_bytes.len();
+            // self.file
+            //     .write_all_at(payload_bytes, self.header.curr_payload_offset)
+            //     .unwrap();
+            self.payload_file
+                .as_ref()
+                .unwrap()
+                .write_all_at(payload_bytes, self.header.curr_payload_offset)?;
             // update the record_range
-            node.set_inner_data_range(&self.header.curr_max_offset, &(node_data_bytes_len as u64));
+            node.set_inner_data_range(
+                // need to be updated to a tmp offset starts from 0 
+                &self.header.curr_payload_offset,
+                &(payload_bytes_len as u64),
+            );
             // update max_offset
-            self.header.curr_max_offset += node_data_bytes_len as u64;
+            self.header.curr_payload_offset += payload_bytes_len as u64;
         }
         // dump header
         let node_header_bytes: [u8; 4096] = node.get_header_bytes();
         self.file
-            .write_all_at(&node_header_bytes, node.header.node_id * 4096)
-            .unwrap();
+            .write_all_at(&node_header_bytes, node.header.node_id * 4096)?;
+
+        Ok(())
     }
 
     pub fn from_disk(file_path: &str, lru_size: usize) -> Cache {
@@ -451,18 +485,24 @@ impl Cache {
         Cache {
             header,
             file,
+            file_path: PathBuf::from(file_path),
+            payload_file: None,
+            payload_file_path: None,
             mmap: None,
             lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
         }
     }
 
-    pub fn from_disk_mmap(idx_path: &str, lru_size: usize) -> io::Result<Cache> {
+    pub fn from_disk_mmap(idx_path: &str, lru_size: usize) -> Result<Cache> {
         let file = File::options().read(true).write(true).open(idx_path)?;
         let mmap = unsafe { Mmap::map(&file)? };
         let header = CacheHeader::from_bytes(&mmap[0..4096])?;
         Ok(Cache {
             header,
             file,
+            file_path: PathBuf::from(idx_path),
+            payload_file: None,
+            payload_file_path: None,
             mmap: Some(mmap),
             lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
         })
@@ -483,7 +523,7 @@ impl Cache {
         let hdr_slice = &mmap[off..off + 4096];
         let mut node = Node::load_header_from_bytes(hdr_slice);
 
-        let po = node.header.payload_offset as usize;
+        let po = node.header.payload_offset as usize + self.header.payload_start_offset;
         let ps = node.header.payload_size as usize;
         let data_slice = &mmap[po..po + ps];
         node.load_record_pointers_from_bytes(data_slice);
@@ -500,7 +540,7 @@ impl Cache {
     }
 
     pub fn get_max_key(&mut self) -> u64 {
-        let max_leaf = self.get_node2(self.header.leaf_node_count);
+        let max_leaf = self.get_node2(self.header.leaf_nodes);
         // dbg!(&max_leaf);
         let max_key = max_leaf.unwrap().get_max_key();
         max_key
@@ -513,8 +553,11 @@ impl Cache {
     }
 
     pub fn close(&mut self) {
-        self.file.flush().unwrap();
         self.file.sync_all().unwrap();
+        self.payload_file.as_ref().map(|f| {
+            f.sync_all().unwrap();
+        });
+    
     }
 }
 
@@ -562,43 +605,13 @@ impl BPTree {
         }
     }
 
-    /// Create a new B+ tree
-    /// load from file if the file exists
-    /// firstly build leaf nodes, then build internal nodes
-    /// leaf nodes id starts with 1, internal nodes id starts with size+1
-    ///
-    /// input file format
-    ///
-    ///     chr1:1101->0x1121
-    ///     chr1:1101->0x1124
-    ///     chr1:1101->0x1134
-    ///     chr1:1123->0x2344
-    ///
-    ///```
-    /// index file
-    ///    | header---
-    ///    | root id offset,
-    ///    | leaf node offset,
-    ///    | height of tree
-    ///    | number of nodes
-    ///    | number of leafnode
-    ///    | number of internal node
-    ///    | leaf nodes * N
-    ///    | ...
-    ///    | internal nodes * N
-    ///    | ...
-    ///    | root node
-    ///    | address data list(leaf node)
-    ///    | ....
-    ///```
-    ///  one bptree for one chromosome
-    ///  The last key of the nodes is set as the key of the higher level node
+    /// build the B+ tree from the interim records
     pub fn build_tree(
         // aggr_intrim_rec_vec: Vec<Vec<MergedIsoformOffsetGroup>>,
-        chr_by_grps: impl Iterator<Item = MergedIsoformOffsetGroup>,
+        tmpidx_chunker: TmpIdxChunker,
         idx_path: &PathBuf,
         chrom_id: u16,
-    ) {
+    ) -> Result<()> {
         let mut tree: BPTree = BPTree {
             root: 0,
             idxdir: idx_path.clone(),
@@ -609,65 +622,60 @@ impl BPTree {
             order: ORDER,
         };
 
-        let mut node_list: Vec<Node> = Vec::new();
+        let mut cache = Cache::create(&idx_path.join(format!("bptree_{}.idx", chrom_id)));
+        // let mut cache_header = CacheHeader::new();
+        cache.header.chromosome_id = chrom_id;
+
+        let mut node_list: Vec<(KeyType, NodeIDType)> = Vec::new();
         let mut node_id: u64 = 0;
-        let mut num_of_keys: u64 = 0;
 
-        for block in &chr_by_grps.chunks(ORDER as usize) {
-            let block: Vec<MergedIsoformOffsetGroup> = block.collect();
+        for block in tmpidx_chunker {
+            // let block: Vec<MergedIsoformOffsetGroup> = block.collect();
             node_id += 1;
-            num_of_keys += block.len() as u64;
-            let node: Node = Node::new_leaf_node_from_batch(node_id.clone(), &block);
-            node_list.push(node);
+            // num_of_ptrs += block.len() as u64;
+            cache.header.leaf_nodes += 1;
+            cache.header.num_of_genome_pos += block.len() as u64;
+            cache.header.total_nodes += 1;
 
+            let mut node: Node = Node::new_leaf_node_from_batch(node_id.clone(), &block);
+            node_list.push((node.get_max_key(), node_id));
+            cache.dump_one_node(&mut node)?;
+            // tree_size += 1;
         }
 
         let mut start_idx = 0;
         let mut level = 1;
-        let num_of_leaf_nodes = node_list.len();
+        // let num_of_leaf_nodes = node_list.len();
         // start to construct internal nodes
         loop {
-            let mut internal_node_list: Vec<Node> = node_list[start_idx..]
+            let mut internal_node_list: Vec<(KeyType, NodeIDType)> = node_list[start_idx..]
                 .chunks(ORDER as usize)
                 .map(|group| {
                     node_id += 1;
+                    cache.header.total_nodes += 1;
+
                     let mut node = Node::new(node_id, false, level);
-                    let keys: Vec<u64> = group
-                        .iter()
-                        .map(|leaf_node| {
-                            leaf_node
-                                .header
-                                .keys
-                                .to_owned()
-                                .iter()
-                                .filter_map(|x| match *x != 0u64 {
-                                    true => Some(*x),
-                                    false => None,
-                                })
-                                .collect::<Vec<u64>>()
-                                .last()
-                                .unwrap()
-                                .to_owned()
-                        })
-                        .collect::<Vec<u64>>();
+                    let keys: Vec<u64> = group.iter().map(|(key, _)| *key).collect::<Vec<u64>>();
                     let childerns = group
                         .into_iter()
-                        .map(|leaf_node| leaf_node.header.node_id)
+                        .map(|(_, node_id)| *node_id)
                         .collect::<Vec<NodeIDType>>();
                     let key_arr = keys.as_slice();
                     node.header.set_keys(key_arr);
                     let childerns_arr = childerns.as_slice();
                     node.header.set_non_leaf_node_childrens(childerns_arr);
                     node.header.num_keys = key_arr.len() as u64;
-                    node
+                    cache.dump_one_node(&mut node).expect(&format!("Can not dump node {}", node_id));
+                    (node.get_max_key(), node_id)
                 })
                 .collect();
 
             start_idx = node_list.len();
             node_list.extend(internal_node_list.clone());
             level += 1;
+            // tree_size += internal_node_list.len();
             if internal_node_list.len() == 1 {
-                tree.root = internal_node_list[0].header.node_id;
+                tree.root = internal_node_list[0].1;
                 break;
             }
             internal_node_list.clear();
@@ -676,31 +684,12 @@ impl BPTree {
         tree.size = node_list.len() as u32;
         tree.chrom_id = chrom_id;
         tree.order = ORDER;
-
-        let mut cache_path = idx_path.clone();
-        let x = format!("bptree_{}.idx", chrom_id);
-        cache_path.push(x);
-        let data_cache_header = Cache::new_header(
-            tree.size as u64,
-            num_of_leaf_nodes as u64,
-            num_of_keys,
-            tree.chrom_id,
-            tree.order,
-            tree.hight as u64,
-            0,
-        );
-
-        let mut cache = Cache::build_cache(data_cache_header, &cache_path);
-
-        // TODO: update to discrete dump, each batch for one hight
-        node_list.iter_mut().for_each(|node| {
-            // dbg!(&node);
-            // println!("dump node: {}", node.header.id);
-            cache.dump_one_node(node);
-        });
-        cache.dump_header();
-        cache.close();
-        // dbg!(&node_list.len());
+        cache.header.root_node_id = tree.root.clone();
+        cache.header.height = level;
+        cache.header.first_node_offset = 4096; // always 4096
+        cache.header.payload_start_offset = (4096 * (cache.header.total_nodes + 1)) as usize; // the start offset of the payload area, always 4096 * (total_nodes + 1)
+        cache.finish()?;
+        Ok(())
     }
 
     /// search the key in the B+ tree
@@ -793,7 +782,7 @@ impl BPTree {
             }
 
             let next_node_id = node.header.node_id + 1;
-            if next_node_id > cache.header.leaf_node_count {
+            if next_node_id > cache.header.leaf_nodes {
                 break;
             }
             node = cache
@@ -825,23 +814,24 @@ impl BPForest {
         }
     }
 
-    pub fn build_forest(idx_path: &PathBuf) {
+    pub fn build_forest(idx_path: &PathBuf) -> Result<()> {
         let chrom_path = idx_path.join("chrom.map");
         let bytes = std::fs::read(chrom_path).unwrap();
         let chromamp = ChromMapping::decode(&bytes);
         let intrim_path = idx_path.join("interim.idx");
         let mut count = 0;
         for chrom_id in chromamp.get_chrom_idxs() {
-            let mut idx = Tmpindex::load(&intrim_path);
+            let idx = Tmpindex::load(&intrim_path);
             // let blocks = idx.get_blocks(chrom_id);
             let blocks = idx.groups(chrom_id).unwrap();
             // if blocks.len() == 0 {
             //     continue;
             // }
             count += 1;
-            BPTree::build_tree(blocks, &mut idx_path.clone(), chrom_id);
+            BPTree::build_tree(blocks, &mut idx_path.clone(), chrom_id)?;
         }
         println!("Build {} trees", count);
+        Ok(())
     }
 
     pub fn search_one_pos(
@@ -962,7 +952,6 @@ impl BPForest {
         }
     }
 }
-
 
 /// find the common elements in the vecs, if one element appears in at least min_match vecs, it is considered as common
 /// min_match is set to 2 incase the mono exon isoforms

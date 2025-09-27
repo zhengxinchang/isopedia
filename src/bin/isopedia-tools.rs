@@ -16,75 +16,85 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
 pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
-    let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
-    let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
-    let chromamp = ChromMapping::decode(&chrom_bytes);
-    // let blocks = idx.get_blocks(chrom_id);
-    let writer = std::fs::File::create(output).unwrap();
-    let mut writer = std::io::BufWriter::new(writer);
-    for chrom_id in chromamp.get_chrom_idxs() {
-        let chrom_name = chromamp.get_chrom_name(chrom_id);
-        let blocks = interim.get_blocks(chrom_id);
-        if blocks.len() == 0 {
-            continue;
-        }
-        for block in blocks {
-            for record in block {
-                writeln!(
-                    writer,
-                    "{}:{}-{:?}",
-                    chrom_name, &record.pos, record.record_ptr_vec
-                )
-                .unwrap();
-            }
-        }
-    }
+    // let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
+    // let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
+    // let chromamp = ChromMapping::decode(&chrom_bytes);
+    // // let blocks = idx.get_blocks(chrom_id);
+    // let writer = std::fs::File::create(output).unwrap();
+    // let mut writer = std::io::BufWriter::new(writer);
+    // for chrom_id in chromamp.get_chrom_idxs() {
+    //     let chrom_name = chromamp.get_chrom_name(chrom_id);
+    //     let blocks = interim.get_blocks(chrom_id);
+    //     if blocks.len() == 0 {
+    //         continue;
+    //     }
+    //     for block in blocks {
+    //         for record in block {
+    //             writeln!(
+    //                 writer,
+    //                 "{}:{}-{:?}",
+    //                 chrom_name, &record.pos, record.record_ptr_vec
+    //             )
+    //             .unwrap();
+    //         }
+    //     }
+    // }
+
 }
 
 pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
-    let mut processed_signautres = std::collections::HashSet::new();
+    // let mut processed_signautres = std::collections::HashSet::new();
 
-    let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
-    let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
-    let chromamp = ChromMapping::decode(&chrom_bytes);
-    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-                                                           // let blocks = idx.get_blocks(chrom_id);
-    let writer = std::fs::File::create(output).unwrap();
-    let mut writer = std::io::BufWriter::new(writer);
+    // let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
+    // let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
+    // let chromamp = ChromMapping::decode(&chrom_bytes);
+    // let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
+    //                                                        // let blocks = idx.get_blocks(chrom_id);
+    // let writer = std::fs::File::create(output).unwrap();
+    // let mut writer = std::io::BufWriter::new(writer);
 
-    let archive_file_handler =
-        File::open(idx.join(MERGED_FILE_NAME)).expect("Can not open aggregated records file...");
-    let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
+    // let archive_file_handler =
+    //     File::open(idx.join(MERGED_FILE_NAME)).expect("Can not open aggregated records file...");
+    // let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
 
-    archive_mmap
-        .advise(memmap2::Advice::Sequential)
-        .expect("Failed to set mmap advice");
+    // archive_mmap
+    //     .advise(memmap2::Advice::Sequential)
+    //     .expect("Failed to set mmap advice");
 
-    for chrom_id in chromamp.get_chrom_idxs() {
-        // let chrom_name = chromamp.get_chrom_name(chrom_id);
-        let blocks = interim.get_blocks(chrom_id);
-        if blocks.len() == 0 {
-            continue;
-        }
-        for block in blocks {
-            for record_grp in block {
-                for record_ptr in record_grp.record_ptr_vec {
-                    let rec = read_record_from_mmap(&archive_mmap, &record_ptr, &mut archive_buf);
-                    if processed_signautres.contains(&rec.signature) {
-                        continue;
-                    }
-                    processed_signautres.insert(rec.signature);
-                    writeln!(writer, "{}", rec.get_string()).unwrap();
-                }
-            }
-        }
-    }
+    // for chrom_id in chromamp.get_chrom_idxs() {
+    //     // let chrom_name = chromamp.get_chrom_name(chrom_id);
+    //     let blocks = interim.get_blocks(chrom_id);
+    //     if blocks.len() == 0 {
+    //         continue;
+    //     }
+    //     for block in blocks {
+    //         for record_grp in block {
+    //             for record_ptr in record_grp.record_ptr_vec {
+    //                 let rec = read_record_from_mmap(&archive_mmap, &record_ptr, &mut archive_buf);
+    //                 if processed_signautres.contains(&rec.signature) {
+    //                     continue;
+    //                 }
+    //                 processed_signautres.insert(rec.signature);
+    //                 writeln!(writer, "{}", rec.get_string()).unwrap();
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 fn inspect_meta(idx: &PathBuf) {
     let dataset_info =
         isopedia::dataset_info::DatasetInfo::load_from_file(&idx.join(DATASET_INFO_FILE_NAME));
     dbg!(&dataset_info);
+}
+
+fn inspect_chroms(idx: &PathBuf) {
+    let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
+    let chromamp = ChromMapping::decode(&chrom_bytes);
+    for chrom_id in chromamp.get_chrom_idxs() {
+        let chrom_name = chromamp.get_chrom_name(chrom_id);
+        println!("{}\t{}", chrom_name, chrom_id);
+    }
 }
 
 fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
@@ -349,7 +359,7 @@ impl Validate for InspectArgs {
             is_ok = false;
         }
 
-        if self.type_f != "tmpidx" && self.type_f != "archive" && self.type_f != "dbinfo" {
+        if self.type_f != "tmpidx" && self.type_f != "archive" && self.type_f != "dbinfo" && self.type_f != "chroms" {
             error!("--type: type must be either 'tmpidx' or 'archive' or 'dbinfo'");
             is_ok = false;
         }
@@ -468,7 +478,10 @@ fn main() {
                 inspect_archive(&inspec_args.idx, &inspec_args.output);
             } else if inspec_args.type_f == "dbinfo" {
                 inspect_meta(&inspec_args.idx);
+            } else if inspec_args.type_f == "chroms" {
+                inspect_chroms(&inspec_args.idx);
             }
+
         }
         ToolsCommands::merge(merge_args) => {
             if !merge_args.validate() {
