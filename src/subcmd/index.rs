@@ -145,14 +145,28 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
                 .for_each(|(i, &chrom_id)| {
                     info!("Indexing chromosome {}/{} ", i + 1, nchrs);
 
-                    let tmpidx_chunker = tmpidx
-                        .groups(chrom_id)
-                        .expect(&format!("Failed to get tmpidx chunker for chrom {}", chrom_id));
-
-                    if let Err(e) = BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id) {
-                        error!("Chrom {} failed: {:?}", chrom_id, e);
-                        std::process::exit(1);
-                    }
+                    match tmpidx.groups(chrom_id) {
+                        Some(tmpidx_chunker) => {
+                            if let Err(e) =
+                                BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id)
+                            {
+                                error!("Chrom {} failed: {:?}", chrom_id, e);
+                                std::process::exit(1);
+                            }
+                        }
+                        None => {
+                            info!("Skip chromosome {}: {} with zero records after filtering", chrom_id, chrom_map.get_chrom_name(chrom_id));
+                            /*
+                             * Explanation:
+                             * In some cases, after filtering, certain chromosomes may have zero records. but the chromsome name was 
+                             * still recorded in the chrom file. 
+                             * After merging, the tmpidx will not have offset and count for this chromosome(because there is no record for this chromosome),
+                             * thus when we try to build the B+ tree for this chromosome, it will fail. 
+                             * Here we just skip the chromosome with zero records, which is a safe operation.
+                             */
+                            return;
+                        }
+                    };
                 });
         });
     }
