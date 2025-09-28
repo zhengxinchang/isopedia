@@ -245,7 +245,6 @@ impl Tmpindex {
                 }
             }
 
-
             let mut interim_rec = interim_rec.clone();
             let old_offset = interim_rec.record_ptr.offset;
 
@@ -367,10 +366,7 @@ impl Tmpindex {
         interim_index
     }
 
-    pub fn groups(
-        &self,
-        chrom_id: u16,
-    ) -> Option<TmpIdxChunker> {
+    pub fn groups(&self, chrom_id: u16) -> Option<TmpIdxChunker> {
         let (chrom_start_idx, chrom_rec_counts) = match self.meta.chrom_offsets.get(&chrom_id) {
             Some((s, l)) => (*s, *l),
             None => return None,
@@ -406,10 +402,8 @@ impl TmpIdxChunker {
         order: usize,
         chrom_start_pos: u64,
         chrom_record_counts: u64,
-
     ) -> TmpIdxChunker {
-
-            file.seek(std::io::SeekFrom::Start(chrom_start_pos))
+        file.seek(std::io::SeekFrom::Start(chrom_start_pos))
             .expect("Can not seek to the chrom start pos");
         TmpIdxChunker {
             file,
@@ -430,12 +424,11 @@ impl TmpIdxChunker {
         }
 
         if let Some(held) = self.hold_record.take() {
-
             self.chr_pos_set.insert((held.chrom_id, held.pos));
             self.records_vec.push(held);
         }
 
-        while self.curr_processed < self.chrom_record_counts  {
+        while self.curr_processed < self.chrom_record_counts {
             if let Err(_) = self.file.read_exact(&mut self.buffer) {
                 break;
             }
@@ -450,18 +443,15 @@ impl TmpIdxChunker {
             }
             self.records_vec.push(record);
             self.chr_pos_set.insert(key);
-            
         }
 
-        let grouped = self.records_vec
+        let grouped = self
+            .records_vec
             .iter()
             .chunk_by(|r| (r.chrom_id, r.pos))
             .into_iter()
             .map(|((chrom, pos), group)| {
-                let mut g = MergedIsoformOffsetGroup::new(
-                    chrom,
-                    pos,
-                );
+                let mut g = MergedIsoformOffsetGroup::new(chrom, pos);
                 for r in group {
                     g.record_ptr_vec.push(r.record_ptr.clone());
                 }
@@ -474,7 +464,6 @@ impl TmpIdxChunker {
         Some(grouped)
     }
 }
-
 
 impl Iterator for TmpIdxChunker {
     type Item = Vec<MergedIsoformOffsetGroup>;

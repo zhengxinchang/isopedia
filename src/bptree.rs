@@ -7,6 +7,7 @@ use crate::tmpidx::MergedIsoformOffsetPtr;
 use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::Tmpindex;
 use ahash::HashSet;
+use anyhow::Result;
 use itertools::Itertools;
 use lru::LruCache;
 use memmap2::Mmap;
@@ -27,7 +28,6 @@ use zerocopy::IntoBytes;
 use zerocopy_derive::FromBytes;
 use zerocopy_derive::Immutable;
 use zerocopy_derive::IntoBytes;
-use anyhow::Result;
 
 /// within the node header, used to store the offset and length of the isoform offsets in
 /// node payload. the reason why use it beacuse node header is fixed size.
@@ -316,17 +316,17 @@ impl Node {
 #[repr(C)]
 pub struct CacheHeader {
     pub magic_number: u64,
-   
-    pub first_node_offset: u64,        // 8*u8 // always 4096
-    pub root_node_id: u64,             // 8*u8 // this id also indicates the number of nodes
-    pub payload_start_offset: usize,       // the start offset of the payload area, always 4096 * (total_nodes + 1)
+
+    pub first_node_offset: u64,      // 8*u8 // always 4096
+    pub root_node_id: u64,           // 8*u8 // this id also indicates the number of nodes
+    pub payload_start_offset: usize, // the start offset of the payload area, always 4096 * (total_nodes + 1)
     pub curr_payload_offset: u64, // 8*u8 // point to the end of the last node, dont use it when load from disk
-    pub total_nodes: u64,              // 8*u8 // this is the total number of nodes
-    pub leaf_nodes: u64,               // 8*u8 // this is the number of leaf nodes
-    pub num_of_genome_pos: u64,        // 8*u8 // total number of keys in the tree
-    pub bptree_order: u64,             // 8*u8. // equals to ORDER
-    pub height: u64,                   // 8*u8 // height of the tree
-    pub chromosome_id: u16,            // 2*u8 // chromosome id
+    pub total_nodes: u64,         // 8*u8 // this is the total number of nodes
+    pub leaf_nodes: u64,          // 8*u8 // this is the number of leaf nodes
+    pub num_of_genome_pos: u64,   // 8*u8 // total number of keys in the tree
+    pub bptree_order: u64,        // 8*u8. // equals to ORDER
+    pub height: u64,              // 8*u8 // height of the tree
+    pub chromosome_id: u16,       // 2*u8 // chromosome id
     _padding: [u8; 4096 - (std::mem::size_of::<u64>() * 10 + std::mem::size_of::<u16>())],
 }
 
@@ -334,7 +334,7 @@ impl CacheHeader {
     pub fn new() -> CacheHeader {
         CacheHeader {
             magic_number: MAGIC,
-            
+
             first_node_offset: 0,
             chromosome_id: 0,
             root_node_id: 0,
@@ -377,7 +377,6 @@ pub struct Cache {
 }
 
 impl Cache {
-
     pub fn create(file_path: &PathBuf) -> Self {
         let header = CacheHeader::new();
         let file = File::create(file_path).unwrap();
@@ -403,9 +402,9 @@ impl Cache {
         }
     }
 
-    pub fn finish(&mut self) ->Result<()> {
+    pub fn finish(&mut self) -> Result<()> {
         // update header and write to disk
-        
+
         let header_bytes = self.header.to_bytes();
         self.file.write_all_at(&header_bytes, 0).unwrap();
         self.close();
@@ -421,8 +420,9 @@ impl Cache {
         while write_len < payload_size {
             let read_size = std::cmp::min(BUF_SIZE_64M, payload_size - write_len);
             payload_reader.read_exact(&mut buffer[..read_size])?;
-            self.file.write_all_at(&buffer[..read_size], offset as u64)?;
-            offset += read_size ;
+            self.file
+                .write_all_at(&buffer[..read_size], offset as u64)?;
+            offset += read_size;
             write_len += read_size;
         }
         // remove the payload file
@@ -437,7 +437,7 @@ impl Cache {
     //     self.header = header;
     // }
 
-    pub fn dump_one_node(&mut self, node: &mut Node)->Result<()> {
+    pub fn dump_one_node(&mut self, node: &mut Node) -> Result<()> {
         // dump the data first if the node is leaf
         assert!(std::mem::size_of_val(&node.header) == 4096); // the size of the node header should be 4096
         if node.is_leaf() {
@@ -453,7 +453,7 @@ impl Cache {
                 .write_all_at(payload_bytes, self.header.curr_payload_offset)?;
             // update the record_range
             node.set_inner_data_range(
-                // need to be updated to a tmp offset starts from 0 
+                // need to be updated to a tmp offset starts from 0
                 &self.header.curr_payload_offset,
                 &(payload_bytes_len as u64),
             );
@@ -557,7 +557,6 @@ impl Cache {
         self.payload_file.as_ref().map(|f| {
             f.sync_all().unwrap();
         });
-    
     }
 }
 
@@ -665,7 +664,9 @@ impl BPTree {
                     let childerns_arr = childerns.as_slice();
                     node.header.set_non_leaf_node_childrens(childerns_arr);
                     node.header.num_keys = key_arr.len() as u64;
-                    cache.dump_one_node(&mut node).expect(&format!("Can not dump node {}", node_id));
+                    cache
+                        .dump_one_node(&mut node)
+                        .expect(&format!("Can not dump node {}", node_id));
                     (node.get_max_key(), node_id)
                 })
                 .collect();

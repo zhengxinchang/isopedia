@@ -41,10 +41,12 @@ pub struct Meta {
 impl Meta {
     pub fn new_empty(sample_names: Vec<String>) -> Self {
         let mut records = IndexMap::new();
-        let header = vec!["Sample".to_string(),"Path".to_string()];
+        let header = vec!["Sample".to_string(), "Path".to_string()];
         for sample in &sample_names {
             let mut entry = MetaEntry::new(sample.clone());
-            entry.add("Path".to_string(), "Fake_path".to_string()).expect("Failed to add Path field");
+            entry
+                .add("Path".to_string(), "Fake_path".to_string())
+                .expect("Failed to add Path field");
             records.insert(sample.clone(), entry);
         }
         Self {
@@ -131,7 +133,6 @@ impl Meta {
     }
 
     pub fn get_meta_table(&self, prefix: Option<&str>) -> String {
-
         let mut table = String::new();
         let mut header_clean = self.header.clone();
         header_clean.remove(1); // remove the path

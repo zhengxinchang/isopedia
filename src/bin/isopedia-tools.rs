@@ -39,7 +39,6 @@ pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
     //         }
     //     }
     // }
-
 }
 
 pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
@@ -359,7 +358,11 @@ impl Validate for InspectArgs {
             is_ok = false;
         }
 
-        if self.type_f != "tmpidx" && self.type_f != "archive" && self.type_f != "dbinfo" && self.type_f != "chroms" {
+        if self.type_f != "tmpidx"
+            && self.type_f != "archive"
+            && self.type_f != "dbinfo"
+            && self.type_f != "chroms"
+        {
             error!("--type: type must be either 'tmpidx' or 'archive' or 'dbinfo'");
             is_ok = false;
         }
@@ -481,7 +484,6 @@ fn main() {
             } else if inspec_args.type_f == "chroms" {
                 inspect_chroms(&inspec_args.idx);
             }
-
         }
         ToolsCommands::merge(merge_args) => {
             if !merge_args.validate() {
