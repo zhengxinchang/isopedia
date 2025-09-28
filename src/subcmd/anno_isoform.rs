@@ -133,7 +133,7 @@ fn greetings(args: &AnnIsoCli) {
 
 pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     env::set_var("RUST_LOG", "info");
-    env_logger::init();
+    // env_logger::init();
 
     cli.validate();
     greetings(&cli);

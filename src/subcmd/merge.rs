@@ -1,7 +1,7 @@
 use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
 
 use crate::{
-    chromosome::ChromMapping,
+    chromosome::{ChromMapping, ChromMappingHelper},
     constants::*,
     dataset_info::DatasetInfo,
     isoform::MergedIsoform,
@@ -194,8 +194,8 @@ impl Display for HeapItem<AggrRead> {
 }
 
 pub fn run_merge(cli: &MergeCli) -> Result<()> {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
+    // env::set_var("RUST_LOG", "info");
+    // env_logger::init();
 
     cli.validate();
     greetings(&cli);
@@ -219,6 +219,8 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             file_reader
         })
         .collect();
+
+    let mut chrom_helper = ChromMappingHelper::new();
 
     info!("Merging...");
 
@@ -297,6 +299,9 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                 }
 
                 // Add to processing collection
+
+                chrom_helper.add_record2chrom(merged_isoform_rec.chrom_id);
+
                 tmp_vec.push((
                     merged_isoform_rec.chrom_id,
                     merged_isoform_rec.get_start_pos(),
@@ -393,6 +398,8 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     }
 
     for (_, merged_isoform_rec) in &merged_map {
+        chrom_helper.add_record2chrom(merged_isoform_rec.chrom_id);
+
         tmp_vec.push((
             merged_isoform_rec.chrom_id,
             merged_isoform_rec.get_start_pos(),
@@ -486,6 +493,21 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         std::fs::File::create(&cli.outdir.join(CHROM_FILE_NAME))
             .expect("Can not create chromsome map file...exit"),
     );
+
+    /*
+     * Drop zero records from chromosome mapping
+     */
+    chrom_helper.drop_zero(&mut chroms);
+    // let x = chroms.get_chrom_idx("KI270363.1");
+    // dbg!(&x);
+    //     // 打印出来chroms看 KI270363.1 到底是什么情况
+    // dbg!(&chroms);
+    // if x.is_some() {
+    //     let x = x.unwrap();
+    //     let count = chroms.get_record_count(x);
+    //     dbg!(&count);
+    // }
+
     out_chrom_map_writer.write_all(&chroms.encode()).unwrap();
 
     info!(

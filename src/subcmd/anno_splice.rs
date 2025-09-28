@@ -150,8 +150,8 @@ fn greetings(args: &AnnSpliceCli) {
 }
 
 pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
+    // env::set_var("RUST_LOG", "info");
+    // env_logger::init();
     cli.validate();
     greetings(&cli);
 

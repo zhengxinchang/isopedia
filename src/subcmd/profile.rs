@@ -142,8 +142,8 @@ fn greetings(args: &ProfileCli) {
 }
 
 pub fn run_extr(cli: &ProfileCli) -> Result<()> {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
+    // env::set_var("RUST_LOG", "info");
+    // env_logger::init();
 
     // let cli = ExtrCli::parse();
     cli.validate();

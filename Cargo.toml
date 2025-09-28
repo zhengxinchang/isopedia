@@ -1,6 +1,6 @@
 [package]
 name = "isopedia"
-version = "1.2.3"
+version = "1.2.4"
 edition = "2021"
 authors = [ "Xinchang Zheng", "Fritz J Sedlazeck"]
 
@@ -8,7 +8,7 @@ authors = [ "Xinchang Zheng", "Fritz J Sedlazeck"]
 lru="0.12.5"
 zerocopy = "0.8.0"
 zerocopy-derive = "0.8.0"
-rust-htslib = "=0.48.0"
+rust-htslib = {version="=0.48.0",features=["static"]}
 bio-types = "1.0.4"
 ahash = "0.8.11"
 rustc-hash = "2.0.0"
@@ -37,10 +37,5 @@ rayon = "1.11.0"
 tempfile = "3.2"
 rand = "0.8"
 
-
-
-
-
 [profile.release]
 panic = 'abort'
-# debug = true

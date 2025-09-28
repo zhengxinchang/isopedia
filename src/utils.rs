@@ -193,5 +193,13 @@ pub fn check_index_dir(path: &Path) -> bool {
 }
 
 pub fn line2fields(line: &str) -> Vec<String> {
-    line.split_whitespace().map(|s| s.to_string()).collect()
+    // if  \t detcted in the line , use \t to split, else use whitespace to split
+    if line.contains('\t') {
+        line.trim_end().split('\t').map(|s| s.to_string()).collect()
+    } else {
+        line.trim_end()
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect()
+    }
 }

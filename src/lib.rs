@@ -8,6 +8,7 @@ pub mod gene_index;
 pub mod gtf;
 pub mod isoform;
 pub mod isoformarchive;
+pub mod logger;
 pub mod meta;
 pub mod output;
 pub mod reads;

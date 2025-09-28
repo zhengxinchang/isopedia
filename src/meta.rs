@@ -57,17 +57,13 @@ impl Meta {
         }
     }
     pub fn parse<P: AsRef<Path>>(path: P) -> Result<Meta> {
+        info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
+
         let mut reader = io::BufReader::new(File::open(path)?);
 
         let mut header = String::new();
         let mut records = IndexMap::new();
         reader.read_line(&mut header)?;
-
-        // let header = header
-        //     .trim_end()
-        //     .split('\t')
-        //     .map(|s| s.to_string())
-        //     .collect::<Vec<String>>();
         let header = utils::line2fields(&header);
 
         info!("Parsed {} fields from header: {:?}", header.len(), header);
@@ -76,12 +72,6 @@ impl Meta {
         for line in reader.lines() {
             let line = line?;
             line_no += 1;
-            // let parts: Vec<String> = line
-            //     .trim_end()
-            //     .split('\t')
-            //     // .into_iter()
-            //     .map(|part| part.to_string())
-            //     .collect();
 
             let parts = utils::line2fields(&line);
             if parts.len() == 0 {
@@ -91,10 +81,12 @@ impl Meta {
 
             if parts.len() != header.len() {
                 return Err(anyhow::anyhow!(
-                    "The {} record does not match header length: {} != {}",
+                    "The record at line {} does not match header length: {} != {}\nHeader: {:?}\nRecord: {:?}",
                     line_no,
                     parts.len(),
-                    header.len()
+                    header.len(),
+                    header,
+                    parts
                 ));
             }
 

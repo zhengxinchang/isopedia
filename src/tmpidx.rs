@@ -9,9 +9,7 @@ use memmap2::Mmap;
 use num_format::{Locale, ToFormattedString};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::map::Iter;
-use std::io::{self, BufRead};
-use std::os::unix::fs::FileExt;
+// use std::io::{self, BufRead};
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
@@ -28,7 +26,7 @@ use std::hash::Hasher;
 type ChromIdxStartart = u64;
 type ChromIdxLength = u64;
 type ChromId = u16;
-use anyhow::Result;
+// use anyhow::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TmpindexMeta {
@@ -209,7 +207,7 @@ impl Tmpindex {
 
             total_idx_n += 1;
 
-            if total_idx_n % self.chunk_size as u64 == 0 {
+            if total_idx_n % (self.chunk_size * 10) as u64 == 0 {
                 info!(
                     "write {} offsets...",
                     total_idx_n.to_formatted_string(&Locale::en)

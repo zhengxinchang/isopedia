@@ -2,11 +2,15 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use isopedia::chromosome::ChromMapping;
 use isopedia::constants::*;
+#[allow(dead_code, unused)]
 use isopedia::isoformarchive::read_record_from_mmap;
+use isopedia::logger::init_logger;
 use isopedia::reads::AggrRead;
+#[allow(dead_code, unused)]
 use isopedia::tmpidx::Tmpindex;
 use isopedia::writer::MyGzWriter;
 use log::{error, info, warn};
+#[allow(dead_code, unused)]
 use memmap2::Mmap;
 // use noodles_fasta::fai::read;
 use serde::{Deserialize, Serialize};
@@ -15,6 +19,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
+#[allow(dead_code, unused)]
 pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
     // let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
     // let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
@@ -41,6 +46,7 @@ pub fn inspect_intrim_file(idx: &PathBuf, output: &PathBuf) {
     // }
 }
 
+#[allow(dead_code, unused)]
 pub fn inspect_archive(idx: &PathBuf, output: &PathBuf) {
     // let mut processed_signautres = std::collections::HashSet::new();
 
@@ -90,10 +96,7 @@ fn inspect_meta(idx: &PathBuf) {
 fn inspect_chroms(idx: &PathBuf) {
     let chrom_bytes = std::fs::read(&idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
-    for chrom_id in chromamp.get_chrom_idxs() {
-        let chrom_name = chromamp.get_chrom_name(chrom_id);
-        println!("{}\t{}", chrom_name, chrom_id);
-    }
+    dbg!(&chromamp);
 }
 
 fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
@@ -451,19 +454,7 @@ impl Validate for ManifestSplit {
 }
 
 fn main() {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
-    )
-    .format(|buf, refcord| {
-        writeln!(
-            buf,
-            "[{}] [{}]: {}",
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-            refcord.level(),
-            refcord.args()
-        )
-    })
-    .init();
+    init_logger();
 
     let cli = ToolCli::parse();
 

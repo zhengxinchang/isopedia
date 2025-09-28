@@ -344,12 +344,12 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
     cli.validate();
     greetings(&cli);
 
-    if cli.debug {
-        env::set_var("RUST_LOG", "debug");
-    } else {
-        env::set_var("RUST_LOG", "info");
-    }
-    env_logger::init();
+    // if cli.debug {
+    //     env::set_var("RUST_LOG", "debug");
+    // } else {
+    //     env::set_var("RUST_LOG", "info");
+    // }
+    // env_logger::init();
 
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;

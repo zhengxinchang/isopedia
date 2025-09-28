@@ -1,7 +1,11 @@
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, sync::Mutex};
 
 use crate::{
-    bptree::BPTree, chromosome::ChromMapping, constants::*, dataset_info::DatasetInfo, meta::Meta,
+    bptree::BPTree,
+    chromosome::{ChromMapping, ChromMappingHelper},
+    constants::*,
+    dataset_info::DatasetInfo,
+    meta::Meta,
     tmpidx::Tmpindex,
 };
 use anyhow::Result;
@@ -96,84 +100,11 @@ fn greetings(args: &IndexCli) {
 }
 
 pub fn run_idx(cli: &IndexCli) -> Result<()> {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
+    // env::set_var("RUST_LOG", "info");
+    // env_logger::init();
 
     cli.validate();
     greetings(&cli);
-
-    let chrom_bytes =
-        std::fs::read(cli.idxdir.join(CHROM_FILE_NAME)).expect("Cannot read chrom map file");
-
-    let chrom_map = ChromMapping::decode(&chrom_bytes);
-
-    info!("Loading...");
-    let mut tmpidx = Tmpindex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
-    // info!("Indexing...");
-    let nchrs = chrom_map.get_size();
-
-    // info!("")
-
-    dbg!(&tmpidx.meta);
-    // change to multi-threaded building of B+ tree
-
-    if cli.threads == 1 {
-        info!("Using single thread for indexing");
-        let mut cur_chr = 0;
-        for chrom_id in chrom_map.get_chrom_idxs() {
-            cur_chr += 1;
-            info!("Indexing {}/{}th chromosome", cur_chr, nchrs);
-
-            let tmpidx_chunker = tmpidx
-                .groups(chrom_id)
-                .expect("Failed to get tmpidx chunker");
-            BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id)?;
-        }
-    } else {
-        info!("Using {} threads for indexing", cli.threads);
-
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(cli.threads)
-            .build()
-            .unwrap();
-
-        pool.install(|| {
-            chrom_map
-                .get_chrom_idxs()
-                .par_iter()
-                .enumerate()
-                .for_each(|(i, &chrom_id)| {
-                    info!("Indexing chromosome {}/{} ", i + 1, nchrs);
-
-                    match tmpidx.groups(chrom_id) {
-                        Some(tmpidx_chunker) => {
-                            if let Err(e) =
-                                BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id)
-                            {
-                                error!("Chrom {} failed: {:?}", chrom_id, e);
-                                std::process::exit(1);
-                            }
-                        }
-                        None => {
-                            info!(
-                                "Skip chromosome {}: {} with zero records after filtering",
-                                chrom_id,
-                                chrom_map.get_chrom_name(chrom_id)
-                            );
-                            /*
-                             * Explanation:
-                             * In some cases, after filtering, certain chromosomes may have zero records. but the chromsome name was
-                             * still recorded in the chrom file.
-                             * After merging, the tmpidx will not have offset and count for this chromosome(because there is no record for this chromosome),
-                             * thus when we try to build the B+ tree for this chromosome, it will fail.
-                             * Here we just skip the chromosome with zero records, which is a safe operation.
-                             */
-                            return;
-                        }
-                    };
-                });
-        });
-    }
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
@@ -209,6 +140,109 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
             .save_to_file(&cli.idxdir.join(META_FILE_NAME))
             .expect("Failed to save empty meta file");
     }
+
+    let chrom_bytes =
+        std::fs::read(cli.idxdir.join(CHROM_FILE_NAME)).expect("Cannot read chrom map file");
+
+    let mut chrom_map = ChromMapping::decode(&chrom_bytes);
+
+    info!("Loading...");
+    let tmpidx = Tmpindex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
+    // info!("Indexing...");
+    let nchrs = chrom_map.get_size();
+
+    if cli.threads == 1 {
+        info!("Using single thread for indexing");
+        let mut chrom_helper = ChromMappingHelper::new();
+        let mut cur_chr = 0;
+        for chrom_id in chrom_map.get_chrom_idxs() {
+            info!("Indexing {}/{}th chromosome", cur_chr, nchrs);
+
+            match tmpidx.groups(chrom_id) {
+                Some(tmpidx_chunker) => {
+                    if let Err(e) = BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id) {
+                        error!("Chrom {} failed: {:?}", chrom_id, e);
+                        std::process::exit(1);
+                    }
+                    cur_chr += 1;
+                    chrom_helper.add_record2chrom(chrom_id);
+                }
+                None => {
+                    info!(
+                        "Skip chromosome {}: {} with zero records after filtering",
+                        chrom_id,
+                        chrom_map.get_chrom_name(chrom_id)
+                    );
+                    /*
+                     * Explanation:
+                     * In some cases, after filtering, certain chromosomes may have zero records. but the chromsome name was
+                     * still recorded in the chrom file.
+                     * After merging, the tmpidx will not have offset and count for this chromosome(because there is no record for this chromosome),
+                     * thus when we try to build the B+ tree for this chromosome, it will fail.
+                     * Here we just skip the chromosome with zero records, which is a safe operation.
+                     */
+                    continue;
+                }
+            }
+        }
+
+        chrom_helper.drop_zero(&mut chrom_map);
+    } else {
+        info!("Using {} threads for indexing", cli.threads);
+        let chrom_helper = Mutex::new(ChromMappingHelper::new());
+
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(cli.threads)
+            .build()?;
+
+        pool.install(|| {
+            chrom_map
+                .get_chrom_idxs()
+                .par_iter()
+                .enumerate()
+                .for_each(|(i, &chrom_id)| {
+                    info!("Indexing chromosome {}/{} ", i, nchrs);
+
+                    match tmpidx.groups(chrom_id) {
+                        Some(tmpidx_chunker) => {
+                            if let Err(e) =
+                                BPTree::build_tree(tmpidx_chunker, &cli.idxdir, chrom_id)
+                            {
+                                error!("Chrom {} failed: {:?}", chrom_id, e);
+                                std::process::exit(1);
+                            }
+                            let mut helper = chrom_helper.lock().unwrap();
+                            helper.add_record2chrom(chrom_id);
+                        }
+                        None => {
+                            info!(
+                                "Skip chromosome {}: {} with zero records after filtering",
+                                chrom_id,
+                                chrom_map.get_chrom_name(chrom_id)
+                            );
+                            /*
+                             * Explanation:
+                             * In some cases, after filtering, certain chromosomes may have zero records. but the chromsome name was
+                             * still recorded in the chrom file.
+                             * After merging, the tmpidx will not have offset and count for this chromosome(because there is no record for this chromosome),
+                             * thus when we try to build the B+ tree for this chromosome, it will fail.
+                             * Here we just skip the chromosome with zero records, which is a safe operation.
+                             */
+                            return;
+                        }
+                    };
+                });
+        });
+
+        let mut helper = chrom_helper.lock().unwrap();
+        helper.drop_zero(&mut chrom_map);
+    }
+
+    // rewrite the chrom file to drop zero-record chromosomes
+
+    let chrom_encoded = chrom_map.encode();
+    std::fs::write(cli.idxdir.join(CHROM_FILE_NAME), &chrom_encoded)
+        .expect("Failed to write updated chrom file");
 
     info!("Finished!");
     Ok(())

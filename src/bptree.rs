@@ -8,7 +8,7 @@ use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::Tmpindex;
 use ahash::HashSet;
 use anyhow::Result;
-use itertools::Itertools;
+// use itertools::Itertools;
 use lru::LruCache;
 use memmap2::Mmap;
 use rustc_hash::FxHashMap;

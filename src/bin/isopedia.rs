@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+use isopedia::logger::init_logger;
 use isopedia::subcmd::anno_fusion::run_anno_fusion;
 use isopedia::subcmd::anno_fusion::AnnFusionCli;
 use isopedia::subcmd::anno_isoform::run_anno_isoform;
@@ -37,6 +38,8 @@ enum Commands {
 }
 
 fn main() {
+    init_logger();
+
     let cli = Cli::parse();
 
     match cli.command {
