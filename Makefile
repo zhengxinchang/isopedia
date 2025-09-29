@@ -8,12 +8,19 @@ build:
 	cargo build --release
 	cargo build --release --target x86_64-unknown-linux-musl
 
+build-docker:
+	bash ./build_linux_dist.sh
+
 strip:
 	cargo strip --target x86_64-unknown-linux-musl
 	
-pack: build 
+pack: build build-docker 
 
 	tar -zcvf ver_release/isopedia-$(VERSION).musl.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
+
+	tar -zcvf ver_release/isopedia-$(VERSION).linux.tar.gz -C linux_build/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
+
+
 
 push:
 	cargo fmt && git add . && git commit -m "WIP" && git push
