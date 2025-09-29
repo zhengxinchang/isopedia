@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, sync::Mutex};
+use std::{path::PathBuf, sync::Mutex};
 
 use crate::{
     bptree::BPTree,

@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    env,
     fs::File,
     io::BufRead,
     path::PathBuf,

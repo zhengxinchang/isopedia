@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, collections::BinaryHeap, env, fmt::Display, io::Write, path::PathBuf};
+use std::{cmp::Reverse, collections::BinaryHeap, fmt::Display, io::Write, path::PathBuf};
 
 use crate::{
     chromosome::{ChromMapping, ChromMappingHelper},

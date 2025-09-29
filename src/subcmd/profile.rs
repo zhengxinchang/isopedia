@@ -8,7 +8,6 @@ use rust_htslib::bam::{
     Read, Record,
 };
 use rustc_hash::FxHashMap;
-use std::env;
 use std::path::PathBuf;
 
 use crate::{

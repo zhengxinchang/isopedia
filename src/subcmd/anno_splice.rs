@@ -11,7 +11,6 @@ use clap::{arg, Parser};
 use log::{error, info, warn};
 use memmap2::Mmap;
 use serde::Serialize;
-use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 

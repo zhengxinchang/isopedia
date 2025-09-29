@@ -106,7 +106,6 @@ pub struct GeneIntervalTree {
     pub tree: HashMap<String, Lapper<u64, GeneInterval>>,
     pub count: usize,
     pub chroms: Vec<String>,
-    // pub list: Vec<GeneInterval>,
 }
 
 impl GeneIntervalTree {

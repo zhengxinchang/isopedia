@@ -34,23 +34,6 @@ impl IsoformArchiveWriter {
     }
 }
 
-// pub fn read_record_from_archive(
-//     reader: &mut BufReader<File>,
-//     record_ptr: &MergedIsoformOffsetPtr,
-//     buf: &mut Vec<u8>,
-// ) -> MergedIsoform {
-//     buf.clear();
-
-//     reader
-//         .seek(std::io::SeekFrom::Start(record_ptr.offset))
-//         .expect("Failed to seek in archive file");
-
-//     reader
-//         .take(record_ptr.length as u64)
-//         .read_to_end(buf)
-//         .expect("Failed to read record from archive file");
-// }
-
 pub fn read_record_from_mmap(
     mmap: &[u8],
     offset: &MergedIsoformOffsetPtr,

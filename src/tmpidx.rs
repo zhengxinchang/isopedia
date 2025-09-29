@@ -214,32 +214,15 @@ impl Tmpindex {
                 );
             }
 
-            // if let Some(rec) = readers[idx]
-            //     .by_ref()
-            //     .bytes()
-            //     .take(MergedIsoformOffsetPlusGenomeLoc::SIZE)
-            //     .collect::<Result<Vec<u8>, _>>()
-            //     .ok()
-            // {
-            //     if rec.len() == MergedIsoformOffsetPlusGenomeLoc::SIZE {
-            //         let next_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&rec);
-            //         heap.push(Reverse((next_rec, idx)));
-            //     }
-            // }
-
             let mut next_buf = [0u8; MergedIsoformOffsetPlusGenomeLoc::SIZE];
             match readers[idx].read_exact(&mut next_buf) {
                 Ok(_) => {
                     let next_rec = MergedIsoformOffsetPlusGenomeLoc::from_bytes(&next_buf);
                     heap.push(Reverse((next_rec, idx)));
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    // 该 chunk 正常读完，啥也不做
-                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {}
                 Err(e) => {
-                    // 非 EOF 的 I/O 错误不要吞掉，至少 warn 一下，避免“静默丢失”
                     error!("read next record failed for chunk {}: {}", idx, e);
-                    // 这里也可以选择 return Err(e) 提前失败，视你对稳健性的要求而定
                 }
             }
 
@@ -326,8 +309,6 @@ impl Tmpindex {
         for path in merged_data_file_list.iter() {
             fs::remove_file(path).expect("Can not remove old record data chunk file");
         }
-
-        // fs::remove_file(record_data_path).expect("Can not remove old record data file");
     }
 
     pub fn load(file_name: &PathBuf) -> Tmpindex {
@@ -577,10 +558,6 @@ impl MergedIsoformOffsetGroup {
             record_ptr_vec: Vec::new(),
         }
     }
-
-    // pub fn is_emtpy(&self) -> bool {
-    //     self.chrom_id == 0 && self.pos == 0
-    // }
 
     pub fn add(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<MergedIsoformOffsetPtr>) {
         assert!(self.chrom_id == chrom_id && self.pos == pos);
