@@ -21,9 +21,9 @@ pack: build build-docker
 	tar -zcvf ver_release/isopedia-$(VERSION).linux.tar.gz -C linux_build/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py temp.html
 
 
-
+CMT ?= WIP
 push:
-	cargo fmt && git add . && git commit -m "WIP" && git push
+	cargo fmt && git add . && git commit -m "$(CMT)" && git push
 
 
 t1:build
