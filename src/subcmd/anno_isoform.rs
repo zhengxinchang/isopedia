@@ -8,6 +8,7 @@ use crate::{
     isoform::{self, MergedIsoform},
     isoformarchive::read_record_from_mmap,
     meta::Meta,
+    output::{Header, Line, TableOutput},
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, get_total_memory_bytes, warmup},
     writer::MyGzWriter,
@@ -157,11 +158,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut mywriter = MyGzWriter::new(&cli.output)?;
 
-    let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME))?;
+    let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
     info!("Writing sample meta...");
 
-    mywriter.write_all_bytes(meta.get_meta_table(Some("##")).as_bytes())?;
+    mywriter.write_all_bytes(meta.to_table(Some("##")).as_bytes())?;
 
     mywriter.write_all_bytes("#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\tdetected\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes())?;
 
@@ -211,29 +212,29 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             );
             iter_count = 0;
 
-            let release_up_to = released_bytes + RELEASE_STEP;
-            let base_ptr = archive_mmap.as_ptr() as *mut libc::c_void;
+            // let release_up_to = released_bytes + RELEASE_STEP;
+            // let base_ptr = archive_mmap.as_ptr() as *mut libc::c_void;
 
-            let ret = unsafe {
-                posix_madvise(
-                    base_ptr.add(released_bytes),
-                    RELEASE_STEP,
-                    POSIX_MADV_DONTNEED,
-                )
-            };
+            // let ret = unsafe {
+            //     posix_madvise(
+            //         base_ptr.add(released_bytes),
+            //         RELEASE_STEP,
+            //         POSIX_MADV_DONTNEED,
+            //     )
+            // };
 
-            if ret == 0 {
-                released_bytes = release_up_to;
-                info!(
-                    "Released first {} MB from page cache",
-                    released_bytes / 1024 / 1024
-                );
-            } else {
-                info!(
-                    "posix_madvise failed at {} MB",
-                    released_bytes / 1024 / 1024
-                );
-            }
+            // if ret == 0 {
+            //     released_bytes = release_up_to;
+            //     info!(
+            //         "Released first {} MB from page cache",
+            //         released_bytes / 1024 / 1024
+            //     );
+            // } else {
+            //     info!(
+            //         "posix_madvise failed at {} MB",
+            //         released_bytes / 1024 / 1024
+            //     );
+            // }
         }
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();

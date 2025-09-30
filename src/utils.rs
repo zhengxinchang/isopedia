@@ -203,3 +203,19 @@ pub fn line2fields(line: &str) -> Vec<String> {
             .collect()
     }
 }
+
+pub fn trim_prefix(s: &str, prefix: &Option<&str>) -> String {
+    if let Some(p) = prefix {
+        s.trim_start_matches(p).to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+pub fn add_prefix(s: &str, prefix: &Option<&str>) -> String {
+    if let Some(p) = prefix {
+        format!("{}{}", p, s)
+    } else {
+        s.to_string()
+    }
+}

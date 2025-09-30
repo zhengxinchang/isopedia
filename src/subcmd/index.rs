@@ -110,7 +110,7 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
 
     if let Some(meta_path) = &cli.meta {
         info!("Integrating meta data from {}", meta_path.display());
-        let meta = Meta::parse(meta_path).expect("Failed to parse meta file");
+        let meta = Meta::parse(meta_path, None).expect("Failed to parse meta file");
         let meta_samples = meta.get_samples();
 
         let dataset_samples = dataset_info.get_sample_names();

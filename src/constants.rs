@@ -12,3 +12,4 @@ pub type NodeIDType = u64;
 pub type AddrType = u64;
 pub const LRU_CACHE_SIZE: usize = 100_000_000;
 pub const MAGIC: u64 = 9236;
+pub const FORMAT_STR: &str = "FORMAT";

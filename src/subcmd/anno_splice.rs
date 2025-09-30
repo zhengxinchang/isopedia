@@ -3,6 +3,7 @@ use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
 use crate::isoform::MergedIsoform;
 use crate::isoformarchive::read_record_from_mmap;
+use crate::output::TableOutput;
 use crate::utils::{get_total_memory_bytes, warmup};
 use crate::writer::MyGzWriter;
 use crate::{constants::*, meta, utils};
@@ -164,7 +165,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     let mut archive_buf: Vec<u8> = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
     info!("loading metadata");
-    let meta = meta::Meta::parse(cli.idxdir.join(META_FILE_NAME))?;
+    let meta = meta::Meta::parse(cli.idxdir.join(META_FILE_NAME), None)?;
 
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .expect("Can not open aggregated records file...");
@@ -217,7 +218,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    let meta_table = meta.get_meta_table(Some("##"));
+    let meta_table = meta.to_table(Some("##"));
 
     mywriter.write_all_bytes(meta_table.as_bytes())?;
 

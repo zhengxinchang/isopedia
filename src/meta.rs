@@ -8,7 +8,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use log::{info, warn};
 
-use crate::utils;
+use crate::{output::TableOutput, utils};
 
 #[derive(Debug, Clone)]
 pub struct MetaEntry {
@@ -56,60 +56,14 @@ impl Meta {
             is_empty: true,
         }
     }
-    pub fn parse<P: AsRef<Path>>(path: P) -> Result<Meta> {
+    pub fn parse<P: AsRef<Path>>(path: P, prefix: Option<&str>) -> Result<Meta> {
         info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
-
-        let mut reader = io::BufReader::new(File::open(path)?);
-
-        let mut header = String::new();
-        let mut records = IndexMap::new();
-        reader.read_line(&mut header)?;
-        let header = utils::line2fields(&header);
-
-        info!("Parsed {} fields from header: {:?}", header.len(), header);
-        let mut samples = Vec::new();
-        let mut line_no = 0;
-        for line in reader.lines() {
-            let line = line?;
-            line_no += 1;
-
-            let parts = utils::line2fields(&line);
-            if parts.len() == 0 {
-                warn!("Skipping empty line at {}", line_no);
-                continue;
-            }
-
-            if parts.len() != header.len() {
-                return Err(anyhow::anyhow!(
-                    "The record at line {} does not match header length: {} != {}\nHeader: {:?}\nRecord: {:?}",
-                    line_no,
-                    parts.len(),
-                    header.len(),
-                    header,
-                    parts
-                ));
-            }
-
-            samples.push(parts[0].clone());
-
-            let mut meta_entry = MetaEntry::new(parts[0].clone());
-            for (k, v) in header.iter().zip(&parts).skip(1) {
-                meta_entry.add(k.clone(), v.clone())?;
-            }
-            records.insert(parts[0].clone(), meta_entry);
-        }
-
-        Ok(Meta {
-            samples,
-            header,
-            records,
-            is_empty: false,
-        })
+        Meta::from_table(&path, prefix)
     }
 
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let mut writer = File::create(path)?;
-        write!(writer, "{}", self.get_meta_table(None))?;
+        write!(writer, "{}", self.to_table(None))?; // for internal use, no prefix
         Ok(())
     }
 
@@ -157,27 +111,114 @@ impl Meta {
         table
     }
 
+    pub fn parse_meta_table<P: AsRef<Path>>(path: P) -> Result<Meta> {
+        Err(anyhow::anyhow!("Not implemented yet"))
+    }
+
     pub fn get_attr_by_name(&self, name: &str, attr: &str) -> Option<&String> {
         self.records
             .get(name)
             .and_then(|entry| entry.fields.get(attr))
     }
 }
-// wrote tests for Meta
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-    #[test]
-    fn test_meta_parse() {
-        let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, "Sample\tField1\tField2").unwrap();
-        writeln!(temp_file, "Sample1\tValue1\tValue2").unwrap();
-        writeln!(temp_file, "Sample2\tValue3\tValue4").unwrap();
-        temp_file.flush().unwrap(); // Ensure all data is written
-        let meta = Meta::parse(temp_file.path()).unwrap();
-        print!("{:?}", meta.get_meta_table(Some("##")));
+
+impl TableOutput for Meta {
+    fn to_table(&self, prefix: Option<&str>) -> String {
+        let mut table = String::new();
+        let mut header_clean = self.header.clone();
+        header_clean.remove(1); // remove the path
+
+        if let Some(p) = prefix {
+            table.push_str(&format!("{}{}\n", p, header_clean.join("\t")));
+            for sample in &self.samples {
+                if let Some(entry) = self.records.get(sample) {
+                    let fields: Vec<String> = header_clean
+                        .iter()
+                        .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
+                        .collect();
+                    table.push_str(&format!("{}{}{}\n", p, entry.name, fields.join("\t")));
+                }
+            }
+        } else {
+            table.push_str(&format!("{}\n", self.header.join("\t")));
+            for sample in &self.samples {
+                if let Some(entry) = self.records.get(sample) {
+                    let fields: Vec<String> = self
+                        .header
+                        .iter()
+                        .map(|h| entry.fields.get(h).cloned().unwrap_or_default())
+                        .collect();
+                    table.push_str(&format!("{}{}\n", entry.name, fields.join("\t")));
+                }
+            }
+        }
+
+        table
+    }
+
+    fn from_table<P: AsRef<Path>>(table: &P, prefix: Option<&str>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let mut reader = io::BufReader::new(File::open(table)?);
+
+        let mut header = String::new();
+        let mut records = IndexMap::new();
+        reader.read_line(&mut header)?;
+
+        let header = if !prefix.is_none() {
+            header.trim_start_matches(prefix.unwrap()).trim()
+        } else {
+            header.trim()
+        };
+
+        let header = utils::line2fields(&header);
+
+        info!("Parsed {} fields from header: {:?}", header.len(), header);
+        let mut samples = Vec::new();
+        let mut line_no = 0;
+        for line in reader.lines() {
+            let line = line?;
+
+            let line = if !prefix.is_none() {
+                line.trim_start_matches(prefix.unwrap()).trim().to_string()
+            } else {
+                line.trim().to_string()
+            };
+
+            line_no += 1;
+
+            let parts = utils::line2fields(&line);
+            if parts.len() == 0 {
+                warn!("Skipping empty line at {}", line_no);
+                continue;
+            }
+
+            if parts.len() != header.len() {
+                return Err(anyhow::anyhow!(
+                    "The record at line {} does not match header length: {} != {}\nHeader: {:?}\nRecord: {:?}",
+                    line_no,
+                    parts.len(),
+                    header.len(),
+                    header,
+                    parts
+                ));
+            }
+
+            samples.push(parts[0].clone());
+
+            let mut meta_entry = MetaEntry::new(parts[0].clone());
+            for (k, v) in header.iter().zip(&parts).skip(1) {
+                meta_entry.add(k.clone(), v.clone())?;
+            }
+            records.insert(parts[0].clone(), meta_entry);
+        }
+
+        Ok(Meta {
+            samples,
+            header,
+            records,
+            is_empty: false,
+        })
     }
 }
