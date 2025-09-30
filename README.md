@@ -81,6 +81,9 @@ isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.tsv
 
 ![how-it-works](./img/how-it-works.png)
 
+![how-it-works2](./img/how-it-works2.png)
+
+
 
 # Usage
 

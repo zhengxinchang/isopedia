@@ -14,5 +14,6 @@ pub mod output;
 pub mod reads;
 pub mod subcmd;
 pub mod tmpidx;
+pub mod tools;
 pub mod utils;
 pub mod writer;

@@ -16,8 +16,11 @@ use anyhow::Result;
 use clap::{command, Parser};
 use log::{error, info};
 use memmap2::Mmap;
+use nix::libc::{self, posix_madvise, POSIX_MADV_DONTNEED};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
+// use nix::sys::mman::{posix_madvise, PosixMadvise};
+// Removed incorrect import of mmap::{PosixMadvise,posix_madvise}
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia-ann-isoform")]
@@ -192,6 +195,10 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
 
+    let mut released_bytes: usize = 0; // 已释放的区间长度
+
+    const RELEASE_STEP: usize = 256 * 1024 * 1024; // 每次释放 256MB
+
     const FORMAT: &str = "CPM:COUNT";
     for trans in gtf {
         iter_count += 1;
@@ -203,6 +210,30 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 (batch * 10_000).to_formatted_string(&Locale::en)
             );
             iter_count = 0;
+
+            let release_up_to = released_bytes + RELEASE_STEP;
+            let base_ptr = archive_mmap.as_ptr() as *mut libc::c_void;
+
+            let ret = unsafe {
+                posix_madvise(
+                    base_ptr.add(released_bytes),
+                    RELEASE_STEP,
+                    POSIX_MADV_DONTNEED,
+                )
+            };
+
+            if ret == 0 {
+                released_bytes = release_up_to;
+                info!(
+                    "Released first {} MB from page cache",
+                    released_bytes / 1024 / 1024
+                );
+            } else {
+                info!(
+                    "posix_madvise failed at {} MB",
+                    released_bytes / 1024 / 1024
+                );
+            }
         }
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
