@@ -58,12 +58,12 @@ impl Meta {
     }
     pub fn parse<P: AsRef<Path>>(path: P, prefix: Option<&str>) -> Result<Meta> {
         info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
-        Meta::from_table(&path, prefix)
+        Meta::from_table(&path, prefix, None)
     }
 
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let mut writer = File::create(path)?;
-        write!(writer, "{}", self.to_table(None))?; // for internal use, no prefix
+        write!(writer, "{}", self.to_table(None, None))?; // for internal use, no prefix
         Ok(())
     }
 
