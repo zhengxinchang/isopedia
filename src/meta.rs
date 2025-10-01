@@ -123,7 +123,7 @@ impl Meta {
 }
 
 impl TableOutput for Meta {
-    fn to_table(&self, prefix: Option<&str>) -> String {
+    fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
         let mut table = String::new();
         let mut header_clean = self.header.clone();
         header_clean.remove(1); // remove the path
@@ -156,7 +156,11 @@ impl TableOutput for Meta {
         table
     }
 
-    fn from_table<P: AsRef<Path>>(table: &P, prefix: Option<&str>) -> Result<Self>
+    fn from_table<P: AsRef<Path>>(
+        table: &P,
+        prefix: Option<&str>,
+        sep: Option<&str>,
+    ) -> Result<Self>
     where
         Self: Sized,
     {

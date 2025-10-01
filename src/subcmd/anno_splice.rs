@@ -218,7 +218,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    let meta_table = meta.to_table(Some("##"));
+    let meta_table = meta.to_table(Some("##"), None);
 
     mywriter.write_all_bytes(meta_table.as_bytes())?;
 

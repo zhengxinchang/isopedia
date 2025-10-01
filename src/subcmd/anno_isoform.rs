@@ -162,7 +162,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     info!("Writing sample meta...");
 
-    mywriter.write_all_bytes(meta.to_table(Some("##")).as_bytes())?;
+    mywriter.write_all_bytes(meta.to_table(Some("##"), None).as_bytes())?;
 
     mywriter.write_all_bytes("#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\tdetected\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes())?;
 
