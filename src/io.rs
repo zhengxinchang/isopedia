@@ -1,5 +1,5 @@
 use crate::writer::MyGzWriter;
-use crate::{constants::FORMAT_STR, meta::Meta, utils::add_prefix};
+use crate::{constants::FORMAT_STR_NAME, meta::Meta, utils::add_prefix};
 use anyhow::anyhow;
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -159,11 +159,23 @@ pub struct SampleChip {
 }
 
 impl SampleChip {
+    pub fn default(name: Option<String>) -> Self {
+        let f = Vec::new();
+        SampleChip {
+            sample_name: name,
+            fields: f,
+        }
+    }
+
     pub fn new(name: Option<String>, fields: Vec<String>) -> Self {
         SampleChip {
             sample_name: name,
             fields,
         }
+    }
+
+    pub fn add_item(&mut self, item: &str) {
+        self.fields.push(item.to_string());
     }
 }
 
@@ -314,7 +326,7 @@ impl GeneralOutputIO for Header {
         // dbg!(&header_line);
         // dbg!(&sample_line);
         header_line.push_str("\t");
-        header_line.push_str(FORMAT_STR);
+        header_line.push_str(FORMAT_STR_NAME);
         header_line.push_str("\t");
         header_line.push_str(&sample_line);
         header_line.push_str("\n");
@@ -336,7 +348,7 @@ impl GeneralOutputIO for Header {
             header_line.trim()
         };
 
-        let parts = header_line.split(FORMAT_STR).collect::<Vec<&str>>();
+        let parts = header_line.split(FORMAT_STR_NAME).collect::<Vec<&str>>();
         if parts.len() != 2 {
             return Err(anyhow::anyhow!("Header line does not contain FORMAT field"));
         }

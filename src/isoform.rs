@@ -10,6 +10,7 @@ use crate::{
     breakpoints::BreakPointPair,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
+    io::SampleChip,
     reads::{AggrRead, Segment, Strand},
     utils::{self, calc_cpm},
 };
@@ -501,14 +502,16 @@ impl MergedIsoform {
         bpp: &BreakPointPair,
         flank: u64,
         dbinfo: &DatasetInfo,
-    ) -> Option<String> {
-        let mut out_str = Vec::new();
+    ) -> Option<(Vec<String>, Vec<SampleChip>)> {
+        let mut result_buffer = Vec::new();
+
+        let mut sample_chip_vec = Vec::new();
 
         // support evidence
-        out_str.push(self.total_evidence.to_string());
+        result_buffer.push(self.total_evidence.to_string());
 
         // cpm of this isoform
-        out_str.push(
+        result_buffer.push(
             calc_cpm(
                 &self.total_evidence,
                 &(dbinfo.sample_total_evidence_vec.iter().sum::<u32>()),
@@ -525,12 +528,12 @@ impl MergedIsoform {
             }
         }) {
             // idx of splice junction
-            out_str.push((idx + 1).to_string());
+            result_buffer.push((idx + 1).to_string());
 
             // distance to splice sites
             // dbg!(sj.0, bpp.left_pos, sj.1, bpp.right_pos);
 
-            out_str.push(format!(
+            result_buffer.push(format!(
                 "{},{}",
                 utils::u64diff2i32(sj.0, bpp.left_pos),
                 utils::u64diff2i32(sj.1, bpp.right_pos)
@@ -545,12 +548,12 @@ impl MergedIsoform {
                 && self.isoform_reads_slim_vec[0].right == self.splice_junctions_vec[0].1
             {
                 // mono-exon
-                out_str.push("1".to_string());
+                result_buffer.push("1".to_string());
             } else {
-                out_str.push("2".to_string());
+                result_buffer.push("2".to_string());
             }
         } else {
-            out_str.push((self.splice_junctions_vec.len() + 1).to_string());
+            result_buffer.push((self.splice_junctions_vec.len() + 1).to_string());
         }
 
         let mut starts = Vec::with_capacity(10);
@@ -564,6 +567,8 @@ impl MergedIsoform {
             .zip(self.sample_evidence_arr.iter())
         {
             // for a particular sample, do:
+            let mut sample_chip = SampleChip::default(None);
+
             if *length > 0 {
                 let sub = &self.isoform_reads_slim_vec
                     [*offset as usize..(*offset as usize + *length as usize)];
@@ -571,34 +576,40 @@ impl MergedIsoform {
                 for read in sub {
                     starts.push(read.left);
                     ends.push(read.right);
-
                     sample_read_sub.push(format!("{}|{}|{}", read.left, read.right, read.strand));
                 }
-                let sample_read_sub = sample_read_sub.join(",");
-                sample_vec.push(format!(
-                    "{}:{}:{}",
+                let sample_read_sub = sample_read_sub.join(","); // example: 2:0.3399716769595925:7668421|7687507|+,7668421|7687489|+
+
+                // sample_chip
+
+                let cpm = calc_cpm(
                     length,
-                    calc_cpm(
-                        length,
-                        &(dbinfo.sample_total_evidence_vec[sample_idx] as u32)
-                    ),
-                    sample_read_sub
-                ));
+                    &(dbinfo.sample_total_evidence_vec[sample_idx] as u32),
+                );
+
+                sample_vec.push(format!("{}:{}:{}", &length, cpm, sample_read_sub));
+
+                sample_chip.add_item(&length.to_string());
+                sample_chip.add_item(&cpm.to_string());
+                sample_chip.add_item(&sample_read_sub);
             } else {
                 sample_vec.push(format!("{}:{}:{}", 0, 0, "NULL"));
+
+                sample_chip.add_item(&"0");
+                sample_chip.add_item(&"0");
+                sample_chip.add_item(&"NULL");
             }
             sample_idx = sample_idx + 1;
+            sample_chip_vec.push(sample_chip);
         }
 
         //left right most numbers
-        out_str.push(starts.iter().min().unwrap().to_string());
-        out_str.push(starts.iter().max().unwrap().to_string());
-        out_str.push(ends.iter().min().unwrap().to_string());
-        out_str.push(ends.iter().max().unwrap().to_string());
+        result_buffer.push(starts.iter().min().unwrap().to_string());
+        result_buffer.push(starts.iter().max().unwrap().to_string());
+        result_buffer.push(ends.iter().min().unwrap().to_string());
+        result_buffer.push(ends.iter().max().unwrap().to_string());
 
-        // splice junctions
-
-        out_str.push(
+        result_buffer.push(
             self.splice_junctions_vec
                 .iter()
                 .map(|(l, r)| format!("{}-{}", l, r))
@@ -608,11 +619,11 @@ impl MergedIsoform {
 
         // format
 
-        out_str.push("COUNT:CPM:START,END,STRAND".to_string());
+        // result_buffer.push("COUNT:CPM:START,END,STRAND".to_string());
 
-        out_str.extend_from_slice(&sample_vec);
+        // result_buffer.extend_from_slice(&sample_vec);
 
-        Some(out_str.join("\t"))
+        Some((result_buffer, sample_chip_vec))
     }
 }
 

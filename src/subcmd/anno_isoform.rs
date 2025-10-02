@@ -9,7 +9,7 @@ use crate::{
     isoform::{self, MergedIsoform},
     isoformarchive::read_record_from_mmap,
     meta::Meta,
-    output::{GeneralTableOutput, IsoformOutput},
+    output::{GeneralTableOutput, IsoformTableOut},
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, get_total_memory_bytes, warmup},
     writer::MyGzWriter,
@@ -184,7 +184,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         out_header.add_sample_name(&name)?;
     }
 
-    let mut isoform_out = IsoformOutput::new(
+    let mut isoform_out = IsoformTableOut::new(
         out_header,
         dbInfos,
         meta.clone(),

@@ -1,9 +1,10 @@
 use crate::bptree::BPForest;
 use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
-use crate::io::GeneralOutputIO;
+use crate::io::{self, DBInfos, GeneralOutputIO, Line};
 use crate::isoform::MergedIsoform;
 use crate::isoformarchive::read_record_from_mmap;
+use crate::output::{GeneralTableOutput, IsoformTableOut, SpliceTableOut};
 use crate::utils::{get_total_memory_bytes, warmup};
 use crate::writer::MyGzWriter;
 use crate::{constants::*, meta, utils};
@@ -11,6 +12,7 @@ use anyhow::Result;
 use clap::{arg, Parser};
 use log::{error, info, warn};
 use memmap2::Mmap;
+use nix::libc::SPLICE_F_GIFT;
 use serde::Serialize;
 use std::fs::File;
 use std::path::PathBuf;
@@ -54,8 +56,8 @@ pub struct AnnSpliceCli {
 
     /// Memory size to use for warming up (in gigabytes).  
     /// Example: 4GB. Increasing this will significantly improve performance;  
-    /// set it as large as your system allows.
-    #[arg(short, long, default_value_t = 4)]
+    /// Set it to 0(default) if you only have small query and want to skip warming up step.
+    #[arg(short, long, default_value_t = 0)]
     pub warmup_mem: usize,
 
     /// Maximum number of cached nodes per tree
@@ -150,14 +152,14 @@ fn greetings(args: &AnnSpliceCli) {
 }
 
 pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
-    // env::set_var("RUST_LOG", "info");
-    // env_logger::init();
     cli.validate();
     greetings(&cli);
 
-    info!("Warmup index file");
-    let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
-    warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
+    if cli.warmup_mem > 0 {
+        info!("Warmup index file");
+        let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
+        warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
+    }
 
     info!("loading indexes");
     let mut forest = BPForest::init(&cli.idxdir);
@@ -177,7 +179,26 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         .expect("Failed to set mmap advice");
 
     // init the output writer
-    let mut mywriter = MyGzWriter::new(&cli.output)?;
+    // let mut mywriter = MyGzWriter::new(&cli.output)?;
+
+    const SPLCIE_FORMAT: &str = "COUNT:CPM:START,END,STRAND";
+
+    let mut out_header = io::Header::new();
+    out_header.add_column("id")?;
+    out_header.add_column("chr1")?;
+    out_header.add_column("pos1")?;
+    out_header.add_column("chr2")?;
+    out_header.add_column("pos2")?;
+    out_header.add_column("total_evidence")?;
+    out_header.add_column("cpm")?;
+    out_header.add_column("matched_sj_idx")?;
+    out_header.add_column("dist_to_matched_sj")?;
+    out_header.add_column("n_exons")?;
+    out_header.add_column("start_pos_left")?;
+    out_header.add_column("start_pos_right")?;
+    out_header.add_column("end_pos_left")?;
+    out_header.add_column("end_pos_right")?;
+    out_header.add_column("splice_junctions")?;
 
     let queries: Vec<BreakPointPair> = if cli.splice.is_some() {
         info!("parse breakpoints pair from command line...");
@@ -218,35 +239,15 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    let meta_table = meta.to_table(Some("##[SAMPLE]"), None);
+    let mut dbinfo = DBInfos::new();
 
-    mywriter.write_all_bytes(meta_table.as_bytes())?;
+    for (name, evidence_count) in dataset_info.get_sample_evidence_pair_vec() {
+        dbinfo.add_sample_evidence(&name, evidence_count);
+        out_header.add_sample_name(&name)?;
+    }
 
-    // make header line
-    let header_line = vec![
-        "#id",
-        "chr1",
-        "pos1",
-        "chr2",
-        "pos2",
-        "total_evidence",
-        "cpm",
-        "matched_sj_idx",
-        "dist_to_matched_sj",
-        "n_exons",
-        "start_pos_left",
-        "start_pos_right",
-        "end_pos_left",
-        "end_pos_right",
-        "splice_junctions",
-        "format",
-    ];
-
-    let mut header_line = header_line.join("\t");
-    header_line.push_str("\t");
-    header_line.push_str(&dataset_info.get_sample_names().join("\t"));
-    header_line.push_str("\n");
-    mywriter.write_all_bytes(header_line.as_bytes())?;
+    let mut splice_out =
+        SpliceTableOut::new(out_header, dbinfo, meta.clone(), SPLCIE_FORMAT.to_string());
 
     // make output
     let mut out_str = String::with_capacity(1024);
@@ -263,12 +264,27 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
             warn!("No isoforms found for query: {}", query.id);
         } else {
             for offset in &isoforms_ptr {
+                let mut out_line = Line::new();
+                out_line.add_field(&query.id);
+                out_line.add_field(&query.left_chr);
+                out_line.add_field(&query.left_pos.to_string());
+                out_line.add_field(&query.right_chr);
+                out_line.add_field(&query.right_pos.to_string());
+
+                out_line.update_format_str(SPLCIE_FORMAT);
+
                 let record: MergedIsoform =
                     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
                 match record.get_splice_report(query, cli.flank, &dataset_info) {
-                    Some(record_str) => {
-                        let new_out_str = format!("{}\t{}\n", out_str, record_str);
-                        mywriter.write_all_bytes(new_out_str.as_bytes())?;
+                    Some((middle_part, sample_vec)) => {
+                        for item in &middle_part {
+                            out_line.add_field(item);
+                        }
+
+                        for samplec in &sample_vec {
+                            out_line.add_sample(samplec.clone());
+                        }
+                        splice_out.add_line(&out_line)?;
                     }
                     None => {}
                 }
@@ -276,7 +292,9 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    mywriter.finish()?;
+    splice_out.save_to_file(cli.output.with_extension("splice.gz"))?;
+
+    // mywriter.finish()?;
 
     info!("Finished!");
 
