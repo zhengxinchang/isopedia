@@ -1,18 +1,16 @@
 use crate::bptree::BPForest;
 use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
-use crate::io::{self, DBInfos, GeneralOutputIO, Line};
+use crate::io::{self, DBInfos, Line};
 use crate::isoform::MergedIsoform;
 use crate::isoformarchive::read_record_from_mmap;
-use crate::output::{GeneralTableOutput, IsoformTableOut, SpliceTableOut};
+use crate::output::{GeneralTableOutput, SpliceTableOut};
 use crate::utils::{get_total_memory_bytes, warmup};
-use crate::writer::MyGzWriter;
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
 use clap::{arg, Parser};
 use log::{error, info, warn};
 use memmap2::Mmap;
-use nix::libc::SPLICE_F_GIFT;
 use serde::Serialize;
 use std::fs::File;
 use std::path::PathBuf;
@@ -181,7 +179,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     // init the output writer
     // let mut mywriter = MyGzWriter::new(&cli.output)?;
 
-    const SPLCIE_FORMAT: &str = "COUNT:CPM:START,END,STRAND";
+    const SPLICE_FORMAT: &str = "COUNT:CPM:START,END,STRAND";
 
     let mut out_header = io::Header::new();
     out_header.add_column("id")?;
@@ -247,7 +245,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     }
 
     let mut splice_out =
-        SpliceTableOut::new(out_header, dbinfo, meta.clone(), SPLCIE_FORMAT.to_string());
+        SpliceTableOut::new(out_header, dbinfo, meta.clone(), SPLICE_FORMAT.to_string());
 
     // make output
     let mut out_str = String::with_capacity(1024);
@@ -271,7 +269,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
                 out_line.add_field(&query.right_chr);
                 out_line.add_field(&query.right_pos.to_string());
 
-                out_line.update_format_str(SPLCIE_FORMAT);
+                out_line.update_format_str(SPLICE_FORMAT);
 
                 let record: MergedIsoform =
                     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
