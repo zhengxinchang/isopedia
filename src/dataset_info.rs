@@ -24,7 +24,7 @@ pub struct DatasetInfo {
 impl DatasetInfo {
     pub fn new() -> DatasetInfo {
         DatasetInfo {
-            name2idx: FxHashMap::default(),
+            name2idx: FxHashMap::default(), //dont use it directly as its not ordered
             name_vec: Vec::new(),
             path_vec: Vec::new(),
             sample_total_evidence_vec: Vec::new(),
@@ -98,5 +98,14 @@ impl DatasetInfo {
 
     pub fn get_sample_names(&self) -> Vec<String> {
         self.name_vec.clone()
+    }
+
+    pub fn get_sample_evidence_pair_vec(&self) -> Vec<(String, u32)> {
+        let mut v = Vec::new();
+        for name in self.name_vec.iter() {
+            let idx = self.name2idx.get(name).unwrap();
+            v.push((name.clone(), self.sample_total_evidence_vec[*idx as usize]));
+        }
+        v
     }
 }

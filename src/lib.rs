@@ -6,6 +6,7 @@ pub mod dataset_info;
 pub mod fusion;
 pub mod gene_index;
 pub mod gtf;
+pub mod io;
 pub mod isoform;
 pub mod isoformarchive;
 pub mod logger;

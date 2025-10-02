@@ -8,7 +8,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use log::{info, warn};
 
-use crate::{output::TableOutput, utils};
+use crate::{io::GeneralOutputIO, utils};
 
 #[derive(Debug, Clone)]
 pub struct MetaEntry {
@@ -58,7 +58,7 @@ impl Meta {
     }
     pub fn parse<P: AsRef<Path>>(path: P, prefix: Option<&str>) -> Result<Meta> {
         info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
-        Meta::from_table(&path, prefix, None)
+        Meta::from_file(&path, prefix, None)
     }
 
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
@@ -110,19 +110,10 @@ impl Meta {
 
         table
     }
-
-    pub fn parse_meta_table<P: AsRef<Path>>(path: P) -> Result<Meta> {
-        Err(anyhow::anyhow!("Not implemented yet"))
-    }
-
-    pub fn get_attr_by_name(&self, name: &str, attr: &str) -> Option<&String> {
-        self.records
-            .get(name)
-            .and_then(|entry| entry.fields.get(attr))
-    }
 }
 
-impl TableOutput for Meta {
+impl GeneralOutputIO for Meta {
+    /// the sep shouldnt be used
     fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
         let mut table = String::new();
         let mut header_clean = self.header.clone();
@@ -156,16 +147,11 @@ impl TableOutput for Meta {
         table
     }
 
-    fn from_table<P: AsRef<Path>>(
-        table: &P,
+    fn from_reader<R: BufRead>(
+        mut reader: &mut R,
         prefix: Option<&str>,
         sep: Option<&str>,
-    ) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut reader = io::BufReader::new(File::open(table)?);
-
+    ) -> Result<Self> {
         let mut header = String::new();
         let mut records = IndexMap::new();
         reader.read_line(&mut header)?;

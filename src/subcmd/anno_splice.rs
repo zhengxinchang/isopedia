@@ -1,9 +1,9 @@
 use crate::bptree::BPForest;
 use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
+use crate::io::GeneralOutputIO;
 use crate::isoform::MergedIsoform;
 use crate::isoformarchive::read_record_from_mmap;
-use crate::output::TableOutput;
 use crate::utils::{get_total_memory_bytes, warmup};
 use crate::writer::MyGzWriter;
 use crate::{constants::*, meta, utils};
@@ -218,7 +218,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    let meta_table = meta.to_table(Some("##"), None);
+    let meta_table = meta.to_table(Some("##[SAMPLE]"), None);
 
     mywriter.write_all_bytes(meta_table.as_bytes())?;
 

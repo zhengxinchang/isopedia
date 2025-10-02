@@ -498,15 +498,6 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
      * Drop zero records from chromosome mapping
      */
     chrom_helper.drop_zero(&mut chroms);
-    // let x = chroms.get_chrom_idx("KI270363.1");
-    // dbg!(&x);
-    //     // 打印出来chroms看 KI270363.1 到底是什么情况
-    // dbg!(&chroms);
-    // if x.is_some() {
-    //     let x = x.unwrap();
-    //     let count = chroms.get_record_count(x);
-    //     dbg!(&count);
-    // }
 
     out_chrom_map_writer.write_all(&chroms.encode()).unwrap();
 

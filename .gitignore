@@ -21,6 +21,7 @@
 **/*.out
 **/*.log
 **/.vscode/
+!src/output.rs
 
 toy_ex/index
 toy_ex/hg002_ont_chr22.isoform.gz

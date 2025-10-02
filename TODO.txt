@@ -40,7 +40,14 @@ vis tool, find reference isoform, dont overlap with min-max, instead overlap wit
 [ ] xz compression to reduce the .dat file size 
 [ ] index need a generator to read tmpidx instead of load entire chromsome in mem.
 [ ] sharding related functions 
-[ ] index without -m cause bug
+[x] index without -m cause bug
+
+[ ] reduce the mem usage in annotation isoform
+[ ] output format standarization
+[ ] bugfix for visulization
+[ ] documentation
+[ ] term: query replace annotate/search?
+[ ] use old version of gencode to test 
 
 
 

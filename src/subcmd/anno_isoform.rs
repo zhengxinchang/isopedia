@@ -5,10 +5,11 @@ use crate::{
     constants::*,
     dataset_info::DatasetInfo,
     gtf::TranscriptChunker,
+    io::{DBInfos, GeneralOutputIO, Header, Line, SampleChip},
     isoform::{self, MergedIsoform},
     isoformarchive::read_record_from_mmap,
     meta::Meta,
-    output::{Header, Line, TableOutput},
+    output::{GeneralTableOutput, IsoformOutput},
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, get_total_memory_bytes, warmup},
     writer::MyGzWriter,
@@ -155,24 +156,40 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut hit_count = 0u32;
     let mut miss_count = 0u32;
-
-    let mut mywriter = MyGzWriter::new(&cli.output)?;
+    info!("Loading sample meta...");
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
-    info!("Writing sample meta...");
+    const ISOFORM_FORMAT: &str = "CPM:COUNT";
 
-    mywriter.write_all_bytes(meta.to_table(Some("##"), None).as_bytes())?;
+    let mut out_header = Header::new();
 
-    mywriter.write_all_bytes("#chrom\tstart\tend\tlength\texon_count\ttrans_id\tgene_id\tconfidence\tdetected\tmin_read\tpositive_count/sample_size\tattributes\tFORMAT".as_bytes())?;
+    out_header.add_column("chrom")?;
+    out_header.add_column("start")?;
+    out_header.add_column("end")?;
+    out_header.add_column("length")?;
+    out_header.add_column("exon_count")?;
+    out_header.add_column("trans_id")?;
+    out_header.add_column("gene_id")?;
+    out_header.add_column("confidence")?;
+    out_header.add_column("detected")?;
+    out_header.add_column("min_read")?;
+    out_header.add_column("positive_count/sample_size")?;
+    out_header.add_column("attributes")?;
 
-    dataset_info.get_sample_names().iter().for_each(|x| {
-        mywriter
-            .write_all_bytes(format!("\t{}", x).as_bytes())
-            .expect("Failed to write sample header");
-    });
+    let mut dbInfos = DBInfos::new();
 
-    mywriter.write_all_bytes("\n".as_bytes())?;
+    for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
+        dbInfos.add_sample_evidence(&name, evidence);
+        out_header.add_sample_name(&name)?;
+    }
+
+    let mut isoform_out = IsoformOutput::new(
+        out_header,
+        dbInfos,
+        meta.clone(),
+        ISOFORM_FORMAT.to_string(),
+    );
 
     info!("Warmup index file");
     let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
@@ -200,7 +217,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     const RELEASE_STEP: usize = 256 * 1024 * 1024; // 每次释放 256MB
 
-    const FORMAT: &str = "CPM:COUNT";
     for trans in gtf {
         iter_count += 1;
 
@@ -253,6 +269,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             hit_count += 1;
         }
 
+        let mut out_line = Line::new();
+        out_line.update_format_str(ISOFORM_FORMAT);
+
         if target.len() > 0 {
             // have hits
             acc_pos_count.fill(0);
@@ -302,8 +321,27 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 acc_pos_count.iter().filter(|&&x| x > 0).count(),
                 dataset_info.get_size(),
                 trans.get_attributes(),
-                FORMAT
+                ISOFORM_FORMAT
             );
+
+            out_line.add_field(&trans.chrom);
+            out_line.add_field(&trans.start.to_string());
+            out_line.add_field(&trans.end.to_string());
+            out_line.add_field(&trans.get_transcript_length().to_string());
+            out_line.add_field(&trans.get_exon_count().to_string());
+            out_line.add_field(&trans.trans_id);
+            out_line.add_field(&trans.gene_id);
+            // out_line.add_field(&trans.get_attributes());
+            out_line.add_field(&confidence.to_string());
+            out_line.add_field("yes");
+            out_line.add_field(&cli.min_read.to_string());
+            out_line.add_field(&format!(
+                "{}/{}",
+                acc_pos_count.iter().filter(|&&x| x > 0).count(),
+                dataset_info.get_size()
+            ));
+            out_line.add_field(&trans.get_attributes());
+
             for (i, val) in acc_sample_evidence_arr.iter().enumerate() {
                 if i > 0 {
                     // write!(writer, "\t")?;
@@ -312,12 +350,18 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
                 let cpm = utils::calc_cpm(val, &dataset_info.sample_total_evidence_vec[i]);
 
+                let samplechip = SampleChip::new(
+                    Some(dataset_info.get_sample_names()[i].clone()),
+                    vec![format!("{}:{}", cpm, val)],
+                );
+                out_line.add_sample(samplechip);
                 // write!(writer, "{}:{}", cpm, val)?;
                 outline.push_str(&format!("{}:{}", cpm, val));
             }
             // write!(writer, "\n")?;
+            isoform_out.add_line(&out_line)?;
             outline.push('\n');
-            mywriter.write_all_bytes(outline.as_bytes())?;
+            // mywriter.write_all_bytes(outline.as_bytes())?;
         } else {
             let mut output = format!(
                 "{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t0\tno\t{}\t0/{}\t{}\t{}\t",
@@ -331,8 +375,23 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 &cli.min_read,
                 dataset_info.get_size(),
                 trans.get_attributes(),
-                FORMAT
+                ISOFORM_FORMAT
             );
+
+            out_line.add_field(&trans.chrom);
+            out_line.add_field(&trans.start.to_string());
+            out_line.add_field(&trans.end.to_string());
+            out_line.add_field(&trans.get_transcript_length().to_string());
+            out_line.add_field(&trans.get_exon_count().to_string());
+            out_line.add_field(&trans.trans_id);
+            out_line.add_field(&trans.gene_id);
+            // out_line.add_field(&trans.get_attributes());
+            out_line.add_field("0");
+            out_line.add_field("no");
+            out_line.add_field(&cli.min_read.to_string());
+            out_line.add_field(&format!("0/{}", dataset_info.get_size()));
+            out_line.add_field(&trans.get_attributes());
+            // for _ in 0..dataset_info.get_size() {
 
             let sample_count = dataset_info.get_sample_names().len();
             for i in 0..sample_count {
@@ -340,13 +399,23 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                     output.push('\t');
                 }
 
+                let samplechip = SampleChip::new(
+                    Some(dataset_info.get_sample_names()[i].clone()),
+                    vec!["0:0".to_string()],
+                );
+                out_line.add_sample(samplechip);
+
                 output.push_str("0:0");
             }
+            isoform_out.add_line(&out_line)?;
 
             output.push('\n');
-            mywriter.write_all_bytes(output.as_bytes())?;
+            // mywriter.write_all_bytes(output.as_bytes())?;
         }
     }
+
+    isoform_out.save_to_file(&cli.output.with_extension("isoform.gz"))?;
+
     let total = hit_count + miss_count;
     info!(
         "Processed {} transcripts",
