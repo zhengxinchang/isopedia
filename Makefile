@@ -71,14 +71,14 @@ t41:build
 	target/release/isopedia isoform -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.gz
 
 tfusion:build
-	target/release/isopedia-anno-fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz
+	target/release/isopedia fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz
 
 tfusion2:build
 	target/release/isopedia-anno-fusion -i ../stix-isoform-experiment/stage/fusion_idx/ -f 200 -P test/fusion.bed  -o test/fusion.output.gz
 
 
 tfusion3:build
-	target/release/isopedia-anno-fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.gtf  -o test/fusion_discovery.output.gz
+	target/release/isopedia fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.gtf  -o test/fusion_discovery.output.gz
 
 tfusion4:build
 	target/release/isopedia-anno-fusion --debug -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \

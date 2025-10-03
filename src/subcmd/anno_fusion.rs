@@ -12,8 +12,11 @@ use crate::{
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionCluster},
     gene_index::GeneIntervalTree,
+    io::*,
     isoform::MergedIsoform,
     isoformarchive::{self, read_record_from_mmap},
+    meta::Meta,
+    output::{FusionBrkPtTableOut, FusionDiscoveryTableOut, GeneralTableOutput},
     utils,
     writer::MyGzWriter,
 };
@@ -205,7 +208,8 @@ type BreakpointType = ((String, u64), (String, u64), String);
 
 fn anno_single_fusion(
     breakpoints: BreakpointType,
-    mywriter: &mut MyGzWriter,
+    // mywriter: &mut MyGzWriter,
+    fusionbrkpt_out: &mut FusionBrkPtTableOut,
     cli: &AnnFusionCli,
     forest: &mut BPForest,
     archive_mmap: &Mmap,
@@ -231,8 +235,6 @@ fn anno_single_fusion(
         return Ok(());
     }
 
-    // let left_target = left_target.unwrap();
-    // let right_target = right_target.unwrap();
     if cli.debug {
         info!(
             "Found {} candidates",
@@ -281,37 +283,31 @@ fn anno_single_fusion(
             .collect();
     }
 
-    let mut record_parts = vec![
-        breakpoints.0 .0.to_string(),
-        breakpoints.0 .1.to_string(),
-        breakpoints.1 .0.to_string(),
-        breakpoints.1 .1.to_string(),
-        breakpoints.2.to_string(),
-        cli.min_read.to_string(),
-        format!(
-            "{}/{}",
-            fusion_evidence_vec
-                .iter()
-                .filter(|&&x| x >= cli.min_read)
-                .count()
-                .to_string(),
-            dbinfo.get_size()
-        ),
-    ];
+    let mut out_line = Line::new();
+    out_line.add_field(&breakpoints.0 .0.to_string());
+    out_line.add_field(&breakpoints.0 .1.to_string());
+    out_line.add_field(&breakpoints.1 .0.to_string());
+    out_line.add_field(&breakpoints.1 .1.to_string());
+    out_line.add_field(&breakpoints.2.to_string());
+    out_line.add_field(&cli.min_read.to_string());
+    out_line.add_field(&format!(
+        "{}/{}",
+        fusion_evidence_vec
+            .iter()
+            .filter(|&&x| x >= cli.min_read)
+            .count()
+            .to_string(),
+        dbinfo.get_size()
+    ));
 
     for idx in 0..dbinfo.get_size() {
-        // if fusion_evidence_vec[idx] >= cli.min_read {
-        //     record_parts.push(fusion_evidence_vec[idx].to_string());
-        // } else {
-        //     record_parts.push("0".to_string());
-        // }
-        record_parts.push(fusion_evidence_vec[idx].to_string());
+        // record_parts.push(fusion_evidence_vec[idx].to_string());
+        let samplechip = SampleChip::new(None, vec![fusion_evidence_vec[idx].to_string()]);
+        out_line.add_sample(samplechip);
     }
 
-    let record_string = record_parts.join("\t") + "\n";
-    mywriter
-        .write_all_bytes(record_string.as_bytes())
-        .context("Failed to write record string")?;
+    fusionbrkpt_out.add_line(&out_line)?;
+
     Ok(())
 }
 
@@ -343,20 +339,10 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
     cli.validate();
     greetings(&cli);
 
-    // if cli.debug {
-    //     env::set_var("RUST_LOG", "debug");
-    // } else {
-    //     env::set_var("RUST_LOG", "info");
-    // }
-    // env_logger::init();
-
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
-    // let mut isofrom_archive = std::io::BufReader::new(
-    //     std::fs::File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-    //         .context("Failed to open merged file")?,
-    // );
+    let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
     let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
         .context("Failed to open merged file for mmap")?;
@@ -367,74 +353,115 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         .advise(Advice::Random)
         .context("Failed to set mmap advice")?;
 
-    let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024); // 1MB buffer
+    let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024);
 
-    if cli.pos.is_some() {
-        let pos = &cli.pos.clone().unwrap();
-        let breakpoints: BreakpointType = match process_fusion_positions(pos) {
-            Ok(bp) => (bp.0, bp.1, "SingleQuery".to_string()),
-            Err(e) => {
-                error!("Error parsing --pos: {}", e);
-                std::process::exit(1);
-            }
-        };
+    if cli.pos.is_some() || cli.pos_bed.is_some() {
+        const FUSION_BRKPT_FORMAT_STR: &str = "COUNT";
 
-        // let mut mywriter = MyGzWriter::new(&cli.output)?;
-        let mut mywriter = MyGzWriter::new(&cli.output)?;
-
-        let mut header_str =
-            String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size");
+        let mut out_header = Header::new();
+        out_header.add_column(&"chr1")?;
+        out_header.add_column(&"pos1")?;
+        out_header.add_column(&"chr2")?;
+        out_header.add_column(&"pos2")?;
+        out_header.add_column(&"id")?;
+        out_header.add_column(&"min_read")?;
+        out_header.add_column(&"positive/sample_size")?;
         let sample_name = dataset_info.get_sample_names();
         for name in sample_name {
-            header_str.push_str(&format!("\t{}", name));
+            out_header.add_sample_name(&name)?;
         }
-        header_str.push('\n');
-        mywriter.write_all_bytes(header_str.as_bytes())?;
 
-        anno_single_fusion(
-            breakpoints,
-            &mut mywriter,
-            &cli,
-            &mut forest,
-            &archive_mmap,
-            &mut archive_buf,
-            &dataset_info,
-        )?;
-        mywriter.finish()?;
-    } else if cli.pos_bed.is_some() {
-        // open the bed file
-        let pos_bed = cli.pos_bed.clone().unwrap();
-        let bed_file = File::open(&pos_bed).context("Failed to open the provided bed file")?;
-        let reader = std::io::BufReader::new(bed_file);
-
-        // not use the common writer since the header is different in gtf mode(discovery mode)
-        let mut mywriter = MyGzWriter::new(&cli.output)?;
-
-        let mut header_str =
-            String::from("chr1\tpos1\tchr2\tpos2\tid\tmin_read\tpositive/sample_size");
-        let sample_name = dataset_info.get_sample_names();
-        for name in sample_name {
-            header_str.push_str(&format!("\t{}", name));
+        let mut dbinfo = DBInfos::new();
+        for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
+            dbinfo.add_sample_evidence(&name, evidence);
         }
-        header_str.push('\n');
-        mywriter.write_all_bytes(header_str.as_bytes())?;
 
-        for line in reader.lines() {
-            let line = line.context("Failed to read line from bed file")?;
-            let breakpoints: BreakpointType = parse_bed(&line)?;
+        let mut fusionbrkpt_out = FusionBrkPtTableOut::new(
+            out_header,
+            dbinfo,
+            meta.clone(),
+            FUSION_BRKPT_FORMAT_STR.to_string(),
+        );
+
+        if cli.pos.is_some() {
+            let pos = &cli.pos.clone().unwrap();
+            let breakpoints: BreakpointType = match process_fusion_positions(pos) {
+                Ok(bp) => (bp.0, bp.1, "SingleQuery".to_string()),
+                Err(e) => {
+                    error!("Error parsing --pos: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
             anno_single_fusion(
                 breakpoints,
-                &mut mywriter,
+                // &mut mywriter,
+                &mut fusionbrkpt_out,
                 &cli,
                 &mut forest,
                 &archive_mmap,
                 &mut archive_buf,
                 &dataset_info,
             )?;
+            // mywriter.finish()?;
+        } else if cli.pos_bed.is_some() {
+            // open the bed file
+            let pos_bed = cli.pos_bed.clone().unwrap();
+            let bed_file = File::open(&pos_bed).context("Failed to open the provided bed file")?;
+            let reader = std::io::BufReader::new(bed_file);
+
+            // not use the common writer since the header is different in gtf mode(discovery mode)
+
+            for line in reader.lines() {
+                let line = line.context("Failed to read line from bed file")?;
+                let breakpoints: BreakpointType = parse_bed(&line)?;
+
+                anno_single_fusion(
+                    breakpoints,
+                    // &mut mywriter,
+                    &mut fusionbrkpt_out,
+                    &cli,
+                    &mut forest,
+                    &archive_mmap,
+                    &mut archive_buf,
+                    &dataset_info,
+                )?;
+            }
+            // mywriter.finish()?;
         }
-        mywriter.finish()?;
+
+        fusionbrkpt_out.save_to_file(&cli.output.with_extension("fusion_breakpoints.gz"))?;
     } else if cli.gene_gtf.is_some() {
+        const FUGEN_GENE_REGION_FORMAT_STR: &str = "COUNT";
+
+        let mut out_header = Header::new();
+        out_header.add_column(&"geneA_name")?;
+        out_header.add_column(&"geneB_name")?;
+        out_header.add_column(&"total_evidences")?;
+        out_header.add_column(&"total_samples")?;
+        out_header.add_column(&"is_two_strand")?;
+        out_header.add_column(&"AtoB_primary_start")?;
+        out_header.add_column(&"AtoB_primary_end")?;
+        out_header.add_column(&"AtoB_supp_start")?;
+        out_header.add_column(&"AtoB_supp_end")?;
+        out_header.add_column(&"BtoA_primary_start")?;
+        out_header.add_column(&"BtoA_primary_end")?;
+        out_header.add_column(&"BtoA_supp_start")?;
+        out_header.add_column(&"BtoA_supp_end")?;
+
+        let mut dbinfo = DBInfos::new();
+        for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
+            dbinfo.add_sample_evidence(&name, evidence);
+            out_header.add_sample_name(&name)?;
+        }
+
+        let mut fusiondiscovery_out = FusionDiscoveryTableOut::new(
+            out_header,
+            dbinfo,
+            meta.clone(),
+            FUGEN_GENE_REGION_FORMAT_STR.to_string(),
+        );
+
         let gtf_path = cli.gene_gtf.clone().unwrap();
         let file = std::fs::File::open(gtf_path).expect("Failed to open GTF file");
         let reader = std::io::BufReader::new(file);
@@ -445,9 +472,6 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         let gene_indexing =
             GeneIntervalTree::new(&mut gtf_reader).expect("Failed to create GeneIntervalTree");
         info!("loaded {} genes", gene_indexing.count);
-
-        let mut mywriter = MyGzWriter::new(&cli.output)?;
-        mywriter.write_all_bytes(FusionCluster::get_table_header(&dataset_info).as_bytes())?;
 
         let mut fusion_cluster_map = HashMap::new();
 
@@ -494,15 +518,6 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
                     for mut candidate in candidates {
                         if candidate.match_gene(&gene_indexing, cli.flank) {
-                            // if gene_interval.gene_name.contains("RUNX1") {
-                            //     debug!("matched RUNX1 gene: candidates: {:?}", &candidate);
-                            // }
-                            let record_string = candidate.get_string(&dataset_info);
-                            debug!("{}", &record_string);
-                            // mywriter
-                            //     .write_all_bytes(record_string.as_bytes())
-                            //     .context("Failed to write record string")?;
-
                             fusion_cluster_map
                                 .entry(candidate.get_gene_hash().0)
                                 .or_insert_with(|| FusionCluster::new(&candidate))
@@ -515,17 +530,14 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
         for fusion_cluster in fusion_cluster_map.values_mut() {
             if fusion_cluster.evaluate() {
-                let record_string = fusion_cluster.get_string(&dataset_info);
-                mywriter
-                    .write_all_bytes(record_string.as_bytes())
-                    .context("Failed to write record string")?;
+                fusion_cluster.generate_record_line(&dataset_info, &mut fusiondiscovery_out)?;
             }
         }
 
         info!("Total processed genes: {}", gene_indexing.count);
         info!("Total skipped genes: {}", skipped_genes);
 
-        mywriter.finish()?;
+        fusiondiscovery_out.save_to_file(&cli.output.with_extension("fusion_discovery.gz"))?;
     }
 
     info!("Total processed samples: {}", dataset_info.get_size());

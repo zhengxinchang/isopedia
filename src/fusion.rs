@@ -1,14 +1,17 @@
 use std::vec;
 
-use ahash::HashSet;
-use rustc_hash::FxHashMap;
-
 use crate::{
     dataset_info::DatasetInfo,
+    fusion,
     gene_index::{CandidateMatchStatus, GeneInterval, GeneIntervalTree},
+    io::{Line, SampleChip},
+    output::{FusionBrkPtTableOut, FusionDiscoveryTableOut, GeneralTableOutput},
     reads::Segment,
     utils::{hash_vec, is_overlap},
 };
+use ahash::HashSet;
+use anyhow::Result;
+use rustc_hash::FxHashMap;
 
 // isoform derived fusion read event.
 // This is a per-read level representation of a supplimentary mapped read.
@@ -157,72 +160,6 @@ impl FusionAggrReads {
             self.left_matched_gene.gene_name.clone(),
             self.right_matched_gene.gene_name.clone(),
         );
-    }
-
-    pub fn get_string(&self, index_info: &DatasetInfo) -> String {
-        let mut out_str = String::new();
-        let total_samples = index_info.get_size();
-        // let sample_names = index_info.get_sample_names();
-
-        let mut sample_str = String::new();
-        for sample_id in 0..total_samples {
-            if let Some(count) = self.sample_evidence.get(&(sample_id as u32)) {
-                sample_str.push_str(&format!("{}\t", count));
-            } else {
-                sample_str.push_str(&format!("0\t"));
-            }
-        }
-
-        let splice_str_left = self
-            .left_matched_splice_junctions
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-            .join(",");
-        let splice_str_right = self
-            .right_matched_splice_junctions
-            .iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<String>>()
-            .join(",");
-
-        out_str.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            self.left_matched_gene.gene_name,
-            self.left_matched_gene.gene_id,
-            self.right_matched_gene.gene_name,
-            self.right_matched_gene.gene_id,
-            self.chr1,
-            self.left_matched_gene.start,
-            self.left_matched_gene.end,
-            self.chr2,
-            self.right_matched_gene.start,
-            self.right_matched_gene.end,
-            self.tootal_evidences,
-            total_samples,
-            self.left_matched_splice_junctions.len(),
-            self.right_matched_splice_junctions.len(),
-            sample_str.trim_end_matches('\t'),
-            splice_str_left,
-            splice_str_right,
-            if self.is_ambiguous {
-                "ambiguous"
-            } else {
-                "unique"
-            }
-        ));
-        // dbg!(&out_str);
-        out_str
-    }
-
-    pub fn get_table_header(index_info: &DatasetInfo) -> String {
-        let sample_names = index_info.get_sample_names();
-        // dbg!(&sample_names);
-        let sample_str = sample_names.join("\t");
-
-        let header = format!("gene1_name\tene1_id\tgene2_name\tgene2_id\tchr1\tstart1\tend1\tchr2\tstart2\tend2\ttotal_evidences\ttotal_samples\tsplice_junctions_count1\tsplice_junctions_count2\t{}\tmatched_left_splice_sites\tmatched_right_splice_sites\tambiguity\n", sample_str);
-        // dbg!(&header);
-        header
     }
 }
 
@@ -559,8 +496,12 @@ impl FusionCluster {
         is_good
     }
 
-    pub fn get_string(&self, index_info: &DatasetInfo) -> String {
-        let mut out_str = String::new();
+    pub fn generate_record_line(
+        &self,
+        index_info: &DatasetInfo,
+        fusiondiscovery_out: &mut FusionDiscoveryTableOut,
+    ) -> Result<()> {
+        // let mut out_str = String::new();
         let total_samples = index_info.get_size();
 
         let mut merged_sample_evidence = FxHashMap::default();
@@ -570,39 +511,45 @@ impl FusionCluster {
                 *merged_sample_evidence.entry(*sample_id).or_insert(0) += *count;
             }
         }
+        let mut out_line = Line::new();
 
         let mut sample_count_str = String::new();
         for sample_id in 0..total_samples {
             if let Some(count) = merged_sample_evidence.get(&(sample_id as u32)) {
                 sample_count_str.push_str(&format!("{}\t", count));
+                let sample_chip = SampleChip::new(None, vec![count.to_string()]);
+                out_line.add_sample(sample_chip);
             } else {
                 sample_count_str.push_str("0\t");
+                out_line.add_sample(SampleChip::new(None, vec!["0".to_string()]));
             }
         }
 
-        out_str.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}:{}-{}\t{}\n",
-            self.gene1,
-            self.gene2,
-            self.total_evidences,
-            total_samples,
-            self.gene_combination.len() > 1,
-            self.chr1,
-            self.order_a_main_left_mean as u32,
-            self.order_a_main_right_mean as u32,
-            self.chr2,
-            self.order_a_supp_left_mean as u32,
-            self.order_a_supp_right_mean as u32,
-            self.chr2,
-            self.order_b_main_left_mean as u32,
-            self.order_b_main_right_mean as u32,
-            self.chr1,
-            self.order_b_supp_left_mean as u32,
-            self.order_b_supp_right_mean as u32,
-            sample_count_str
+        out_line.add_field(&self.gene1);
+        out_line.add_field(&self.gene2);
+        out_line.add_field(&self.total_evidences.to_string());
+        out_line.add_field(&total_samples.to_string());
+        out_line.add_field(&(self.gene_combination.len() > 1).to_string());
+        out_line.add_field(&format!(
+            "{}:{}-{}",
+            self.chr1, self.order_a_main_left_mean as u32, self.order_a_main_right_mean as u32
+        ));
+        out_line.add_field(&format!(
+            "{}:{}-{}",
+            self.chr2, self.order_a_supp_left_mean as u32, self.order_a_supp_right_mean as u32
+        ));
+        out_line.add_field(&format!(
+            "{}:{}-{}",
+            self.chr2, self.order_b_main_left_mean as u32, self.order_b_main_right_mean as u32
+        ));
+        out_line.add_field(&format!(
+            "{}:{}-{}",
+            self.chr1, self.order_b_supp_left_mean as u32, self.order_b_supp_right_mean as u32
         ));
 
-        out_str
+        fusiondiscovery_out.add_line(&out_line)?;
+
+        Ok(())
     }
 
     pub fn get_table_header(index_info: &DatasetInfo) -> String {
