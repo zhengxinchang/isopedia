@@ -551,14 +551,4 @@ impl FusionCluster {
 
         Ok(())
     }
-
-    pub fn get_table_header(index_info: &DatasetInfo) -> String {
-        let sample_names = index_info.get_sample_names();
-        // dbg!(&sample_names);
-        let sample_str = sample_names.join("\t");
-
-        let header = format!("geneA_name\tgeneB_name\ttotal_evidences\ttotal_samples\tis_two_strand\tAtoB_primary_start\tAtoB_primary_end\tAtoB_supp_start\tAtoB_supp_end\tBtoA_primary_start\tBtoA_primary_end\tBtoA_supp_start\tBtoA_supp_end\t{}", sample_str);
-        // dbg!(&header);
-        header
-    }
 }
