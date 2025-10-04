@@ -5,12 +5,13 @@ use crate::{
     chromosome::{ChromMapping, ChromMappingHelper},
     constants::*,
     dataset_info::DatasetInfo,
+    io::GeneralOutputIO,
     meta::Meta,
     tmpidx::Tmpindex,
 };
 use anyhow::Result;
 use clap::Parser;
-use log::{error, info, warn};
+use log::{error, info};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::Serialize;
 
@@ -23,9 +24,9 @@ use serde::Serialize;
 ", long_about = None)]
 #[clap(after_long_help = "
 
-Example: isopedia index -i /path/to/index/dir [--meta /path/to/meta.tsv]
+Example: isopedia index -i /path/to/index/dir --meta /path/to/meta.tsv
 
-The meta file is optional.
+The meta file is the file that was used in the merge step, columns more than 2 will be treated as metadata columns.
 
 The format of the meta file is tab-separated with the first line as header.
 
@@ -46,7 +47,7 @@ pub struct IndexCli {
     pub idxdir: PathBuf,
 
     #[arg(short, long, help = "Metadata for the samples in the index.")]
-    pub meta: Option<PathBuf>,
+    pub meta: PathBuf,
 
     #[arg(
         short,
@@ -77,12 +78,17 @@ impl IndexCli {
             is_ok = false;
         }
 
-        if let Some(meta_path) = &self.meta {
-            if !meta_path.exists() {
-                error!("--meta: meta file {} does not exist", meta_path.display());
-                is_ok = false;
-            }
+        // if let Some(meta_path) = &self.meta {
+        if !self.meta.exists() {
+            error!("--meta: meta file {} does not exist", self.meta.display());
+            is_ok = false;
+        } else {
+            let meta =
+                Meta::from_file(&self.meta, None, None).expect("Cannot parse the manifest file");
+            meta.validate_sample_names();
+            meta.validate_path_column();
         }
+        // }
 
         if is_ok != true {
             // error!("Please check the input arguments!");
@@ -108,38 +114,39 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
-    if let Some(meta_path) = &cli.meta {
-        info!("Integrating meta data from {}", meta_path.display());
-        let meta = Meta::parse(meta_path, None).expect("Failed to parse meta file");
-        let meta_samples = meta.get_samples();
+    // if let Some(meta_path) = &cli.meta {
+    info!("Integrating meta data from {}", cli.meta.display());
+    let mut meta = Meta::parse(&cli.meta, None).expect("Failed to parse meta file");
+    meta.remove_path_column();
+    let meta_samples = meta.get_samples();
 
-        let dataset_samples = dataset_info.get_sample_names();
-        if meta_samples.len() != dataset_samples.len() {
-            error!(
+    let dataset_samples = dataset_info.get_sample_names();
+    if meta_samples.len() != dataset_samples.len() {
+        error!(
                 "The number of samples in the meta file ({}) does not match the number of samples in the dataset info file ({})",
                 meta_samples.len(),
                 dataset_samples.len()
             );
+        std::process::exit(1);
+    }
+    for sample in meta_samples {
+        if !dataset_samples.contains(&sample) {
+            error!(
+                "Sample {} in the meta file does not exist in the dataset info file",
+                sample
+            );
             std::process::exit(1);
         }
-        for sample in meta_samples {
-            if !dataset_samples.contains(&sample) {
-                error!(
-                    "Sample {} in the meta file does not exist in the dataset info file",
-                    sample
-                );
-                std::process::exit(1);
-            }
-        }
-        meta.save_to_file(&cli.idxdir.join(META_FILE_NAME))
-            .expect("Failed to save meta file");
-    } else {
-        warn!("Meta file is not provided, Write empty meta file, you can redo index to update the metadata later.");
-        let empty_meta = Meta::new_empty(dataset_info.get_sample_names());
-        empty_meta
-            .save_to_file(&cli.idxdir.join(META_FILE_NAME))
-            .expect("Failed to save empty meta file");
     }
+    meta.save_to_file(&cli.idxdir.join(META_FILE_NAME))
+        .expect("Failed to save meta file");
+    // } else {
+    //     warn!("Meta file is not provided, Write empty meta file, you can redo index to update the metadata later.");
+    //     let empty_meta = Meta::new_empty(dataset_info.get_sample_names());
+    //     empty_meta
+    //         .save_to_file(&cli.idxdir.join(META_FILE_NAME))
+    //         .expect("Failed to save empty meta file");
+    // }
 
     let chrom_bytes =
         std::fs::read(cli.idxdir.join(CHROM_FILE_NAME)).expect("Cannot read chrom map file");

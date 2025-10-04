@@ -18,12 +18,11 @@ use crate::{
     meta::Meta,
     output::{FusionBrkPtTableOut, FusionDiscoveryTableOut, GeneralTableOutput},
     utils,
-    writer::MyGzWriter,
 };
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
 
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use memmap2::{Advice, Mmap};
 use noodles_gtf::io::Reader as gtfReader;
 use serde::Serialize;
@@ -429,7 +428,8 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
             }
             // mywriter.finish()?;
         }
-
+        info!("Total processed samples: {}", dataset_info.get_size());
+        // info!("Results written to {}", cli.output.display());
         fusionbrkpt_out.save_to_file(&cli.output.with_extension("fusion_breakpoints.gz"))?;
     } else if cli.gene_gtf.is_some() {
         const FUGEN_GENE_REGION_FORMAT_STR: &str = "COUNT";
@@ -536,13 +536,13 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
         info!("Total processed genes: {}", gene_indexing.count);
         info!("Total skipped genes: {}", skipped_genes);
-
+        info!("Total processed samples: {}", dataset_info.get_size());
+        // info!("Results written to {}", cli.output.display());
         fusiondiscovery_out.save_to_file(&cli.output.with_extension("fusion_discovery.gz"))?;
     }
 
-    info!("Total processed samples: {}", dataset_info.get_size());
-
-    info!("Results written to {}", cli.output.display());
+    // info!("Total processed samples: {}", dataset_info.get_size());
+    // info!("Results written to {}", cli.output.display());
     info!("Finished!");
     Ok(())
 }

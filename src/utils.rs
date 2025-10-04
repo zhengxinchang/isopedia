@@ -2,6 +2,7 @@ use ahash::RandomState;
 use anyhow::Result;
 use log::error;
 use std::fs;
+use std::path::PathBuf;
 use std::{fs::File, hash::Hash, io::Read, path::Path};
 
 use crate::constants::*;
@@ -194,6 +195,7 @@ pub fn check_index_dir(path: &Path) -> bool {
 
 pub fn line2fields(line: &str) -> Vec<String> {
     // if  \t detcted in the line , use \t to split, else use whitespace to split
+
     if line.contains('\t') {
         line.trim_end().split('\t').map(|s| s.to_string()).collect()
     } else {
@@ -217,5 +219,113 @@ pub fn add_prefix(s: &str, prefix: &Option<&str>) -> String {
         format!("{}{}", p, s)
     } else {
         s.to_string()
+    }
+}
+
+pub fn calc_confidence(
+    evidence_arr: &Vec<u32>,
+    total_size: usize,
+    sample_total_evidence_vec: &Vec<u32>,
+) -> f64 {
+    let mut total = 0;
+    let mut sorted_evidence = Vec::new();
+    let mut evidence_frac_vec = Vec::new();
+    let mut max_reads = 0;
+    let mut positive_samples: f64 = 0.0;
+    for idx in 0..total_size {
+        if evidence_arr[idx] > max_reads {
+            max_reads = evidence_arr[idx];
+        }
+
+        if evidence_arr[idx] > 0 {
+            positive_samples += 1.0;
+        }
+
+        sorted_evidence.push(evidence_arr[idx]);
+        total += evidence_arr[idx];
+
+        // calculate CPM fraction
+        if evidence_arr[idx] > 0 {
+            let frac = evidence_arr[idx] as f64 / sample_total_evidence_vec[idx] as f64 * 1000000.0;
+            evidence_frac_vec.push(frac.ln());
+        }
+    }
+
+    // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
+
+    sorted_evidence.sort_unstable_by(|a, b| b.cmp(a)); // sort in descending order
+                                                       // dbg!(&sorted_evidence);
+
+    let mut tmp = 0;
+    for (i, &e) in sorted_evidence.iter().enumerate() {
+        tmp += (i + 1) as u32 * e;
+    }
+
+    // dbg!(n, tmp);
+    let a = 2.0f64 * (tmp as f64) / (total_size as f64 * total as f64);
+    let b = ((total_size + 1) as f64) / total_size as f64;
+
+    // dbg!(a, b);
+    let gini = a - b;
+    // dbg!(gini, avg_reads, max_reads);
+
+    if positive_samples == 0.0 {
+        return 0.0;
+    } else {
+        return (positive_samples / total_size as f64)
+            * (evidence_frac_vec.iter().sum::<f64>() / evidence_frac_vec.len() as f64).exp()
+            * (1.0 - gini);
+    }
+}
+
+pub fn add_gz_suffix_if_needed<P: AsRef<Path>>(path: &P) -> PathBuf {
+    let mut path = path.as_ref().to_path_buf();
+    if let Some(ext) = path.extension() {
+        if ext == "gz" {
+            path.clone()
+        } else {
+            let ext_str = ext.to_string_lossy();
+            let path_str = path.file_stem().unwrap().to_string_lossy();
+            dbg!(&ext_str);
+            dbg!(&path_str);
+            if ext_str.is_empty() {
+                // dbg!(&ext_str);
+                path.with_extension("gz")
+            } else {
+                path.set_extension(format!("{}.gz", ext_str));
+                path.clone()
+            }
+        }
+    } else {
+        let mut new_path = path.clone();
+        new_path.set_extension("gz");
+        new_path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_gz_suffix_if_needed() {
+        let path1 = PathBuf::from("file.txt");
+        let path2 = PathBuf::from("file.txt.gz");
+        let path3 = PathBuf::from("file");
+        let path4 = PathBuf::from("file.");
+
+        let new_path1 = add_gz_suffix_if_needed(&path1);
+        let new_path2 = add_gz_suffix_if_needed(&path2);
+        let new_path3 = add_gz_suffix_if_needed(&path3);
+        let new_path4 = add_gz_suffix_if_needed(&path4);
+
+        dbg!(&new_path1);
+        dbg!(&new_path2);
+        dbg!(&new_path3);
+        dbg!(&new_path4);
+
+        // assert_eq!(new_path1, PathBuf::from("file.txt.gz"));
+        // assert_eq!(new_path2, PathBuf::from("file.txt.gz"));
+        // assert_eq!(new_path3, PathBuf::from("file.gz"));
     }
 }

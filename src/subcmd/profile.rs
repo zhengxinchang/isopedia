@@ -11,8 +11,8 @@ use rustc_hash::FxHashMap;
 use std::path::PathBuf;
 
 use crate::{
+    io::MyGzWriter,
     reads::{AggrRead, SingleRead},
-    writer::MyGzWriter,
 };
 use anyhow::Result;
 use num_format::{Locale, ToFormattedString};

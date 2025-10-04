@@ -16,7 +16,7 @@ Split a large manifest file into smaller shards.
 Examples:
 isopedia-tool split-manifest --input <INPUT> --output_prefix <OUTPUT_PREFIX> --each_size <EACH_SIZE>
 ")]
-pub struct ManifestSplit {
+pub struct ManifestArg {
     #[arg(short, long)]
     pub input: PathBuf,
     #[arg(short, long)]
@@ -25,7 +25,7 @@ pub struct ManifestSplit {
     pub each_size: usize,
 }
 
-impl ToolCmdValidate for ManifestSplit {
+impl ToolCmdValidate for ManifestArg {
     fn validate(&self) -> bool {
         let mut is_ok = true;
 
@@ -94,8 +94,8 @@ pub fn split_manifest(file: &PathBuf, outprefix: &PathBuf, each_size: usize) -> 
     Ok(())
 }
 
-#[allow(dead_code)]
-fn merge_manifest(files: &Vec<PathBuf>, out_path: &PathBuf) -> Result<()> {
-    todo!("Implement merge_manifest");
-    Ok(())
-}
+// #[allow(unused_attributes)]
+// fn merge_manifest(files: &Vec<PathBuf>, out_path: &PathBuf) -> Result<()> {
+//     todo!("Implement merge_manifest");
+//     Ok(())
+// }

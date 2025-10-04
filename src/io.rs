@@ -1,14 +1,97 @@
-use crate::writer::MyGzWriter;
-use crate::{constants::FORMAT_STR_NAME, meta::Meta, utils::add_prefix};
+use crate::{constants::FORMAT_STR_NAME, utils::add_prefix};
 use anyhow::anyhow;
 use anyhow::Result;
+use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use indexmap::IndexMap;
-use rust_htslib::bam::header;
 use std::fs::File;
+use std::io;
 use std::io::BufWriter;
 use std::io::Write;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+
+pub struct MyGzWriter {
+    #[allow(dead_code)]
+    file_name: String,
+    inner: Option<GzEncoder<BufWriter<File>>>,
+}
+
+impl MyGzWriter {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let file = File::create(&path)?;
+
+        let fname = path.as_ref().to_string_lossy();
+        let writer = GzEncoder::new(BufWriter::new(file), Compression::default());
+
+        Ok(MyGzWriter {
+            file_name: fname.to_string(),
+            inner: Some(writer),
+        })
+    }
+
+    pub fn write_all_bytes(&mut self, bytes: &[u8]) -> io::Result<()> {
+        match &mut self.inner {
+            Some(writer) => writer.write_all(bytes),
+            None => Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "Writer has been finished",
+            )),
+        }
+    }
+
+    pub fn flush(&mut self) -> io::Result<()> {
+        match &mut self.inner {
+            Some(writer) => writer.flush(),
+            None => Ok(()), // 已完成，无需 flush
+        }
+    }
+
+    pub fn finish(&mut self) -> io::Result<()> {
+        if let Some(writer) = self.inner.take() {
+            // take() 移出所有权
+            // let mut buf_writer =
+            writer.finish()?;
+            // buf_writer.flush()?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for MyGzWriter {
+    fn drop(&mut self) {
+        self.finish().expect("Can not drop gz writer...");
+    }
+}
+
+pub struct MyGzReader {
+    #[allow(dead_code)]
+    file_name: String,
+    inner: Option<BufReader<GzDecoder<File>>>,
+}
+
+impl MyGzReader {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let file = File::open(&path)?;
+
+        let fname = path.as_ref().to_string_lossy();
+        let reader = BufReader::new(GzDecoder::new(file));
+
+        Ok(MyGzReader {
+            file_name: fname.to_string(),
+            inner: Some(reader),
+        })
+    }
+
+    pub fn read_line(&mut self, buf: &mut String) -> io::Result<usize> {
+        match &mut self.inner {
+            Some(reader) => reader.read_line(buf),
+            None => Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "Reader has been finished",
+            )),
+        }
+    }
+}
 
 pub trait GeneralOutputIO: Sized {
     fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String;
@@ -57,19 +140,31 @@ impl Line {
     pub fn add_field(&mut self, field: &str) {
         self.field_vec.push(field.to_string());
     }
+
+    // pub fn merge(&mut self, other: &Line) -> Result<()> {
+    //     if self.field_vec != other.field_vec {
+
+    //         error!("Self field_vec: {:?}", self.field_vec);
+    //         error!("Other field_vec: {:?}", other.field_vec);
+
+    //         return Err(anyhow::anyhow!("Cannot merge lines with different field_vec"));
+    //     }
+    //     if self.format_str != other.format_str {
+    //         return Err(anyhow::anyhow!("Cannot merge lines with different format_str"));
+    //     }
+    //     self.sample_vec.extend(other.sample_vec.clone());
+    //     Ok(())
+    // }
 }
 
 impl GeneralOutputIO for Line {
-    fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
+    /// sep does not work for Line
+    fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
         let mut parts = Vec::new();
 
         for value in &self.field_vec {
             parts.push(value.clone());
         }
-
-        // if let Some(sep) = sep {
-        //     parts.push(sep.to_string());
-        // }
 
         parts.push(self.format_str.clone().unwrap());
 
@@ -180,7 +275,7 @@ impl SampleChip {
 }
 
 impl GeneralOutputIO for SampleChip {
-    fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
+    fn to_table(&self, _prefix: Option<&str>, _sep: Option<&str>) -> String {
         let mut parts = Vec::new();
         for value in &self.fields {
             parts.push(value.clone());
@@ -249,10 +344,34 @@ impl DBInfos {
         self.sample_total_evidence_map
             .insert(sample.to_string(), total);
     }
+
+    pub fn merge(&mut self, other: &DBInfos) -> Result<()> {
+        for (sample, total) in &other.sample_total_evidence_map {
+            if self.sample_total_evidence_map.contains_key(sample) {
+                return Err(anyhow::anyhow!(
+                    "Duplicate sample name found when merging DBInfos: {}",
+                    sample
+                ));
+            }
+            self.sample_total_evidence_map
+                .insert(sample.clone(), *total);
+        }
+        Ok(())
+    }
+
+    pub fn get_total_evidence_vec(&self) -> (Vec<String>, Vec<u32>) {
+        let mut vec = Vec::new();
+        let mut vec_u32 = Vec::new();
+        for (sample, total) in &self.sample_total_evidence_map {
+            vec.push(sample.clone());
+            vec_u32.push(*total);
+        }
+        (vec, vec_u32)
+    }
 }
 
 impl GeneralOutputIO for DBInfos {
-    fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
+    fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
         let mut parts = Vec::new();
         for (sample, total) in &self.sample_total_evidence_map {
             parts.push(format!("{}:{}", sample, total));
@@ -265,7 +384,7 @@ impl GeneralOutputIO for DBInfos {
     fn from_reader<R: BufRead>(
         reader: &mut R,
         prefix: Option<&str>,
-        sep: Option<&str>,
+        _sep: Option<&str>,
     ) -> Result<Self> {
         let mut content = String::new();
         reader.read_to_string(&mut content)?; // 10 MB limit
@@ -316,15 +435,26 @@ impl Header {
         self.sample_names.push(sample_name.to_string());
         Ok(())
     }
+
+    pub fn merge(&mut self, other: &Header) -> Result<()> {
+        for sample in &other.sample_names {
+            if !self.sample_names.contains(sample) {
+                self.sample_names.push(sample.clone());
+            } else {
+                return Err(anyhow::anyhow!(
+                    "Duplicate sample name found when merging headers: {}",
+                    sample
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl GeneralOutputIO for Header {
-    fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
+    fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
         let mut header_line = self.columns.join("\t");
         let sample_line = self.sample_names.join("\t");
-
-        // dbg!(&header_line);
-        // dbg!(&sample_line);
         header_line.push_str("\t");
         header_line.push_str(FORMAT_STR_NAME);
         header_line.push_str("\t");
@@ -337,7 +467,7 @@ impl GeneralOutputIO for Header {
     fn from_reader<R: BufRead>(
         reader: &mut R,
         prefix: Option<&str>,
-        sep: Option<&str>,
+        _sep: Option<&str>,
     ) -> Result<Self> {
         let mut header_line = String::new();
         reader.read_line(&mut header_line)?;
@@ -347,7 +477,7 @@ impl GeneralOutputIO for Header {
         } else {
             header_line.trim()
         };
-
+        // dbg!(&header_line);
         let parts = header_line.split(FORMAT_STR_NAME).collect::<Vec<&str>>();
         if parts.len() != 2 {
             return Err(anyhow::anyhow!("Header line does not contain FORMAT field"));
@@ -364,3 +494,55 @@ impl GeneralOutputIO for Header {
         })
     }
 }
+
+// pub struct OutputVersion{
+//     type_: String,
+//     version: String,
+// }
+
+// impl OutputVersion {
+//     pub fn new(type_: &str, version: &str) -> Self {
+//         OutputVersion {
+//             type_: type_.to_string(),
+//             version: version.to_string(),
+//         }
+//     }
+// }
+
+// impl GeneralOutputIO for OutputVersion {
+//     fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
+//         let mut parts = Vec::new();
+//         parts.push(format!("type={}",self.type_));
+//         parts.push(format!("version={}",self.version));
+//         let line = parts.join(";") + "\n";
+//         let line = add_prefix(&line, &prefix);
+//         line
+//     }
+
+//     fn from_reader<R: BufRead>(
+//         reader: &mut R,
+//         prefix: Option<&str>,
+//         _sep: Option<&str>,
+//     ) -> Result<Self> {
+//         let mut bufline = String::new();
+//         reader.read_line(&mut bufline)?;
+//         let line = if !prefix.is_none() {
+//             bufline.trim_start_matches(prefix.unwrap()).trim()
+//         } else {
+//             bufline.trim()
+//         };
+//         let mut type_ = String::new();
+//         let mut version = String::new();
+//         for part in line.split(';') {
+//             let mut kv = part.splitn(2, '=');
+//             let key = kv.next().unwrap();
+//             let value = kv.next().unwrap();
+//             match key {
+//                 "type" => type_ = value.to_string(),
+//                 "version" => version = value.to_string(),
+//                 _ => {}
+//             }
+//         }
+//         Ok(OutputVersion { type_, version })
+//     }
+// }

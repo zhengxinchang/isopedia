@@ -441,59 +441,11 @@ impl MergedIsoform {
 
     /// Function to get the confidence value of the isoform based on the evidence
     pub fn get_confidence_value(
-        evidence_arr: Vec<u32>,
+        evidence_arr: &Vec<u32>,
         total_size: usize,
         sample_total_evidence_vec: &Vec<u32>,
     ) -> f64 {
-        let mut total = 0;
-        let mut sorted_evidence = Vec::new();
-        let mut evidence_frac_vec = Vec::new();
-        let mut max_reads = 0;
-        let mut positive_samples: f64 = 0.0;
-        for idx in 0..total_size {
-            if evidence_arr[idx] > max_reads {
-                max_reads = evidence_arr[idx];
-            }
-
-            if evidence_arr[idx] > 0 {
-                positive_samples += 1.0;
-            }
-
-            sorted_evidence.push(evidence_arr[idx]);
-            total += evidence_arr[idx];
-
-            if evidence_arr[idx] > 0 {
-                let frac =
-                    evidence_arr[idx] as f64 / sample_total_evidence_vec[idx] as f64 * 1000000.0;
-                evidence_frac_vec.push(frac.ln());
-            }
-        }
-
-        // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
-
-        sorted_evidence.sort_unstable_by(|a, b| b.cmp(a)); // sort in descending order
-                                                           // dbg!(&sorted_evidence);
-
-        let mut tmp = 0;
-        for (i, &e) in sorted_evidence.iter().enumerate() {
-            tmp += (i + 1) as u32 * e;
-        }
-
-        // dbg!(n, tmp);
-        let a = 2.0f64 * (tmp as f64) / (total_size as f64 * total as f64);
-        let b = ((total_size + 1) as f64) / total_size as f64;
-
-        // dbg!(a, b);
-        let gini = a - b;
-        // dbg!(gini, avg_reads, max_reads);
-
-        if positive_samples == 0.0 {
-            return 0.0;
-        } else {
-            return (positive_samples / total_size as f64)
-                * (evidence_frac_vec.iter().sum::<f64>() / evidence_frac_vec.len() as f64).exp()
-                * (1.0 - gini);
-        }
+        utils::calc_confidence(evidence_arr, total_size, sample_total_evidence_vec)
     }
 
     /// get partial report for splice junction searching
@@ -640,7 +592,7 @@ mod tests {
         dataset_info.sample_total_evidence_vec = vec![10000, 20000, 30000, 40000];
 
         let confidence = MergedIsoform::get_confidence_value(
-            evidence_arr,
+            &evidence_arr,
             dataset_info.get_size(),
             &dataset_info.sample_total_evidence_vec,
         );

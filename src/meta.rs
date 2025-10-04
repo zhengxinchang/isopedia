@@ -1,22 +1,22 @@
-use std::{
-    fs::File,
-    io::{self, BufRead, Write},
-    path::Path,
-};
-
 use anyhow::Result;
 use indexmap::IndexMap;
-use log::{info, warn};
+use log::{error, info, warn};
+use std::{
+    fs::File,
+    io::{BufRead, Write},
+    path::Path,
+};
 
 use crate::{io::GeneralOutputIO, utils};
 
 #[derive(Debug, Clone)]
-pub struct MetaEntry {
+pub struct SampleMetaEntry {
+    // sample entry
     pub name: String,
-    pub fields: IndexMap<String, String>,
+    pub fields: IndexMap<String, String>, // attr -> value
 }
 
-impl MetaEntry {
+impl SampleMetaEntry {
     fn new(name: String) -> Self {
         Self {
             name,
@@ -32,9 +32,9 @@ impl MetaEntry {
 
 #[derive(Debug, Clone)]
 pub struct Meta {
-    pub samples: Vec<String>,
-    pub header: Vec<String>,
-    pub records: IndexMap<String, MetaEntry>,
+    pub samples: Vec<String>,                       // sample names
+    pub header: Vec<String>,                        // atrribute names
+    pub records: IndexMap<String, SampleMetaEntry>, // sample name -> MetaEntry
     is_empty: bool,
 }
 
@@ -43,7 +43,7 @@ impl Meta {
         let mut records = IndexMap::new();
         let header = vec!["Sample".to_string(), "Path".to_string()];
         for sample in &sample_names {
-            let mut entry = MetaEntry::new(sample.clone());
+            let mut entry = SampleMetaEntry::new(sample.clone());
             entry
                 .add("Path".to_string(), "Fake_path".to_string())
                 .expect("Failed to add Path field");
@@ -57,7 +57,6 @@ impl Meta {
         }
     }
     pub fn parse<P: AsRef<Path>>(path: P, prefix: Option<&str>) -> Result<Meta> {
-        info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
         Meta::from_file(&path, prefix, None)
     }
 
@@ -67,7 +66,7 @@ impl Meta {
         Ok(())
     }
 
-    pub fn get_record_by_name(&self, name: &str) -> Option<&MetaEntry> {
+    pub fn get_record_by_name(&self, name: &str) -> Option<&SampleMetaEntry> {
         if self.is_empty {
             return None;
         }
@@ -110,15 +109,130 @@ impl Meta {
 
         table
     }
+
+    /// remove the Path column from header and records
+    pub fn remove_path_column(&mut self) {
+        // remove the second column in header and records
+        if self.header.len() < 2 {
+            return;
+        }
+        let path_col = self.header[1].clone();
+        self.header.remove(1);
+        for (_sample, metaentry) in self.records.iter_mut() {
+            metaentry.fields.shift_remove(&path_col);
+        }
+    }
+
+    pub fn validate_path_column(&self) {
+        //if the value in the scond column is a valid path
+
+        let path_col = self.header[1].clone();
+        for (sample, metaentry) in self.records.iter() {
+            if let Some(path) = metaentry.fields.get(&path_col) {
+                if !Path::new(path).exists() {
+                    error!("The path for sample {} does not exist: {}", sample, path);
+                    std::process::exit(1);
+                }
+            } else {
+                error!(
+                    "The path column {} is missing for sample {}",
+                    path_col, sample
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
+    pub fn validate_sample_names(&self) {
+        let mut name_set = std::collections::HashSet::new();
+        for sample in &self.samples {
+            if name_set.contains(sample) {
+                error!("Duplicate sample name found: {}", sample);
+                std::process::exit(1);
+            } else {
+                name_set.insert(sample);
+            }
+        }
+    }
+
+    pub fn merge(&mut self, other: &Meta) -> Result<()> {
+        if self.header != other.header {
+            warn!("Merging Meta with different headers: {:?} vs {:?}, missing attributes will be filled with 'NA'", self.header, other.header);
+        }
+
+        let mut all_headers = Vec::new();
+
+        for h in &self.header {
+            if !all_headers.contains(h) {
+                all_headers.push(h.clone());
+            }
+        }
+
+        for h in &other.header {
+            if !all_headers.contains(h) {
+                all_headers.push(h.clone());
+            }
+        }
+
+        let mut all_samples = Vec::new();
+        for s in &self.samples {
+            if !all_samples.contains(s) {
+                all_samples.push(s.clone());
+            }
+        }
+        for s in &other.samples {
+            if !all_samples.contains(s) {
+                all_samples.push(s.clone());
+            }
+        }
+
+        self.header = all_headers.clone();
+        self.samples = all_samples.clone();
+
+        let mut new_records = IndexMap::new();
+        for sample in &all_samples {
+            let mut entry = SampleMetaEntry::new(sample.clone());
+
+            for attr in &all_headers {
+                if attr == "Sample" {
+                    continue;
+                }
+                if let Some(self_entry) = self.records.get(sample) {
+                    if let Some(value) = self_entry.fields.get(attr) {
+                        entry.add(attr.clone(), value.clone())?;
+                        // continue;
+                    } else {
+                        entry.add(attr.clone(), "NA1".to_string())?;
+                    }
+                } else if let Some(other_entry) = other.records.get(sample) {
+                    if let Some(value) = other_entry.fields.get(attr) {
+                        entry.add(attr.clone(), value.clone())?;
+                        // continue;
+                    } else {
+                        entry.add(attr.clone(), "NA2".to_string())?;
+                    }
+                } else {
+                    // entry.add(attr.clone(), "NA".to_string())?;
+                }
+            }
+
+            new_records.insert(sample.clone(), entry);
+        }
+
+        self.records = new_records;
+
+        Ok(())
+    }
 }
 
 impl GeneralOutputIO for Meta {
     /// the sep shouldnt be used
-    fn to_table(&self, prefix: Option<&str>, sep: Option<&str>) -> String {
+    fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
         let mut table = String::new();
         let mut header_clean = self.header.clone();
-        header_clean.remove(1); // remove the path
-
+        // standarize the fisrt column name with Sample
+        header_clean[0] = "Sample".into();
+        // header_clean.remove(1); // remove the path
         if let Some(p) = prefix {
             table.push_str(&format!("{}{}\n", p, header_clean.join("\t")));
             for sample in &self.samples {
@@ -148,10 +262,12 @@ impl GeneralOutputIO for Meta {
     }
 
     fn from_reader<R: BufRead>(
-        mut reader: &mut R,
+        reader: &mut R,
         prefix: Option<&str>,
-        sep: Option<&str>,
+        _sep: Option<&str>,
     ) -> Result<Self> {
+        info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
+
         let mut header = String::new();
         let mut records = IndexMap::new();
         reader.read_line(&mut header)?;
@@ -165,6 +281,7 @@ impl GeneralOutputIO for Meta {
         let header = utils::line2fields(&header);
 
         info!("Parsed {} fields from header: {:?}", header.len(), header);
+
         let mut samples = Vec::new();
         let mut line_no = 0;
         for line in reader.lines() {
@@ -186,7 +303,8 @@ impl GeneralOutputIO for Meta {
 
             if parts.len() != header.len() {
                 return Err(anyhow::anyhow!(
-                    "The record at line {} does not match header length: {} != {}\nHeader: {:?}\nRecord: {:?}",
+                    "The record at line {} does not match header length: {} != {}\n\n> Header: {:?}\n> Record: {:?}\n\n> Please firstly check if the '\\t' and ' ' are both used as separators in the file. \n> Iosopedia does not support mixed separators in the same file, as some values may contain space within fields.\n> If '\\t' is detected in the line, it will be used as the field separator, otherwise, space will be used as the field separator.
+                    ",
                     line_no,
                     parts.len(),
                     header.len(),
@@ -197,7 +315,7 @@ impl GeneralOutputIO for Meta {
 
             samples.push(parts[0].clone());
 
-            let mut meta_entry = MetaEntry::new(parts[0].clone());
+            let mut meta_entry = SampleMetaEntry::new(parts[0].clone());
             for (k, v) in header.iter().zip(&parts).skip(1) {
                 meta_entry.add(k.clone(), v.clone())?;
             }
@@ -210,5 +328,28 @@ impl GeneralOutputIO for Meta {
             records,
             is_empty: false,
         })
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use crate::output::{GeneralTableOutput, IsoformTableOut};
+
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_meta_merge() {
+        let meta1_path = "test/test.output.isoform.gz";
+        // let meta2_path = "/hdd1/isopedia_datadownload/gencode.v47.basic.annotation.isoform2.gz";
+        let meta2_path = "test/test.output.isoform.gz";
+        let mut isofom_out1 = IsoformTableOut::load(meta1_path).unwrap();
+        let mut isofom_out2 = IsoformTableOut::load(meta2_path).unwrap();
+        let meta1 = isofom_out1.meta.clone();
+        let meta2 = isofom_out2.meta.clone();
+        let mut merged_meta = meta1.clone();
+        merged_meta.merge(&meta2).unwrap();
+        merged_meta.save_to_file("test/merged.meta.txt").unwrap();
     }
 }

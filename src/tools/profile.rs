@@ -1,17 +1,16 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use log::{error, info, warn};
 #[allow(dead_code, unused)]
 use memmap2::Mmap;
 // use noodles_fasta::fai::read;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use crate::io::MyGzWriter;
 use crate::reads::AggrRead;
-use crate::writer::MyGzWriter;
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(after_long_help = "

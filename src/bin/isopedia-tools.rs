@@ -1,29 +1,17 @@
-use anyhow::Result;
+// use anyhow::Result;
 use clap::{Parser, Subcommand};
-use isopedia::chromosome::ChromMapping;
-use isopedia::constants::*;
+// use isopedia::chromosome::ChromMapping;
+// use isopedia::constants::*;
+use anyhow::Result;
 #[allow(dead_code, unused)]
 use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::logger::init_logger;
-use isopedia::reads::AggrRead;
-#[allow(dead_code, unused)]
-use isopedia::tmpidx::Tmpindex;
-use isopedia::tools::inspection::InspectArgs;
-// use isopedia::tools::ToolCmdValidate;
-// use isopedia::writer::MyGzWriter;
-// use log::{error, info, warn};
-// #[allow(dead_code, unused)]
-// use memmap2::Mmap;
-// use noodles_fasta::fai::read;
+use isopedia::tools::output;
+use isopedia::tools::profile::*;
+use isopedia::tools::view::ViewArgs;
+use isopedia::tools::view::*;
+use isopedia::tools::{manifest::*, output::*, ToolCmdValidate};
 use serde::{Deserialize, Serialize};
-// use std::collections::HashSet;
-// use std::fs::File;
-// use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::PathBuf;
-
-use isopedia::tools::inspection::*;
-use isopedia::tools::merge_replicates::*;
-use isopedia::tools::{manifest::*, ToolCmdValidate};
 
 #[derive(Parser, Clone, Debug, Serialize, Deserialize)]
 #[command(name = "isopedia-tool")]
@@ -42,16 +30,20 @@ pub struct ToolCli {
 #[derive(Subcommand, Clone, Debug, Serialize, Deserialize)]
 pub enum ToolsCommands {
     #[allow(non_camel_case_types)]
-    #[command(about = "Inspect index files")]
-    inspect(InspectArgs),
+    #[command(about = "View index files")]
+    view(ViewArgs),
 
     #[allow(non_camel_case_types)]
-    #[command(about = "Merge replicates file from isopedia-extr")]
-    merge(MergeArgs),
+    #[command(about = "Merge replicates file from isopedia profile")]
+    profile(MergeArgs),
 
     #[allow(non_camel_case_types)]
     #[command(about = "Split a large manifest file into smaller shards")]
-    split_manifest(ManifestSplit),
+    manifest(ManifestArg),
+
+    #[allow(non_camel_case_types)]
+    #[command(about = "Split a large manifest file into smaller shards")]
+    output(OutputArg),
 }
 
 fn greetings(args: &ToolCli) {
@@ -62,7 +54,7 @@ fn greetings(args: &ToolCli) {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     init_logger();
 
     let cli = ToolCli::parse();
@@ -70,30 +62,29 @@ fn main() {
     greetings(&cli);
 
     match cli.command {
-        ToolsCommands::inspect(inspec_args) => {
-            if !inspec_args.validate() {
+        ToolsCommands::view(view_args) => {
+            if !view_args.validate() {
                 std::process::exit(1);
             }
 
-            if inspec_args.type_f == "tmpidx" {
-                inspect_intrim_file(&inspec_args.idx, &inspec_args.output);
-            } else if inspec_args.type_f == "archive" {
-                inspect_archive(&inspec_args.idx, &inspec_args.output);
-            } else if inspec_args.type_f == "dbinfo" {
-                inspect_meta(&inspec_args.idx);
-            } else if inspec_args.type_f == "chroms" {
-                inspect_chroms(&inspec_args.idx);
+            if view_args.type_f == "tmpidx" {
+                view_tmpidx(&view_args);
+            } else if view_args.type_f == "archive" {
+                view_archive(&view_args);
+            } else if view_args.type_f == "dbinfo" {
+                view_dbinfo(&view_args);
+            } else if view_args.type_f == "chroms" {
+                view_chroms(&view_args);
             }
         }
-        ToolsCommands::merge(merge_args) => {
+        ToolsCommands::profile(merge_args) => {
             if !merge_args.validate() {
                 std::process::exit(1);
             }
 
-            merge_replicates(&merge_args.input_files, &merge_args.output)
-                .expect("Failed to merge replicates");
+            merge_replicates(&merge_args.input_files, &merge_args.output)?;
         }
-        ToolsCommands::split_manifest(split_args) => {
+        ToolsCommands::manifest(split_args) => {
             if !split_args.validate() {
                 std::process::exit(1);
             }
@@ -102,8 +93,15 @@ fn main() {
                 &split_args.input,
                 &split_args.output_prefix,
                 split_args.each_size,
-            )
-            .expect("Failed to split manifest");
+            )?;
+        }
+        ToolsCommands::output(output_arg) => {
+            if !output_arg.validate() {
+                std::process::exit(1);
+            }
+            // Call the appropriate function based on mode
+            output::merge(&output_arg)?;
         }
     }
+    Ok(())
 }

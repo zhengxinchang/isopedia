@@ -2,10 +2,9 @@ use std::vec;
 
 use crate::{
     dataset_info::DatasetInfo,
-    fusion,
     gene_index::{CandidateMatchStatus, GeneInterval, GeneIntervalTree},
     io::{Line, SampleChip},
-    output::{FusionBrkPtTableOut, FusionDiscoveryTableOut, GeneralTableOutput},
+    output::{FusionDiscoveryTableOut, GeneralTableOutput},
     reads::Segment,
     utils::{hash_vec, is_overlap},
 };

@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fs::OpenOptions;
 use std::num::NonZeroUsize;
 use std::os::unix::fs::FileExt;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{
@@ -433,10 +434,6 @@ impl Cache {
         Ok(())
     }
 
-    // pub fn update_header(&mut self, header: CacheHeader) {
-    //     self.header = header;
-    // }
-
     pub fn dump_one_node(&mut self, node: &mut Node) -> Result<()> {
         // dump the data first if the node is leaf
         assert!(std::mem::size_of_val(&node.header) == 4096); // the size of the node header should be 4096
@@ -468,8 +465,17 @@ impl Cache {
         Ok(())
     }
 
-    pub fn from_disk(file_path: &str, lru_size: usize) -> Cache {
-        let mut file: File = File::open(file_path).unwrap();
+    pub fn get_leaf_notes(&mut self) -> Vec<Arc<Node>> {
+        let mut leaves: Vec<Arc<Node>> = Vec::new();
+        for node_id in 1..=self.header.leaf_nodes {
+            let leaf = self.get_node2(node_id).unwrap();
+            leaves.push(leaf);
+        }
+        leaves
+    }
+
+    pub fn from_disk<P: AsRef<Path>>(file_path: P, lru_size: usize) -> Cache {
+        let mut file: File = File::open(&file_path).unwrap();
         let mut header_bytes = [0; 4096];
         file.read_exact(&mut header_bytes).unwrap();
 
@@ -477,7 +483,10 @@ impl Cache {
         if magic != MAGIC {
             panic!(
                 "{}",
-                format!("The file {:?}is not a valid data cache file", file_path)
+                format!(
+                    "The file {:?} is not a valid data cache file",
+                    std::path::PathBuf::from(file_path.as_ref())
+                )
             );
         }
 
@@ -485,7 +494,7 @@ impl Cache {
         Cache {
             header,
             file,
-            file_path: PathBuf::from(file_path),
+            file_path: PathBuf::from(file_path.as_ref()),
             payload_file: None,
             payload_file_path: None,
             mmap: None,
@@ -493,14 +502,14 @@ impl Cache {
         }
     }
 
-    pub fn from_disk_mmap(idx_path: &str, lru_size: usize) -> Result<Cache> {
-        let file = File::options().read(true).write(true).open(idx_path)?;
+    pub fn from_disk_mmap<P: AsRef<Path>>(idx_path: P, lru_size: usize) -> Result<Cache> {
+        let file = File::options().read(true).write(true).open(&idx_path)?;
         let mmap = unsafe { Mmap::map(&file)? };
         let header = CacheHeader::from_bytes(&mmap[0..4096])?;
         Ok(Cache {
             header,
             file,
-            file_path: PathBuf::from(idx_path),
+            file_path: PathBuf::from(idx_path.as_ref()),
             payload_file: None,
             payload_file_path: None,
             mmap: Some(mmap),
@@ -514,7 +523,7 @@ impl Cache {
             return Some(Arc::clone(n));
         }
 
-        let mmap = self.mmap.as_ref().expect("Cache not mmap’d");
+        let mmap = self.mmap.as_ref().expect("Cache not mmaped");
         if node_id == 0 || node_id > self.header.total_nodes {
             return None;
         }
