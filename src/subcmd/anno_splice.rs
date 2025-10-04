@@ -256,7 +256,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
             query.id, query.left_chr, query.left_pos, query.right_chr, query.right_pos,
         ));
 
-        let isoforms_ptr = forest.search_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
+        let isoforms_ptr = forest.search2_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
 
         if isoforms_ptr.is_empty() {
             warn!("No isoforms found for query: {}", query.id);
@@ -290,7 +290,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    splice_out.save_to_file(cli.output.with_extension("splice.gz"))?;
+    splice_out.save_to_file(cli.output.clone())?;
 
     // mywriter.finish()?;
 

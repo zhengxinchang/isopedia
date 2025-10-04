@@ -168,6 +168,20 @@ impl<R: BufRead> TranscriptChunker<R> {
             }
         }
     }
+
+    pub fn get_all_transcripts_vec(&mut self) -> Vec<Transcript> {
+        let mut transcripts = Vec::new();
+        while let Some(trans) = self.get_next_transcript() {
+            transcripts.push(trans);
+        }
+        transcripts.sort_by(|a, b| {
+            a.chrom
+                .cmp(&b.chrom)
+                .then(a.start.cmp(&b.start))
+                .then(a.end.cmp(&b.end))
+        });
+        transcripts
+    }
 }
 
 impl<R: BufRead> Iterator for TranscriptChunker<R> {

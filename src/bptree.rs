@@ -844,7 +844,7 @@ impl BPForest {
         Ok(())
     }
 
-    pub fn search_one_pos(
+    pub fn search0_one_pos(
         &mut self,
         chrom_name: &str,
         pos: u64,
@@ -856,16 +856,26 @@ impl BPForest {
                 return vec![];
             }
         };
+        // let tree: &mut BPTree = self
+        //     .trees_by_chrom
+        //     .entry(chrom_id)
+        //     .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
+
+        // // dbg!("aaa");
+        // tree.single_pos_search(pos)
+
+        if self.trees_by_chrom.contains_key(&chrom_id) == false {
+            // dbg!("bbb");
+            self.trees_by_chrom.clear();
+        }
         let tree: &mut BPTree = self
             .trees_by_chrom
             .entry(chrom_id)
             .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
-
-        // dbg!("aaa");
-        tree.single_pos_search(pos)
+        return tree.single_pos_search(pos);
     }
 
-    pub fn search_one_range(
+    pub fn search0_one_range(
         &mut self,
         chrom_name: &str,
         pos: u64,
@@ -879,15 +889,21 @@ impl BPForest {
             }
         };
 
+        // ugly but works
+
+        if self.trees_by_chrom.contains_key(&chrom_id) == false {
+            self.trees_by_chrom.clear();
+        }
+
         let tree: &mut BPTree = self
             .trees_by_chrom
             .entry(chrom_id)
             .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
 
-        tree.range_search2(pos, flank)
+        return tree.range_search2(pos, flank);
     }
 
-    fn search_multi_exact(
+    fn search1_multi_exact(
         &mut self,
         positions: &Vec<(String, u64)>,
         min_match: usize,
@@ -896,7 +912,7 @@ impl BPForest {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
+                self.search0_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
             })
             .collect();
 
@@ -907,7 +923,7 @@ impl BPForest {
         }
     }
 
-    fn search_multi_range(
+    fn search1_multi_range(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -917,7 +933,7 @@ impl BPForest {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search_one_range(
+                self.search0_one_range(
                     &chrom_name.to_ascii_uppercase(),
                     pos.clone(),
                     flank,
@@ -935,20 +951,20 @@ impl BPForest {
         }
     }
 
-    pub fn search_all_match(
+    pub fn search2_all_match(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
         lru_size: usize,
     ) -> Vec<MergedIsoformOffsetPtr> {
         if flank == 0 {
-            self.search_multi_exact(positions, 0, lru_size)
+            self.search1_multi_exact(positions, 0, lru_size)
         } else {
-            self.search_multi_range(positions, flank, 0, lru_size)
+            self.search1_multi_range(positions, flank, 0, lru_size)
         }
     }
 
-    pub fn search_partial_match(
+    pub fn search2_partial_match(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -956,9 +972,9 @@ impl BPForest {
         lru_size: usize,
     ) -> Vec<MergedIsoformOffsetPtr> {
         if flank == 0 {
-            self.search_multi_exact(positions, min_match, lru_size)
+            self.search1_multi_exact(positions, min_match, lru_size)
         } else {
-            self.search_multi_range(positions, flank, min_match, lru_size)
+            self.search1_multi_range(positions, flank, min_match, lru_size)
         }
     }
 }

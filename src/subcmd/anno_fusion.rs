@@ -220,9 +220,9 @@ fn anno_single_fusion(
         breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
     );
     let left_target =
-        forest.search_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
+        forest.search0_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
     let right_target =
-        forest.search_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
+        forest.search0_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
 
     if left_target.is_empty() || right_target.is_empty() {
         if cli.debug {
@@ -430,7 +430,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         }
         info!("Total processed samples: {}", dataset_info.get_size());
         // info!("Results written to {}", cli.output.display());
-        fusionbrkpt_out.save_to_file(&cli.output.with_extension("fusion_breakpoints.gz"))?;
+        fusionbrkpt_out.save_to_file(&cli.output)?;
     } else if cli.gene_gtf.is_some() {
         const FUGEN_GENE_REGION_FORMAT_STR: &str = "COUNT";
 
@@ -497,7 +497,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                     .collect::<Vec<(String, u64)>>();
 
                 let targets =
-                    forest.search_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
+                    forest.search2_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
 
                 if targets.is_empty() {
                     skipped_genes += 1;
@@ -538,7 +538,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         info!("Total skipped genes: {}", skipped_genes);
         info!("Total processed samples: {}", dataset_info.get_size());
         // info!("Results written to {}", cli.output.display());
-        fusiondiscovery_out.save_to_file(&cli.output.with_extension("fusion_discovery.gz"))?;
+        fusiondiscovery_out.save_to_file(&cli.output)?;
     }
 
     // info!("Total processed samples: {}", dataset_info.get_size());
