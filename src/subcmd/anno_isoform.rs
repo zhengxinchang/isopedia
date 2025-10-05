@@ -17,6 +17,7 @@ use anyhow::Result;
 use clap::{command, Parser};
 use log::{error, info};
 use memmap2::Mmap;
+use nix::libc::{self, posix_madvise, POSIX_MADV_DONTNEED};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 // use nix::sys::mman::{posix_madvise, PosixMadvise};
@@ -53,13 +54,13 @@ pub struct AnnIsoCli {
     pub output: PathBuf,
 
     /// Memory size to use for warming up (in gigabytes).  
-    /// Example: 1GB. Increasing this will significantly improve performance;  
+    /// Example: 4GB. Increasing this will significantly improve performance;  
     /// set it as large as your system allows.
     #[arg(short, long, default_value_t = 4)]
     pub warmup_mem: usize,
 
     /// Maximum number of cached nodes per tree
-    #[arg(short = 'c', long = "cached_nodes", default_value_t = 100_000)]
+    #[arg(short = 'c', long = "cached_nodes", default_value_t = 10_000)]
     pub lru_size: usize,
 }
 
@@ -213,6 +214,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
 
+    let mut released_bytes = 0;
+    const RELEASE_STEP: usize = 1024 * 1024 * 1024; // 1GB
+
     for trans in gtf_vec {
         iter_count += 1;
 
@@ -224,29 +228,29 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             );
             iter_count = 0;
 
-            // let release_up_to = released_bytes + RELEASE_STEP;
-            // let base_ptr = archive_mmap.as_ptr() as *mut libc::c_void;
+            let release_up_to = released_bytes + RELEASE_STEP;
+            let base_ptr = archive_mmap.as_ptr() as *mut libc::c_void;
 
-            // let ret = unsafe {
-            //     posix_madvise(
-            //         base_ptr.add(released_bytes),
-            //         RELEASE_STEP,
-            //         POSIX_MADV_DONTNEED,
-            //     )
-            // };
+            let ret = unsafe {
+                posix_madvise(
+                    base_ptr.add(released_bytes),
+                    RELEASE_STEP,
+                    POSIX_MADV_DONTNEED,
+                )
+            };
 
-            // if ret == 0 {
-            //     released_bytes = release_up_to;
-            //     info!(
-            //         "Released first {} MB from page cache",
-            //         released_bytes / 1024 / 1024
-            //     );
-            // } else {
-            //     info!(
-            //         "posix_madvise failed at {} MB",
-            //         released_bytes / 1024 / 1024
-            //     );
-            // }
+            if ret == 0 {
+                released_bytes = release_up_to;
+                // info!(
+                //     "Released first {} MB from page cache",
+                //     released_bytes / 1024 / 1024
+                // );
+            } else {
+                // info!(
+                //     "posix_madvise failed at {} MB",
+                //     released_bytes / 1024 / 1024
+                // );
+            }
         }
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
