@@ -2,7 +2,12 @@
 
 # About the Isopedia <img src="./img/logo2.png" align="right" alt="" width=120 />
 
-Isopedia is a scalable tool that evaluates novel isoforms by leveraging population-scale long-read transcriptome data to distinguish true biological variants from technical artifacts.
+Isopedia is a scalable tool that can explore hundreds to thousands of long-read transcriptome datasets simoutanously. There are two new insights that are provided by isopedia.
+
+1) Population-level
+
+2) Iosform diversity based on the population and 
+
 
 <details>
 <summary>Table of Content</summary>
