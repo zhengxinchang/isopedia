@@ -2,19 +2,18 @@
 
 # About the Isopedia <img src="./img/logo2.png" align="right" alt="" width=120 />
 
-Isopedia is a scalable tool that can explore hundreds to thousands of long-read transcriptome datasets simoutanously. There are two new insights that are provided by isopedia.
+**Isopedia** is a scalable tool designed for the analysis of hundreds to thousands of long-read transcriptome datasets simultaneously by read-level indexing approach. It provides two key capabilities:
 
-1) Population-level
+Population-level transcript quantification and frequency profiling — With a single command, Isopedia can quantify isoform expression and estimate their occurrence frequencies across large cohorts using minimal computational resources.
 
-2) Iosform diversity based on the population and 
+Isoform diversity exploration and visualization — Isopedia enables systematic analysis of fusion genes and specific splicing events across populations, offering insights into transcript diversity beyond individual samples.
 
 
-<details>
-<summary>Table of Content</summary>
-
+# Table of Content
 
 - [Quick Start](#quick-start)
 - [How it works](#how-it-works)
+- [Download pre-built index](#download-pre-built-index)
 - [Usage](#usage)
   - [Annotate (search) isoforms/transcripts](#annotate-search-isoformstranscripts)
   - [Annotate (search) fusion genes](#annotate-search-fusion-genes)
@@ -22,32 +21,38 @@ Isopedia is a scalable tool that can explore hundreds to thousands of long-read 
 - [Installation](#installation)
 - [Quick Q&A](#quick-qa)
 
-</details>
 
 # Quick Start
 
-isopeida consists of multiple binaries that have prefix isopedia-*. This naming strategy help isopedia update each command individually and easily to expand.
-
+Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `isopedia` is used for all the main functions, and `isopedia-tools` has some helper functions.
 
 **Download prebuild index and run**
+
 ```bash
-isopedia isoform -i index/ -g query.gtf -o isoform.anno.tsv
+# query transcripts
+isopedia isoform -i index/ -g query.gtf -o out.isoform.tsv.gz
 
-isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o fusion.anno.tsv
+# query one fusion gene (two breakpoints)
+isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o out.fusion.tsv.gz
 
-isopedia fusion  -i index/ -P fusion_query.bed -o fusion.anno.tsv
+# query multiple fusion genes
+isopedia fusion  -i index/ -P fusion_query.bed -o out.fusion.tsv.gz
 
-isopedia fusion  -i index/ -g gene.gtf -o fusion.discovery.tsv
+# query gene regions and discover potential fusion events
+isopedia fusion  -i index/ -g gene.gtf -o out.fusion.discovery.tsv.gz
+
+# query a splice junction and visualize it
+isopedia splice  -i index/ -s 17:7675236,17:7675993  -o out.splice.tsv.gz
+python script/isopedia-splice-viz.py  -i out.splice.tsv.gz -g gencode.v47.basic.annotation.gtf  -t script/temp.html  -o isopedia-splice-view
 ```
 
-**Build your own index**
-
+**Build your own index** 
 
 Isopedia supports building local index in your own datasets. prerequests are listed below:
 
 1. latest isopedia binaries
 2. A set of mapped bam files(sorted bam are not required)
-3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format
+3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format. This 
 
 
 <details>
@@ -62,20 +67,20 @@ You can find example files and commands at here [click to expand]
 # download the toy_ex 
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
-# extract isoform signals on each bam individually
-isopedia extr -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
-isopedia extr -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
+# prifile isoform signals on each bam individually
+isopedia profile -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
+isopedia profile -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 
 # make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
 
-# aggregate, only first two column will be read in this step.
-isopedia aggr -i manifest.tsv -o index/
+# merging, only first two column will be read in this step.
+isopedia merge -i manifest.tsv -o index/
 
 # build index. provide the same manifest file, the rest of meta columns will be read.
 isopedia-idx  -i index/ -m manifest.tsv 
 
 # test your index by run a small annotation task.
-isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.tsv
+isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
 
 ```
 </details>
@@ -86,13 +91,23 @@ isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o isoform.anno.tsv
 
 ![how-it-works](./img/how-it-works.png)
 
+The workflow of Isopedia involves several key steps, including isoform profiling, merging, indexing, and quering. Users can start by profiling isoform signals from individual BAM files, then merge the results to build a comprehensive index. Once the index is ready, it can be used to qeury isoforms, fusion genes, and explore splice junctions across multiple samples. Users can also visualize specific splicing events using the provided visualization tools. 
+
+Isopedia comes with pre-built indexes from hundreds of publicly available long-read RNA-seq datasets, which can be used directly for isoform and fusion gene annotation.
+
+
 ![how-it-works2](./img/how-it-works2.png)
 
+This figure dipicts how Isopedia determines a positive hit for a query in different sinarios. 
 
+
+# Download pre-built index
+
+[place holder for index download link]
 
 # Usage
 
-## Annotate (search) isoforms/transcripts
+## Query transcripts
 
 ### Purpose:
 
@@ -101,14 +116,10 @@ search transcripts from input gtf file and return how many samples in the index 
 ### Example:
 
 ```bash
-isopedia isoform -i index/ -g query.gtf -f 15 -o out.tsv.gz
+isopedia isoform -i index/ -g query.gtf -o out.tsv.gz
 ```
 
 key parameters:
-
-`--idxdir(-i)` path to index file
-
-`--gtf(-g)` path to gtf that to be annotate
 
 `--min-read(-m)` minimal support read in each sample to define a postive sample
 
@@ -120,27 +131,37 @@ All parameters:
 </summary>
 
 ```bash
-Usage: isopedia isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF>
+Usage: isopedia isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF> --output <OUTPUT>
 
 Options:
   -i, --idxdir <IDXDIR>
-          index directory
+          Path to the index directory
 
   -g, --gtf <GTF>
-          gtf file
+          Path to the GTF file
 
   -f, --flank <FLANK>
-          flank size for search, before and after the position
+          Flanking size (in bases) before and after the position
           
           [default: 10]
 
   -m, --min-read <MIN_READ>
-          minimal reads to define a positive sample
+          Minimum number of reads required to define a positive sample
           
           [default: 1]
 
   -o, --output <OUTPUT>
-          output file for search results
+          Output file for search results
+
+  -w, --warmup-mem <WARMUP_MEM>
+          Memory size to use for warming up (in gigabytes). Example: 4GB. Increasing this will significantly improve performance; set it as large as your system allows
+          
+          [default: 4]
+
+  -c, --cached_nodes <LRU_SIZE>
+          Maximum number of cached nodes per tree
+          
+          [default: 10000]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -200,11 +221,11 @@ $$G = 2 \frac{\sum_{i=1}^{n} i*CPM_{i}}{n \sum_{i=1}^{n} CPM_{i} } - \frac{n+1}{
 </details>
 
 
-## Annotate (search) fusion genes
+## Query fusion gene breakpoints
 
 ### Purpose:
 
-search fusion from the index and report evidence.
+This command is used to search for evidence of specific gene fusion events in the index based on provided breakpoints.
 
 ### Example:
 
@@ -216,6 +237,12 @@ isopedia fusion -i index/ -f 10 -p chr1:pos1,chr2:pos2 -o fusion.anno.bed.gz
 isopedia fusion -i index/ -f 10 -P fusion_breakpoints.bed -o fusion_all.anno.bed.gz
 ```
 
+key parameters:
+
+`--min-read(-m)` minimal support read in each sample to define a postive sample
+
+`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+
 <details>
 
 <summary>
@@ -223,7 +250,6 @@ All parameters:
 </summary>
 
 ```bash
-
 Usage: isopedia fusion [OPTIONS] --idxdir <IDXDIR> --output <OUTPUT>
 
 Options:
@@ -254,6 +280,11 @@ Options:
 
       --debug
           debug mode
+
+  -c, --cached_nodes <LRU_SIZE>
+          number of cached nodes for each tree in maximal
+          
+          [default: 1000000]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -286,7 +317,7 @@ Options:
 
 ### Purpose:
 
-search fusion from the index and report evidence.
+Query candidate fusion genes within specified gene regions. It identifies potential fusion events by examining all possible gene pairs within the provided regions and reporting those with supporting evidence in the index.
 
 ### Example:
 
@@ -298,6 +329,10 @@ isopedia fusion -i index/  -G gene.gtf -o fusion.discovery.out.gz
 key parameters:
 
 `--gene-gtf(-G)` a gtf file that has gene records. the rest of feature will be ignored.
+
+`--min-read(-m)` minimal support read in each sample to define a postive sample
+
+`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
 
 ### Output
 
@@ -325,7 +360,7 @@ key parameters:
 
 
 
-## Annotate splice junctions and visualize isoforms
+## Query splice junctions and visualize isoforms
 
 ### Purpose:
 This command is designed for cases where you have a specific splice junction of interest and want to explore its isoform context in detail. It provides both tabular output and visualization.
@@ -333,26 +368,91 @@ This command is designed for cases where you have a specific splice junction of 
 ### Example:
 
 ```bash
-isopedia splice \
-  -i index/ \
-  -g gencode.v47.basic.chr22.gtf \
-  -p chr22:41100500-41101500 \
-  -o splice.out.gz
+isopedia splice  -i index/ -p chr22:41100500-41101500  -o splice.out.gz
+python script/isopedia-splice-viz.py  -i splice.out.gz -g gencode.v47.basic.annotation.gtf  -t script/temp.html  -o isopedia-splice-view
+
 ```
 
-key parameters:
+key parameters(isopedia splice):
 
-| Option | Argument        | Description                                                                 | Default   |
-|--------|-----------------|-----------------------------------------------------------------------------|-----------|
-| `-i, --idxdir`       | `<IDXDIR>`      | Path to the index directory                                           | —         |
-| `-s, --splice`       | `<SPLICE>`      | Splice junction in `chr1:pos1,chr2:pos2` format                      | —         |
-| `-S, --splice-bed`   | `<SPLICE_BED>`  | Path to splice junction BED file                                     | —         |
-| `-f, --flank`        | `<FLANK>`       | Flanking size (in bases) before and after the position               | `10`      |
-| `-m, --min-read`     | `<MIN_READ>`    | Minimum number of reads required to define a positive sample         | `1`       |
-| `-o, --output`       | `<OUTPUT>`      | Output file for search results (gzip-compressed)                     | —         |
-| `-w, --warmup-mem`   | `<WARMUP_MEM>`  | Memory size for warming up (GB). Larger values improve performance   | `4`       |
-| `-c, --cached_nodes` | `<LRU_SIZE>`    | Maximum number of cached nodes per tree                              | `100000`  |
+`--min-read(-m)` minimal support read in each sample to define a postive sample
 
+`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+
+key parameters(isopedia-splice-viz.py):
+
+`-g/--gtf` a gtf file that has gene annotations. it will be used to annotate the splice junction and isoforms.
+
+`-t/--temp-html` a template html file that will be used to generate the interactive vislization.
+
+
+<details>
+<summary>
+All parameters:
+</summary>
+
+```bash
+
+Usage: isopedia splice [OPTIONS] --idxdir <IDXDIR> --output <OUTPUT>
+
+Options:
+  -i, --idxdir <IDXDIR>
+          Path to the index directory
+
+  -s, --splice <SPLICE>
+          Splice junction in 'chr1:pos1,chr2:pos2' format
+
+  -S, --splice-bed <SPLICE_BED>
+          Path to splice junction bed file
+
+  -f, --flank <FLANK>
+          Flanking size (in bases) before and after the position
+          
+          [default: 10]
+
+  -m, --min-read <MIN_READ>
+          Minimum number of reads required to define a positive sample
+          
+          [default: 1]
+
+  -o, --output <OUTPUT>
+          Output file for search results
+
+  -w, --warmup-mem <WARMUP_MEM>
+          Memory size to use for warming up (in gigabytes). Example: 4GB. Increasing this will significantly improve performance; Set it to 0(default) if you only have small query and want to skip warming up step
+          
+          [default: 0]
+
+  -c, --cached_nodes <LRU_SIZE>
+          Maximum number of cached nodes per tree
+          
+          [default: 100000]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+```
+
+```bash
+
+usage: isopedia-splice-viz.py [-h] -i INPUT [-g GTF] [-t TEMPLATE] -o OUTPUT
+
+Visualize isoforms from isopedia-anno-splice output
+
+options:
+  -h, --help            show this help message and exit
+  -i INPUT, --input INPUT
+                        Input file, the file is the output from isopedia-anno-splice with single query mode.
+  -g GTF, --gtf GTF     Reference GTF file
+  -t TEMPLATE, --template TEMPLATE
+                        Templates HTML file
+  -o OUTPUT, --output OUTPUT
+                        Output file
+
+```
+</details>
 
 
 
@@ -382,6 +482,8 @@ The output is a gzip-compressed file containing detailed information about the s
 Visualization output example:
 https://zhengxinchang.github.io/isopedia/ 
 
+![isopedia-splice-view](./img/isopedia-splice-view.png)
+
 
 # Memory Usage
 
@@ -389,7 +491,7 @@ https://zhengxinchang.github.io/isopedia/
 ## ENCODE long-read RNA-seq datasets(107 samples)
 | Step                       | Peak Memory Usage (GB) |
 |----------------------------|------------------------|
-| isopedia aggr             | 7.12                   |
+| isopedia merge             | 7.12                   |
 | isopedia-idx               | 3.84                   |
 | isopedia isoform(158K transcripts from GENCODE)      | 15.82                  |
 
@@ -416,7 +518,7 @@ cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 
-
+<!-- 
 # Quick Q&A:
 
 **Q1: What gap does Isopedia aim to fill?**
@@ -430,7 +532,7 @@ A: Isopedia introduces several innovations for scalable and efficient isoform ev
 
 **Q4: What is the best use case for Isopedia?**
 A: Isopedia is designed to be integrated into standard long-read transcriptome analysis pipelines. After isoforms are identified using tools like IsoQuant, FLAMES, TALON, or others, their output GTF files can be passed to Isopedia. It then evaluates the isoforms against a background index constructed from hundreds of publicly available long-read transcriptome datasets, providing a scalable and population-aware assessment.
-
+ -->
 
 # Contact
 
