@@ -1,0 +1,42 @@
+{% set name = "isopedia" %}
+{% set version = environ.get('version', '0.1.0') %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+
+source:
+  path: ../ver_release/{{ name }}-{{ version }}.linux.tar.gz
+
+
+build:
+  number: 0
+  binary_relocation: false
+  skip: true  # [not linux]
+  script:
+    - pwd && ls -l
+    - mkdir -p $PREFIX/bin
+    - tar -xzvf ./isopedia-{{ version }}.linux.tar.gz && rm -rf ./isopedia-{{ version }}.linux.tar.gz || echo "skip extract"
+    - find . -maxdepth 2 -type f -exec install -m 0755 {} $PREFIX/bin/ \;
+
+
+requirements:
+  run:
+    - python >=3.8 
+
+test:
+  commands:
+    - isopedia --version
+    - isopedia-tools --help
+    - python -c "import sys; print('Python OK')"
+
+about:
+  home: https://github.com/zhengxinchang/isopedia
+  license: MIT
+  license_file: ../LICENSE
+  summary: "Simultaneous exploration of thousands of long-read transcriptomes by read-level indexing"
+
+extra:
+  recipe-maintainers:
+    - zhengxc

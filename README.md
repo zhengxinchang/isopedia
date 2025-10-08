@@ -499,6 +499,12 @@ https://zhengxinchang.github.io/isopedia/
 
 # Installation
 
+## Install from conda
+
+```bash
+conda install zhengxinchang::isopedia
+```
+
 ## Check out the latest release
 
 
