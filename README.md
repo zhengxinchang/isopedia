@@ -77,7 +77,7 @@ isopedia profile -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 isopedia merge -i manifest.tsv -o index/
 
 # build index. provide the same manifest file, the rest of meta columns will be read.
-isopedia-idx  -i index/ -m manifest.tsv 
+isopedia index  -i index/ -m manifest.tsv 
 
 # test your index by run a small annotation task.
 isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
@@ -507,9 +507,9 @@ conda install zhengxinchang::isopedia
 
 ## Check out the latest release
 
-
 https://github.com/zhengxinchang/isopedia/releases
 
+Note that the `isopedia-<version>.linux.tar.gz` was compliled in Amazon Linux 2 with GCC 7.3, Glibc 2.26, and Binutils 2.29.1. It should work in most of Linux distrubtion, however, if your Linux distribution can not run it, you can still try to use the `isopedia-<version>.musl.tar.gz`(statically linked with musl). 
 
 ## From source code
 

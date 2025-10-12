@@ -100,7 +100,7 @@ pub struct ProfileCli {
     #[arg(long, default_value_t = 5)]
     pub mapq: u8,
 
-    /// Include secondary reads in the analysis
+    /// Include secondary alignments
     #[arg(long = "use-secondary", default_value_t = false)]
     pub use_secondary: bool,
 
