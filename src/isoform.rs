@@ -4,7 +4,6 @@ use flate2::bufread::GzEncoder;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-
 use crate::{
     // constants::MAX_SAMPLE_SIZE,
     breakpoints::BreakPointPair,
@@ -256,16 +255,36 @@ impl MergedIsoform {
             .read_to_end(buf)
             .expect("Can not compress the AggRecord");
 
+
+
         return length as u32;
     }
+
+    // DEPRECATED,SLOW
+    // pub fn xz_encode(&self, buf: &mut Vec<u8>) -> u32 {
+    //     let tmp_buf = bincode::serialize(&self).expect("Can not serialize the AggRecord");
+
+    //     let length = XzEncoder::new(tmp_buf.as_slice(), 6)
+    //         .read_to_end(buf)
+    //         .expect("Can not compress the AggRecord");
+
+    //     return length as u32;
+    // }
 
     pub fn gz_decode(bytes: &[u8]) -> Result<MergedIsoform, bincode::Error> {
         let mut decoder = flate2::bufread::GzDecoder::new(bytes);
         let mut bytes = Vec::new();
         decoder.read_to_end(&mut bytes)?;
-
         bincode::deserialize(&bytes[..])
     }
+
+    // DEPRECATED,SLOW
+    // pub fn xz_decode(bytes: &[u8]) -> Result<MergedIsoform, bincode::Error> {
+    //     let mut decoder = XzDecoder::new(bytes);
+    //     let mut bytes = Vec::new();
+    //     decoder.read_to_end(&mut bytes)?;
+    //     bincode::deserialize(&bytes[..])
+    // }
 
     pub fn get_common_splice_sites(&self) -> Vec<u64> {
         self.splice_junctions_vec

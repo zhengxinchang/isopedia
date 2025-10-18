@@ -29,6 +29,9 @@ Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `is
 **Download prebuild index and run**
 
 ```bash
+# install isopedia from conda
+conda install -y zhengxinchang::isopedia
+
 # query transcripts
 isopedia isoform -i index/ -g query.gtf -o out.isoform.tsv.gz
 
@@ -50,7 +53,7 @@ python script/isopedia-splice-viz.py  -i out.splice.tsv.gz -g gencode.v47.basic.
 
 Isopedia supports building local index in your own datasets. prerequests are listed below:
 
-1. latest isopedia binaries
+1. Latest isopedia binaries
 2. A set of mapped bam files(sorted bam are not required)
 3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format. This 
 
@@ -107,7 +110,7 @@ This figure dipicts how Isopedia determines a positive hit for a query in differ
 
 # Usage
 
-## Query transcripts
+## Query(quantification) transcripts
 
 ### Purpose:
 
@@ -206,6 +209,9 @@ There are a few columns can be used to filter the results.
 `positive_count/sample_size` this value is a combination of two values. it indicates how many samples have engouth evidence(defined by `--min-read`). it can be used to quckly filter the transcirpts that have at least several samples in the index.
 
 `confidence` a value that summarize the confidence of observing a transcript in the entire index
+
+*CPM* values are provided in each sample column, which is defined as:
+$$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} * 1,000,000$$ 
 
 <details>
 
