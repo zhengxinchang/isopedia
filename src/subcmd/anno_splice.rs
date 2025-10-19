@@ -150,8 +150,8 @@ fn greetings(args: &AnnSpliceCli) {
 }
 
 pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
-    cli.validate();
     greetings(&cli);
+    cli.validate();
 
     if cli.warmup_mem > 0 {
         info!("Warmup index file");

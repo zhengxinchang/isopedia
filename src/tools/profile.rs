@@ -139,10 +139,10 @@ pub fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
         }
     }
 
-    info!("{} Chromsomes detected and merged.", chrom_set.len());
+    info!("{} Chromosomes detected and merged.", chrom_set.len());
 
     // write the chrom_set
-    info!("Process chromsomes");
+    info!("Processing chromosomes");
     let mut chrom_str = Vec::new();
     chrom_set.into_iter().for_each(|x| {
         chrom_str.extend_from_slice(x.as_bytes());

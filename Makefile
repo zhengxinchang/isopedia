@@ -33,18 +33,19 @@ t1:build
 	-i /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
 	-o flnc.isoform.out
 
+
 t11:build
 	target/release/isopedia profile \
 	-i test/bams/hg002.directrna.B-Lymphocyte.bam  \
-	-o test/ont.isoform.out
+	-o  test/ont.isoform.out.gz --rname
 
 	target/release/isopedia profile \
 	-i test/bams/hg002.pbcluster.bam \
-	-o test/clustered.mapped.isoform.out
+	-o test/clustered.mapped.isoform.out.gz --rname
 
 	target/release/isopedia profile \
 	-i test/bams/hg002.flnc.minimap2.sorted.bam \
-	-o test/flnc.isoform.out
+	-o  test/flnc.isoform.out.gz --rname
 
 t1111:build
 	target/release/isopedia profile \
@@ -124,3 +125,32 @@ isoquant:
 	--bam  test/bams/hg002.pbcluster.bam \
 	--data_type pacbio_ccs \
 	-o test/isoquant_output
+
+
+t1g:build
+
+	target/release/isopedia profile \
+	-g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v47.basic.annotation.gtf  \
+	-o test/gencode_gtf_v47_basic.isoform.gz --gid --tid --rname
+
+	target/release/isopedia profile \
+	-g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v49.annotation.gtf  \
+	-o test/gencode_gtf_v49.isoform.gz --gid --tid --rname
+
+t2g:build
+
+	target/release/isopedia merge -i test/gencode_index_manifest.tsv -o test/gencode_index/
+
+t3g:build
+
+	target/release/isopedia index -i test/gencode_index/ -m test/gencode_index_manifest.tsv
+
+t4g:build
+
+	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g test/gencode.v47.basic.annotation.gtf -o test/gencode_gtf_v47_basic.anno.isoform.gz --info
+	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g test/gencode.v49.annotation.gtf -o test/gencode_gtf_v49.anno.isoform.gz --info
+
+
+
+gtf_index:build t1g t2g t3g t4g
+

@@ -49,45 +49,6 @@ isopedia splice  -i index/ -s 17:7675236,17:7675993  -o out.splice.tsv.gz
 python script/isopedia-splice-viz.py  -i out.splice.tsv.gz -g gencode.v47.basic.annotation.gtf  -t script/temp.html  -o isopedia-splice-view
 ```
 
-**Build your own index** 
-
-Isopedia supports building local index in your own datasets. prerequests are listed below:
-
-1. Latest isopedia binaries
-2. A set of mapped bam files(sorted bam are not required)
-3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format. This 
-
-
-<details>
-
-<summary>
-You can find example files and commands at here [click to expand]
-</summary>
-
-```bash
-# make sure isopedia in your $PATH or use absolute path to the binaries.
-
-# download the toy_ex 
-git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
-
-# prifile isoform signals on each bam individually
-isopedia profile -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
-isopedia profile -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
-
-# make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
-
-# merging, only first two column will be read in this step.
-isopedia merge -i manifest.tsv -o index/
-
-# build index. provide the same manifest file, the rest of meta columns will be read.
-isopedia index  -i index/ -m manifest.tsv 
-
-# test your index by run a small annotation task.
-isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
-
-```
-</details>
-
 
 # How it works
 
@@ -107,6 +68,49 @@ This figure dipicts how Isopedia determines a positive hit for a query in differ
 # Download pre-built index
 
 [place holder for index download link]
+
+
+# Build your own index
+
+
+Isopedia supports building local index in your own datasets. prerequests are listed below:
+
+1. Latest isopedia binaries
+2. A set of mapped bam files(sorted bam are not required)
+3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format. 
+
+Example manifest file:
+
+```
+sample_name   path   platform
+HG002_pb_chr22   /path/to/hg002_pb_chr22.isoform.gz   PacBio
+HG002_ont_chr22   /path/to/hg002_ont_chr22.isoform.gz   ONT
+
+```
+## Example workflow
+
+```bash
+# make sure isopedia in your $PATH or use absolute path to the binaries.
+
+# download the toy_ex 
+git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
+
+# profile isoform signals on each bam individually
+isopedia profile -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
+isopedia profile -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
+
+# make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
+
+# merging, only first two column will be read in this step.
+isopedia merge -i manifest.tsv -o index/
+
+# build index. provide the same manifest file, the rest of meta columns will be read.
+isopedia index  -i index/ -m manifest.tsv 
+
+# test your index by run a small annotation task.
+isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
+
+```
 
 # Usage
 
@@ -211,14 +215,18 @@ There are a few columns can be used to filter the results.
 `confidence` a value that summarize the confidence of observing a transcript in the entire index
 
 *CPM* values are provided in each sample column, which is defined as:
+
 $$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} * 1,000,000$$ 
+
 
 <details>
 
 $$C = \frac{k}{n}* (\prod_{i}^{n}CPM_{i})^{1/n} *G$$
 
 where $n$ is the total number of samples in the index. $k$ is the sample number that found evidence(at least 1 support read) for a query. $CPM_{i}$ is the count per million value of the transcript in the sample $i$, which is defined as:
+
 $$CPM_{i}=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample }i} * 1,000,000$$
+
 $G$ is the GINI coefficient in positive samples$(i=0..k)$:
 
 $$G = 2 \frac{\sum_{i=1}^{n} i*CPM_{i}}{n \sum_{i=1}^{n} CPM_{i} } - \frac{n+1}{n}$$

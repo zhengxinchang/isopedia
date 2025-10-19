@@ -129,8 +129,10 @@ pub fn view_archive(cli: &ViewArgs) {
                     continue;
                 }
                 processed_signautres.insert(rec.signature);
+                let mut s = rec.get_string();
+                s.push('\n');
                 mygzwriter
-                    .write_all_bytes(&rec.get_string().into_bytes())
+                    .write_all_bytes(&s.into_bytes())
                     .expect("Failed to write record");
             }
         }

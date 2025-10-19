@@ -1,7 +1,9 @@
-use crate::utils::trim_chr_prefix_to_upper;
+use crate::{reads::SingleRead, utils::trim_chr_prefix_to_upper};
+use bio_types::strand::ReqStrand;
 use core::panic;
 use noodles_gtf::{self as GTF, io::Reader as gtfReader, record::Strand};
 use std::io::BufRead;
+
 #[derive(Debug, Clone)]
 pub struct Transcript {
     pub chrom: String,
@@ -92,6 +94,31 @@ impl Transcript {
 
     pub fn get_transcript_length(&self) -> u64 {
         self.end - self.start
+    }
+
+    /// Convert Transcript to SingleRead
+    /// Used in indexing GTF files instead of parsing reads from BAM files
+    pub fn to_single_read(&self) -> SingleRead {
+        let mut sr = SingleRead::new(
+            self.chrom.clone(),
+            60,
+            1,
+            self.get_transcript_length(),
+            self.start,
+        );
+
+        let strand = match self.strand {
+            Strand::Forward => ReqStrand::Forward,
+            Strand::Reverse => ReqStrand::Reverse,
+        };
+
+        for exon in &self.exons {
+            sr.add_segment(self.chrom.clone(), exon.0, exon.1, &strand, false);
+        }
+        sr.update_right(self.end);
+        sr.process();
+
+        sr
     }
 }
 

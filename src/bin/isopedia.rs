@@ -11,7 +11,7 @@ use isopedia::subcmd::index::run_idx;
 use isopedia::subcmd::index::IndexCli;
 use isopedia::subcmd::merge::run_merge;
 use isopedia::subcmd::merge::MergeCli;
-use isopedia::subcmd::profile::run_extr;
+use isopedia::subcmd::profile::run_profile;
 use isopedia::subcmd::profile::ProfileCli;
 
 #[derive(Parser)]
@@ -59,7 +59,7 @@ fn main() {
             }
         }
         Commands::Profile(ref profile_cli) => {
-            if let Err(e) = run_extr(profile_cli) {
+            if let Err(e) = run_profile(profile_cli) {
                 eprintln!("Error running extraction: {}", e);
             }
         }

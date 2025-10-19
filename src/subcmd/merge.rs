@@ -202,8 +202,8 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
-    cli.validate();
     greetings(&cli);
+    cli.validate();
 
     let mut dataset_info = DatasetInfo::parse_manifest(&cli.input)?;
 
@@ -218,7 +218,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         .map(|sample| {
             let mut file_reader = SingleSampleReader::new(sample.to_str().unwrap());
             chroms.update_from_string(&file_reader.next_line_str().expect(
-                format!("Cannot read chromsomes from file: {}", sample.display()).as_str(),
+                format!("Cannot read chromosomes from file: {}", sample.display()).as_str(),
             ));
             file_reader.skip_lines(1); // skip the header
             file_reader

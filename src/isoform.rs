@@ -1,9 +1,5 @@
 use std::{io::Read, vec};
 
-use flate2::bufread::GzEncoder;
-use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use crate::{
     // constants::MAX_SAMPLE_SIZE,
     breakpoints::BreakPointPair,
@@ -13,13 +9,50 @@ use crate::{
     reads::{AggrRead, Segment, Strand},
     utils::{self, calc_cpm},
 };
+use flate2::bufread::GzEncoder;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReadDiffSlim {
     pub left: u64,
     pub right: u64,
     pub supp_seg_vec_offset: u32,
     pub supp_seg_vec_length: u32,
+    pub info: Vec<(String, String)>,
     pub strand: Strand,
+}
+
+impl ReadDiffSlim {
+    pub fn to_string(&self) -> String {
+        format!(
+            "{}-{}:{}:{}:{}:{}",
+            self.left,
+            self.right,
+            self.strand.to_string(),
+            self.supp_seg_vec_offset,
+            self.supp_seg_vec_length,
+            self.info
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<String>>()
+                .join(";")
+        )
+    }
+
+    pub fn to_string_no_offsets(&self) -> String {
+        format!(
+            "{}|{}|{}|{}",
+            self.left,
+            self.right,
+            self.strand.to_string(),
+            self.info
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<String>>()
+                .join(";")
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -108,6 +141,7 @@ impl MergedIsoform {
                     strand: isoform_delta.strand.clone(),
                     supp_seg_vec_offset: 0,
                     supp_seg_vec_length: isoform_delta.supp_segs.len() as u32,
+                    info: isoform_delta.info.clone(),
                 }
             })
             .collect();
@@ -154,6 +188,7 @@ impl MergedIsoform {
                     strand: isoform_delta.strand.clone(),
                     supp_seg_vec_offset: 0,
                     supp_seg_vec_length: isoform_delta.supp_segs.len() as u32,
+                    info: isoform_delta.info.clone(),
                 }
             })
             .collect();
@@ -221,14 +256,15 @@ impl MergedIsoform {
                 .isoform_reads_slim_vec
                 .iter()
                 .map(|delta| {
-                    format!(
-                        "{}-{}:{}:{}:{}",
-                        delta.left,
-                        delta.right,
-                        delta.strand.to_string(),
-                        delta.supp_seg_vec_offset,
-                        delta.supp_seg_vec_length
-                    )
+                    // format!(
+                    //     "{}-{}:{}:{}:{}",
+                    //     delta.left,
+                    //     delta.right,
+                    //     delta.strand.to_string(),
+                    //     delta.supp_seg_vec_offset,
+                    //     delta.supp_seg_vec_length
+                    // )
+                    delta.to_string()
                 })
                 .collect::<Vec<String>>()
                 .join(","),
@@ -254,8 +290,6 @@ impl MergedIsoform {
         let length = GzEncoder::new(tmp_buf.as_slice(), flate2::Compression::default())
             .read_to_end(buf)
             .expect("Can not compress the AggRecord");
-
-
 
         return length as u32;
     }
@@ -299,6 +333,10 @@ impl MergedIsoform {
             .iter()
             .flat_map(|d| [d.left, d.right])
             .collect()
+    }
+
+    pub fn get_sample_offset_arr(&self) -> Vec<u32> {
+        self.sample_offset_arr.to_vec()
     }
 
     pub fn get_positive_count(&self, min_evidence: &u32) -> u32 {

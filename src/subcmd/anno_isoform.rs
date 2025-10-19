@@ -1,4 +1,4 @@
-use std::{env, fs::File, io::BufReader, path::PathBuf, vec};
+use std::{fs::File, io::BufReader, path::PathBuf, vec};
 
 use crate::{
     bptree::BPForest,
@@ -52,6 +52,10 @@ pub struct AnnIsoCli {
     /// Output file for search results
     #[arg(short, long)]
     pub output: PathBuf,
+
+    /// Whether to include additional information in the output
+    #[arg(long, default_value_t = false)]
+    pub info: bool,
 
     /// Memory size to use for warming up (in gigabytes).  
     /// Example: 4GB. Increasing this will significantly improve performance;  
@@ -136,11 +140,11 @@ fn greetings(args: &AnnIsoCli) {
 }
 
 pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
-    env::set_var("RUST_LOG", "info");
+    // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
-    cli.validate();
     greetings(&cli);
+    cli.validate();
 
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
@@ -161,7 +165,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
-    const ISOFORM_FORMAT: &str = "CPM:COUNT";
+    const ISOFORM_FORMAT: &str = "CPM:COUNT:INFO";
 
     let mut out_header = Header::new();
 
@@ -211,6 +215,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut batch = 0;
     let mut acc_pos_count = vec![0u32; dataset_info.get_size()];
     let mut acc_sample_evidence_arr = vec![0u32; dataset_info.get_size()];
+    let mut acc_sample_read_info_arr = vec!["".to_string(); dataset_info.get_size()];
 
     let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
 
@@ -276,6 +281,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             // have hits
             acc_pos_count.fill(0);
             acc_sample_evidence_arr.fill(0);
+            acc_sample_read_info_arr.fill("NULL".to_string());
 
             for offset in &target {
                 let record: MergedIsoform =
@@ -286,10 +292,31 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                     .zip(record.get_positive_array(&cli.min_read))
                     .for_each(|(a, b)| *a += b);
 
+                let single_sample_evidence_arr = record.get_sample_evidence_arr();
+
                 acc_sample_evidence_arr
                     .iter_mut()
-                    .zip(record.get_sample_evidence_arr())
+                    .zip(single_sample_evidence_arr.iter())
                     .for_each(|(a, b)| *a += b);
+
+                for (i, ofs) in record.get_sample_offset_arr().iter().enumerate() {
+                    let ofs = *ofs as usize;
+                    let length = single_sample_evidence_arr[i] as usize;
+                    // get readdiffslim
+                    if length > 0 {
+                        let read_info_str = record.isoform_reads_slim_vec[ofs..ofs + length]
+                            .iter()
+                            .map(|delta| delta.to_string_no_offsets())
+                            .collect::<Vec<String>>()
+                            .join(",");
+                        if acc_sample_read_info_arr[i] == "NULL" {
+                            acc_sample_read_info_arr[i] = read_info_str;
+                        } else {
+                            acc_sample_read_info_arr[i] =
+                                format!("{},{}", acc_sample_read_info_arr[i], read_info_str);
+                        }
+                    }
+                }
             }
 
             acc_sample_evidence_arr
@@ -328,10 +355,18 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             for (i, val) in acc_sample_evidence_arr.iter().enumerate() {
                 let cpm = utils::calc_cpm(val, &dataset_info.sample_total_evidence_vec[i]);
 
-                let samplechip = SampleChip::new(
-                    Some(dataset_info.get_sample_names()[i].clone()),
-                    vec![format!("{}:{}", cpm, val)],
-                );
+                let samplechip = if cli.info {
+                    SampleChip::new(
+                        Some(dataset_info.get_sample_names()[i].clone()),
+                        vec![format!("{}:{}:{}", cpm, val, acc_sample_read_info_arr[i])],
+                    )
+                } else {
+                    SampleChip::new(
+                        Some(dataset_info.get_sample_names()[i].clone()),
+                        vec![format!("{}:{}:NULL", cpm, val)],
+                    )
+                };
+
                 out_line.add_sample(samplechip);
             }
             isoform_out.add_line(&out_line)?;
@@ -353,9 +388,22 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
             let sample_count = dataset_info.get_sample_names().len();
             for i in 0..sample_count {
+                // let sample_chip = if cli.info {
+                //     SampleChip::new(
+                //         Some(dataset_info.get_sample_names()[i].clone()),
+                //         vec!["0:0:".to_string()],
+                //     )
+                // } else {
+                //     SampleChip::new(
+                //         Some(dataset_info.get_sample_names()[i].clone()),
+                //         vec!["0:0:".to_string()],
+                //     )
+                // };
+                // out_line.add_sample(sample_chip);
+
                 let samplechip = SampleChip::new(
                     Some(dataset_info.get_sample_names()[i].clone()),
-                    vec!["0:0".to_string()],
+                    vec!["0:0:NULL".to_string()],
                 );
                 out_line.add_sample(samplechip);
             }
@@ -386,6 +434,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         (hit_count + miss_count).to_formatted_string(&Locale::en),
         hit_count as f64 / (hit_count + miss_count) as f64 * 100f64
     );
+    info!("Writing output to {}", cli.output.display());
     isoform_out.save_to_file(&cli.output)?;
     info!("Finished");
     Ok(())

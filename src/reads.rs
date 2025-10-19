@@ -109,16 +109,6 @@ impl PartialEq for Segment {
     }
 }
 
-/// Implement the PartialOrd trait for Segment
-/// Only compare the start position of the segment
-/// This should be fine if the all segments are from the same cigar string
-/// If the segments from supplementary alignment are mixed with the segments
-/// from the primary alignment, it might have problem when the supplementary
-/// alignment is overlap with the primary alignment.
-/// # Arguments
-/// * `other` - The other segment to compare
-/// # Returns
-/// * `Option<std::cmp::Ordering>` - The ordering of the two segments
 impl PartialOrd for Segment {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         if !self.is_supp && other.is_supp {
@@ -145,19 +135,19 @@ impl PartialOrd for Segment {
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub struct SingleRead {
     pub chrom: String,
     pub seg_size: u64,
     pub read_len: u64,
     pub read_start: u64,
-    pub ref_span: u64, // not sure if it is necessary
+    pub right: u64, // not sure if it is necessary
     pub mapq: u8,
     pub evidence: u32,
     pub segment_list: Vec<Segment>,
     pub pri_seg_size: u64,
     pub signature: u64,
     pub strand: Strand,
+    pub info: Vec<(String, String)>,
 }
 
 impl SingleRead {
@@ -170,21 +160,18 @@ impl SingleRead {
             evidence: supp_raw_read,
             read_len: readlen,
             read_start: start,
-            ref_span: 0,
+            right: 0,
             pri_seg_size: 0,
             signature: 0,
             strand: Strand::Plus,
+            info: Vec::new(),
         }
     }
 
-    /// Add a segment to the isoform
-    /// # Arguments
-    /// * `chrom` - The chromosome of the segment
-    /// * `start` - The start position of the segment
-    /// * `end` - The end position of the segment
-    /// * `strand` - The strand of the segment
-    /// * `is_supp` - Whether the segment is supported
-    /// the strand is a ReqStrand enum, either Forward or Reverse.
+    pub fn add_info(&mut self, key: String, value: String) {
+        self.info.push((key, value));
+    }
+
     pub fn add_segment(
         &mut self,
         chrom: String,
@@ -204,14 +191,6 @@ impl SingleRead {
         self.pri_seg_size += 1;
     }
 
-    /// Add a segment to the isoform
-    /// # Arguments
-    /// * `chrom` - The chromosome of the segment
-    /// * `start` - The start position of the segment
-    /// * `end` - The end position of the segment
-    /// * `strand` - The strand of the segment
-    /// * `is_supp` - Whether the segment is supported
-    /// the strand is a string, either "+" or "-".
     pub fn add_supp_segment(
         &mut self,
         chrom: String,
@@ -227,8 +206,8 @@ impl SingleRead {
         self.seg_size += 1
     }
 
-    pub fn update_ref_span(&mut self, ref_span: u64) {
-        self.ref_span = ref_span;
+    pub fn update_right(&mut self, right: u64) {
+        self.right = right;
     }
 
     pub fn sort_segments(&mut self) {
@@ -269,18 +248,86 @@ impl SingleRead {
     }
 }
 
-// use crate::extraction::SingleRead;
-// // use crate::extractor::aggr_isofrom::Segment;
-// // use crate::extractor::aggr_isofrom::Strand;
-// use crate::extraction::single_read::Segment;
-// use crate::extraction::single_read::Strand;
-
 #[derive(Debug, Clone)]
 pub struct ReadDiff {
     pub left: u64,
     pub right: u64,
     pub strand: Strand,
     pub supp_segs: Vec<Segment>,
+    pub info: Vec<(String, String)>,
+}
+
+impl ReadDiff {
+    pub fn from_string(rec: &str) -> ReadDiff {
+        let mut iter = rec.trim().split(':');
+        let left_right: Vec<u64> = iter
+            .next()
+            .unwrap()
+            .split('-')
+            .map(|s| s.parse::<u64>().unwrap())
+            .collect();
+        let strand = Strand::from_string(iter.next().unwrap());
+        let supp_segs = iter
+            .next()
+            .unwrap()
+            .split(',')
+            .filter(|s| s.len() > 0)
+            .map(|s| {
+                let mut iter4 = s.split('%');
+                Segment {
+                    chrom: iter4.next().unwrap().to_string(),
+                    start: iter4.next().unwrap().parse::<u64>().unwrap(),
+                    end: iter4.next().unwrap().parse::<u64>().unwrap(),
+                    strand: Strand::from_string(iter4.next().unwrap()),
+                    is_supp: true,
+                }
+            })
+            .collect::<Vec<Segment>>();
+        let info = if let Some(info_str) = iter.next() {
+            info_str
+                .split(';')
+                .filter(|s| s.len() > 0)
+                .map(|s| {
+                    let mut kv_iter = s.split('=');
+                    let key = kv_iter.next().unwrap().to_string();
+                    let value = kv_iter.next().unwrap().to_string();
+                    (key, value)
+                })
+                .collect::<Vec<(String, String)>>()
+        } else {
+            Vec::new()
+        };
+
+        ReadDiff {
+            left: left_right[0],
+            right: left_right[1],
+            strand,
+            supp_segs,
+            info,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            "{}-{}:{}:{}:{}",
+            self.left,
+            self.right,
+            self.strand.to_string(),
+            self.supp_segs
+                .iter()
+                .map(|seg| {
+                    // for each reads ,add the supplmentarty segments
+                    format!("{}%{}%{}%{}", seg.chrom, seg.start, seg.end, seg.strand)
+                })
+                .collect::<Vec<String>>()
+                .join(","),
+            self.info
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<String>>()
+                .join(";")
+        )
+    }
 }
 
 /// Aggregated isoform from single sample in extractor
@@ -303,9 +350,10 @@ impl AggrRead {
             evidence: 1,
             read_diffs: vec![ReadDiff {
                 left: sr.read_start,
-                right: sr.ref_span,
+                right: sr.right,
                 strand: sr.strand,
                 supp_segs: sr.get_supp_segments(),
+                info: sr.info.clone(),
             }],
         }
     }
@@ -314,9 +362,10 @@ impl AggrRead {
         self.evidence += 1;
         self.read_diffs.push(ReadDiff {
             left: isoform.read_start,
-            right: isoform.ref_span,
+            right: isoform.right,
             strand: isoform.strand,
             supp_segs: isoform.get_supp_segments(),
+            info: isoform.info.clone(),
         });
     }
 
@@ -351,21 +400,22 @@ impl AggrRead {
                 .iter()
                 .map(|delta| {
                     // isoform diff process
-                    format!(
-                        "{}-{}:{}:{}",
-                        delta.left,
-                        delta.right,
-                        delta.strand.to_string(),
-                        delta
-                            .supp_segs
-                            .iter()
-                            .map(|seg| {
-                                // for each reads ,add the supplmentarty segments
-                                format!("{}%{}%{}%{}", seg.chrom, seg.start, seg.end, seg.strand)
-                            })
-                            .collect::<Vec<String>>()
-                            .join(",")
-                    )
+                    // format!(
+                    //     "{}-{}:{}:{}",
+                    //     delta.left,
+                    //     delta.right,
+                    //     delta.strand.to_string(),
+                    //     delta
+                    //         .supp_segs
+                    //         .iter()
+                    //         .map(|seg| {
+                    //             // for each reads ,add the supplmentarty segments
+                    //             format!("{}%{}%{}%{}", seg.chrom, seg.start, seg.end, seg.strand)
+                    //         })
+                    //         .collect::<Vec<String>>()
+                    //         .join(",")
+                    // )
+                    delta.to_string()
                 })
                 .collect::<Vec<String>>()
                 .join("|"),
@@ -405,37 +455,39 @@ impl AggrRead {
             .split('|')
             .filter(|s| s.len() > 0)
             .map(|s| {
-                let mut iter3 = s.split(':');
+                // let mut iter3 = s.split(':');
+                // // dbg!(&s);
+                // let left_right: Vec<u64> = iter3
+                //     .next()
+                //     .unwrap()
+                //     .split('-')
+                //     .map(|s| s.parse::<u64>().unwrap())
+                //     .collect();
+                // let strand = Strand::from_string(iter3.next().unwrap());
+                // let supp_segs = iter3
+                //     .next()
+                //     .unwrap()
+                //     .split(',')
+                //     .filter(|s| s.len() > 0)
+                //     .map(|s| {
+                //         let mut iter4 = s.split('%');
+                //         Segment {
+                //             chrom: iter4.next().unwrap().to_string(),
+                //             start: iter4.next().unwrap().parse::<u64>().unwrap(),
+                //             end: iter4.next().unwrap().parse::<u64>().unwrap(),
+                //             strand: Strand::from_string(iter4.next().unwrap()),
+                //             is_supp: true,
+                //         }
+                //     })
+                //     .collect::<Vec<Segment>>();
+                // ReadDiff {
+                //     left: left_right[0],
+                //     right: left_right[1],
+                //     strand: strand,
+                //     supp_segs,
+                // }
                 // dbg!(&s);
-                let left_right: Vec<u64> = iter3
-                    .next()
-                    .unwrap()
-                    .split('-')
-                    .map(|s| s.parse::<u64>().unwrap())
-                    .collect();
-                let strand = Strand::from_string(iter3.next().unwrap());
-                let supp_segs = iter3
-                    .next()
-                    .unwrap()
-                    .split(',')
-                    .filter(|s| s.len() > 0)
-                    .map(|s| {
-                        let mut iter4 = s.split('%');
-                        Segment {
-                            chrom: iter4.next().unwrap().to_string(),
-                            start: iter4.next().unwrap().parse::<u64>().unwrap(),
-                            end: iter4.next().unwrap().parse::<u64>().unwrap(),
-                            strand: Strand::from_string(iter4.next().unwrap()),
-                            is_supp: true,
-                        }
-                    })
-                    .collect::<Vec<Segment>>();
-                ReadDiff {
-                    left: left_right[0],
-                    right: left_right[1],
-                    strand: strand,
-                    supp_segs,
-                }
+                ReadDiff::from_string(s)
             });
 
         AggrRead {

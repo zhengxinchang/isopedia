@@ -335,8 +335,8 @@ fn parse_bed(line: &str) -> Result<BreakpointType> {
 }
 
 pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
-    cli.validate();
     greetings(&cli);
+    cli.validate();
 
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;

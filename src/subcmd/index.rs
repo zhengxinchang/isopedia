@@ -109,8 +109,8 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
-    cli.validate();
     greetings(&cli);
+    cli.validate();
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
