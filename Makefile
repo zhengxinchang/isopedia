@@ -23,7 +23,7 @@ pack: build build-docker build-conda
 
 
 CMT ?= WIP
-push:
+git:
 	cargo fmt && git add . && git commit -m "$(CMT)" && git push
 
 
