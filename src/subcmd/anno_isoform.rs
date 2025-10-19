@@ -82,7 +82,7 @@ impl AnnIsoCli {
 
         if !self.idxdir.join(MERGED_FILE_NAME).exists() {
             error!(
-                "--idxdir: Aggr file {} does not exist in {}, please run `isopedia-aggr` first",
+                "--idxdir: merged isoform data {} does not exist in {}, please run `isopedia merge` first",
                 MERGED_FILE_NAME,
                 self.idxdir.display()
             );
@@ -91,7 +91,7 @@ impl AnnIsoCli {
 
         if !self.idxdir.join("bptree_0.idx").exists() {
             error!(
-                "--idxdir: bptree_0.idx file does not exist in {}, please run `isopedia-idx` first",
+                "--idxdir: tree files does not exist in {}, please run `isopedia index` first",
                 self.idxdir.display()
             );
             is_ok = false;
@@ -260,6 +260,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
+
+        // dbg!(&queries);
+
+        // println!("query: {:?},query len {}", &queries, queries.len());
+
         let res = forest.search2_all_match(&queries, cli.flank, cli.lru_size);
 
         // make sure the returned isoform has exactly the same number of splice sites as the query
@@ -267,6 +272,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             .into_iter()
             .filter(|x| x.n_splice_sites == queries.len() as u32)
             .collect();
+
+        // println!("found {} targets", target.len());
 
         if target.len() == 0 {
             miss_count += 1;
@@ -299,21 +306,23 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                     .zip(single_sample_evidence_arr.iter())
                     .for_each(|(a, b)| *a += b);
 
-                for (i, ofs) in record.get_sample_offset_arr().iter().enumerate() {
-                    let ofs = *ofs as usize;
-                    let length = single_sample_evidence_arr[i] as usize;
-                    // get readdiffslim
-                    if length > 0 {
-                        let read_info_str = record.isoform_reads_slim_vec[ofs..ofs + length]
-                            .iter()
-                            .map(|delta| delta.to_string_no_offsets())
-                            .collect::<Vec<String>>()
-                            .join(",");
-                        if acc_sample_read_info_arr[i] == "NULL" {
-                            acc_sample_read_info_arr[i] = read_info_str;
-                        } else {
-                            acc_sample_read_info_arr[i] =
-                                format!("{},{}", acc_sample_read_info_arr[i], read_info_str);
+                if cli.info {
+                    for (i, ofs) in record.get_sample_offset_arr().iter().enumerate() {
+                        let ofs = *ofs as usize;
+                        let length = single_sample_evidence_arr[i] as usize;
+                        // get readdiffslim
+                        if length > 0 {
+                            let read_info_str = record.isoform_reads_slim_vec[ofs..ofs + length]
+                                .iter()
+                                .map(|delta| delta.to_string_no_offsets())
+                                .collect::<Vec<String>>()
+                                .join(",");
+                            if acc_sample_read_info_arr[i] == "NULL" {
+                                acc_sample_read_info_arr[i] = read_info_str;
+                            } else {
+                                acc_sample_read_info_arr[i] =
+                                    format!("{},{}", acc_sample_read_info_arr[i], read_info_str);
+                            }
                         }
                     }
                 }
@@ -434,7 +443,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         (hit_count + miss_count).to_formatted_string(&Locale::en),
         hit_count as f64 / (hit_count + miss_count) as f64 * 100f64
     );
-    info!("Writing output to {}", cli.output.display());
+    // info!("Writing output to {}", cli.output.display());
     isoform_out.save_to_file(&cli.output)?;
     info!("Finished");
     Ok(())

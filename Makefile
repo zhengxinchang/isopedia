@@ -70,7 +70,7 @@ t4:build
 	target/release/isopedia isoform -i test/HG002_idx/ -f 10 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz
 
 t41:build
-	target/release/isopedia isoform -i test/HG002_idx/ -f 20 -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.gz
+	target/release/isopedia isoform -i test/HG002_idx/ -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.gz
 
 tfusion:build
 	target/release/isopedia fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz
@@ -129,28 +129,41 @@ isoquant:
 
 t1g:build
 
-	target/release/isopedia profile \
-	-g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v47.basic.annotation.gtf  \
-	-o test/gencode_gtf_v47_basic.isoform.gz --gid --tid --rname
+# 	target/release/isopedia profile \
+# 	-g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v47.basic.annotation.gtf  \
+# 	-o test/gencode_gtf_v47_basic.isoform.gz --gid --tid --rname
+
+# 	target/release/isopedia profile \
+# 	-g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v49.annotation.gtf  \
+# 	-o test/gencode_gtf_v49.isoform.gz --gid --tid --rname
 
 	target/release/isopedia profile \
-	-g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v49.annotation.gtf  \
-	-o test/gencode_gtf_v49.isoform.gz --gid --tid --rname
+	-g /ssd1/stix-iso-devspace/isopedia-dev/ENST00000381578.6.gtf \
+	-o test/ENST00000381578.isoform.gz --gid --tid --rname
+
+
+	target/release/isopedia profile \
+	-g /ssd1/stix-iso-devspace/isopedia-dev/ENST00000634662.1.gtf \
+	-o test/ENST00000634662.isoform.gz --gid --tid --rname
+
 
 t2g:build
 
-	target/release/isopedia merge -i test/gencode_index_manifest.tsv -o test/gencode_index/
+	target/release/isopedia merge -i test/gencode_index_manifest2.tsv -o test/gencode_index/
 
 t3g:build
 
-	target/release/isopedia index -i test/gencode_index/ -m test/gencode_index_manifest.tsv
+	target/release/isopedia index -i test/gencode_index/ -m test/gencode_index_manifest2.tsv
 
 t4g:build
 
-	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g test/gencode.v47.basic.annotation.gtf -o test/gencode_gtf_v47_basic.anno.isoform.gz --info
-	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g test/gencode.v49.annotation.gtf -o test/gencode_gtf_v49.anno.isoform.gz --info
+# 	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g /ssd1/stix-iso-devspace/isopedia-dev/ENST00000634662.1.gtf -o test/ENST00000634662.anno.isoform.gz --info
+# 	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g test/gencode.v49.annotation.gtf -o test/gencode_gtf_v49.anno.isoform.gz --info
 
+	target/release/isopedia isoform -i test/gencode_index/ -f 10  -g test/gencode.v47.basic.annotation.gtf -o test/gencode_gtf_v47.anno.isoform.gz --info
 
 
 gtf_index:build t1g t2g t3g t4g
 
+missing:
+	cargo build --release && target/release/isopedia isoform -i test/gencode_index -f 10 -g test/gencode_missingv47.gtf  -o test/test.output.gz

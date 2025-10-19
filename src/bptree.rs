@@ -771,7 +771,15 @@ impl BPTree {
             }
         };
 
-        // span the range in the leaf node
+        // // span the range in the leaf node
+
+        // dbg!(
+        //     &node.header.node_id,
+        //     &node.header.keys[0],
+        //     &node.get_max_key(),
+        //     &start,
+        //     &end
+        // );
 
         let mut results = Vec::new();
         // results.reserve(estimated_size);
@@ -784,6 +792,10 @@ impl BPTree {
                 }
 
                 if *k > end {
+                    // dbg!("break at key:", k);
+                    // dbg!("current results:", &results);
+
+                    // println!("node max key: {}", node.get_max_key());
                     return results;
                 }
 
@@ -798,7 +810,10 @@ impl BPTree {
             node = cache
                 .get_node2(next_node_id)
                 .expect("Can not get next leaf node");
+            // println!("next node id: {}", node.header.node_id);
         }
+        // dbg!("total results:", results.len());
+        // dbg!("results: {:?}", &results);
         results
     }
 }
@@ -927,7 +942,7 @@ impl BPForest {
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
-        min_match: usize, // must larger than 0 and less than positions.len()
+        min_matched_splice_site: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
     ) -> Vec<MergedIsoformOffsetPtr> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
@@ -942,12 +957,15 @@ impl BPForest {
             })
             .collect();
 
-        // dbg!(&res_vec);
+        // for ee in &res_vec {
+        //     dbg!(ee.len());
+        // }
 
-        if min_match == 0 || min_match >= positions.len() {
+        if min_matched_splice_site == 0 || min_matched_splice_site >= positions.len() {
+            // all splice sites must match
             find_common(res_vec)
         } else {
-            find_partial_common(&res_vec, min_match)
+            find_partial_common(&res_vec, min_matched_splice_site)
         }
     }
 
@@ -980,7 +998,7 @@ impl BPForest {
 }
 
 /// find the common elements in the vecs, if one element appears in at least min_match vecs, it is considered as common
-/// min_match is set to 2 incase the mono exon isoforms
+/// min_match is set to 2 in case the mono exon isoforms
 pub fn find_partial_common(
     vecs: &[Vec<MergedIsoformOffsetPtr>],
     min_match: usize,
@@ -1002,6 +1020,21 @@ pub fn find_partial_common(
 }
 
 pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOffsetPtr> {
+    // let mut n44 = 0;
+
+    // for v in &vecs {
+    //     // println!("input vec len: {}", v.len());
+    //     for vv in v {
+    //         if vv.n_splice_sites == 44 {
+    //             n44 += 1;
+    //             println!("{:?}", vv);
+    //         }
+    //     }
+    // }
+
+    // println!("n44: {}", n44);
+    // println!("number of vecs: {}", vecs.len());
+
     if vecs.is_empty() {
         return vec![];
     }
@@ -1012,14 +1045,38 @@ pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsof
         v.dedup(); // 避免重复
     }
 
+    // for v in &vecs {
+    //     // println!("input vec len: {}", v.len());
+    //     for vv in v {
+    //         if vv.n_splice_sites == 44 {
+    //             n44 += 1;
+    //             println!("{:?}", vv);
+    //         }
+    //     }
+    // }
+
     // 从第一个 vec 开始交集
     let mut result = vecs[0].clone();
+
+    // for xx in &result {
+    //     println!("initial: {:?}", xx);
+    // }
+
     for v in vecs.iter().skip(1) {
         result = intersect_sorted(&result, v);
+
+        // for rr in v {
+        //     println!("@{:?}", rr);
+
+        // }
+
+        // println!("intersected: {:?}", &result);
+        // println!("==: {}", result.len());
         if result.is_empty() {
             break;
         }
     }
+    // println!("final result: {:?}", &result);
     result
 }
 

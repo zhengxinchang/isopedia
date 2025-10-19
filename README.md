@@ -49,6 +49,8 @@ isopedia splice  -i index/ -s 17:7675236,17:7675993  -o out.splice.tsv.gz
 python script/isopedia-splice-viz.py  -i out.splice.tsv.gz -g gencode.v47.basic.annotation.gtf  -t script/temp.html  -o isopedia-splice-view
 ```
 
+For indexing GTF files, please refer to [Indexing GTF Files](doc/indexing_gtf.md) section.
+
 
 # How it works
 

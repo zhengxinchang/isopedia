@@ -113,6 +113,8 @@ impl GeneralTableOutput for IsoformTableOut {
         // let outname = utils::add_gz_suffix_if_needed(out.as_ref());
         let outname = utils::add_gz_suffix_if_needed(&out);
 
+        info!("Saving output to {:?}", outname);
+
         let mut mywriter = MyGzWriter::new(&outname)?;
 
         // write meta
@@ -135,7 +137,6 @@ impl GeneralTableOutput for IsoformTableOut {
             mywriter.write_all_bytes(line_str.as_bytes())?;
         }
 
-        info!("Saved output to {:?}", outname);
         Ok(())
     }
 

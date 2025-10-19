@@ -607,12 +607,25 @@ impl MergedIsoformOffsetPtr {
 impl PartialEq for MergedIsoformOffsetPtr {
     fn eq(&self, other: &Self) -> bool {
         self.offset == other.offset
+            && self.length == other.length
+            && self.n_splice_sites == other.n_splice_sites
     }
 }
 
 impl PartialOrd for MergedIsoformOffsetPtr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.offset.cmp(&other.offset))
+        // Some(self.offset.cmp(&other.offset))
+
+        // if offsets are equal, compare length, if length equal, compare n_splice_sites
+        if self.offset == other.offset {
+            if self.length == other.length {
+                Some(self.n_splice_sites.cmp(&other.n_splice_sites))
+            } else {
+                Some(self.length.cmp(&other.length))
+            }
+        } else {
+            Some(self.offset.cmp(&other.offset))
+        }
     }
 }
 
@@ -620,7 +633,16 @@ impl Eq for MergedIsoformOffsetPtr {}
 
 impl Ord for MergedIsoformOffsetPtr {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.offset.cmp(&other.offset)
+        // if offsets are equal, compare length, if length equal, compare n_splice_sites
+        if self.offset == other.offset {
+            if self.length == other.length {
+                self.n_splice_sites.cmp(&other.n_splice_sites)
+            } else {
+                self.length.cmp(&other.length)
+            }
+        } else {
+            self.offset.cmp(&other.offset)
+        }
     }
 }
 

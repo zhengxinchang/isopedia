@@ -243,7 +243,12 @@ impl SingleRead {
     /// Process the isoform
     /// the signature is the hash value of the splice junctions
     pub fn process(&mut self) {
-        self.signature = hash_vec(&self.get_pri_splice_junction());
+        let mut s = self.chrom.clone();
+        s.push_str(":");
+        for (l, r) in self.get_pri_splice_junction() {
+            s.push_str(&format!("{},{}", l, r));
+        }
+        self.signature = hash_vec(&s);
         self.sort_segments();
     }
 }

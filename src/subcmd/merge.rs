@@ -371,7 +371,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                             record_ptr: MergedIsoformOffsetPtr {
                                 offset: merged_offset,
                                 length: bytes_len,
-                                n_splice_sites: 0,
+                                n_splice_sites: 0, // for fusion gene detection
                             },
                         };
                     tmpidx.add_one(offset_plus_genomeloc);
