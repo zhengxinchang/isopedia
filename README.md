@@ -1,6 +1,6 @@
 
 
-# About the Isopedia <img src="./img/logo2.png" align="right" alt="" width=120 />
+# About the Isopedia <img src="./img/logo3.png" align="right" alt="" width=120 />
 
 **Isopedia** is a scalable tool designed for the analysis of hundreds to thousands of long-read transcriptome datasets simultaneously by read-level indexing approach. It provides two key capabilities:
 
