@@ -4,9 +4,9 @@
 
 **Isopedia** is a scalable tool designed for the analysis of hundreds to thousands of long-read transcriptome datasets simultaneously by read-level indexing approach. It provides two key capabilities:
 
-Population-level transcript quantification and frequency profiling — With a single command, Isopedia can quantify isoform expression and estimate their occurrence frequencies across large cohorts using minimal computational resources.
+**Population-level transcript quantification and frequency profiling** — With a single command, Isopedia can quantify isoform expression and estimate their occurrence frequencies across large cohorts using minimal computational resources.
 
-Isoform diversity exploration and visualization — Isopedia enables systematic analysis of fusion genes and specific splicing events across populations, offering insights into transcript diversity beyond individual samples.
+**Isoform diversity exploration and visualization** — Isopedia enables systematic analysis of fusion genes and specific splicing events across populations, offering insights into transcript diversity beyond individual samples.
 
 
 # Table of Content
@@ -19,7 +19,7 @@ Isoform diversity exploration and visualization — Isopedia enables systematic 
   - [Annotate (search) fusion genes](#annotate-search-fusion-genes)
   - [Find potential fusion genes](#find-potential-fusion-genes)
 - [Installation](#installation)
-- [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotateannotate)
+- [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate)
 <!-- - [Quick Q&A](#quick-qa) -->
 
 
