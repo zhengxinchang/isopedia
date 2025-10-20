@@ -135,6 +135,12 @@ key parameters:
 
 `--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
 
+`--tid` include transcript id in the profile file , only work when `-g` (GTF) is passed.
+
+`--gid` include gene id in the profile file, only work when `-g` (GTF)is passed.
+
+`--rname` include read name in the profile file, only work when `-i` (BAM/CRAM) is passed.
+
 <details>
 <summary>
 All parameters:
@@ -144,34 +150,37 @@ All parameters:
 Usage: isopedia isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF> --output <OUTPUT>
 
 Options:
-  -i, --idxdir <IDXDIR>
-          Path to the index directory
+  -i, --bam <BAM>
+          Input file in BAM/CRAM format
 
   -g, --gtf <GTF>
-          Path to the GTF file
+          Input file in GTF format
 
-  -f, --flank <FLANK>
-          Flanking size (in bases) before and after the position
-          
-          [default: 10]
-
-  -m, --min-read <MIN_READ>
-          Minimum number of reads required to define a positive sample
-          
-          [default: 1]
+  -r, --reference <REFERENCE>
+          Reference file for CRAMs. Must provide for CRAM format input
 
   -o, --output <OUTPUT>
-          Output file for search results
+          Name of the output signal file
 
-  -w, --warmup-mem <WARMUP_MEM>
-          Memory size to use for warming up (in gigabytes). Example: 4GB. Increasing this will significantly improve performance; set it as large as your system allows
+      --mapq <MAPQ>
+          Minimal mapping quality of reads
           
-          [default: 4]
+          [default: 5]
 
-  -c, --cached_nodes <LRU_SIZE>
-          Maximum number of cached nodes per tree
-          
-          [default: 10000]
+      --use-secondary
+          Include secondary alignments
+
+      --rname
+          Include read names in the output, only for BAM/CRAM input
+
+      --tid
+          Include transcript IDs in the output, only for GTF input
+
+      --gid
+          Include gene IDs in the output, only for GTF input
+
+      --debug
+          Debug mode
 
   -h, --help
           Print help (see a summary with '-h')
