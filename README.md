@@ -19,7 +19,8 @@ Isoform diversity exploration and visualization — Isopedia enables systematic 
   - [Annotate (search) fusion genes](#annotate-search-fusion-genes)
   - [Find potential fusion genes](#find-potential-fusion-genes)
 - [Installation](#installation)
-- [Quick Q&A](#quick-qa)
+- [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotateannotate)
+<!-- - [Quick Q&A](#quick-qa) -->
 
 
 # Quick Start
@@ -539,6 +540,16 @@ cargo build --release
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
+
+# Annotate ORF with ORFannotate
+
+Isopedia is designed to interoperate with [ORFannotate](https://github.com/egustavsson/ORFannotate), which can process isopedia outputs to predict ORFs and UTRs, annotate CDS features in GTF files, and produce transcript-level summaries.
+
+Example to use ORF annotate 
+
+```
+<place holder>
+```
 
 <!-- 
 # Quick Q&A:
