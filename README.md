@@ -137,7 +137,7 @@ key parameters:
 
 `--tid` include transcript id in the profile file , only work when `-g` (GTF) is passed.
 
-`--gid` include gene id in the profile file, only work when `-g` (GTF)is passed.
+`--gid` include gene id in the profile file, only work when `-g` (GTF) is passed.
 
 `--rname` include read name in the profile file, only work when `-i` (BAM/CRAM) is passed.
 
