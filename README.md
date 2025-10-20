@@ -36,7 +36,7 @@ Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `is
 conda install -y zhengxinchang::isopedia
 
 # query transcripts
-isopedia isoform -i index/ -g query.gtf -o out.isoform.tsv.gz
+isopedia isoform -i index/ -g query.gtf -o out.profile.tsv.gz
 
 # query one fusion gene (two breakpoints)
 isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o out.fusion.tsv.gz
