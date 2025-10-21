@@ -75,7 +75,7 @@ impl Strand {
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-[build index, step1] Profile raw isoform signals from each single BAM/CRAM file.
+[build index, step1] Profile raw isoform signals from each single BAM/CRAM or GTF file.
 ", long_about = None)]
 #[clap(after_long_help = "
 

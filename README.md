@@ -33,7 +33,7 @@ Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `is
 
 ```bash
 # install isopedia from conda
-conda install -y zhengxinchang::isopedia
+conda install -y -c zhengxinchang isopedia
 
 # query transcripts
 isopedia isoform -i index/ -g query.gtf -o out.profile.tsv.gz
@@ -530,7 +530,7 @@ https://zhengxinchang.github.io/isopedia/
 ## Install from conda
 
 ```bash
-conda install zhengxinchang::isopedia
+conda install -c zhengxinchang isopedia
 ```
 
 ## Check out the latest release

@@ -20,7 +20,7 @@ use std::path::PathBuf;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-[Annotation/visualization] Search all isoforms overlapping with the provided splice junction(s) and visualize the results.
+[Query/visualization] Search all isoforms overlapping with the provided splice junction(s) and visualize the results.
 ", long_about = None)]
 #[clap(after_long_help = "
 

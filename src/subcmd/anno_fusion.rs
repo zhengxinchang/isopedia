@@ -32,7 +32,7 @@ use serde::Serialize;
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
-[Annotation/discovery] Annotate provided fusion breakpoints or discover potential gene fusion events(from provided GTF file) with the index.
+[Query/discovery] Annotate provided fusion breakpoints or discover potential gene fusion events(from provided GTF file) with the index.
 ", long_about = None)]
 #[clap(after_long_help = r#"
 Examples:
