@@ -35,6 +35,9 @@ Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `is
 # install isopedia from conda
 conda install -y -c zhengxinchang isopedia
 
+# clone the repo and enter the toy_ex directory
+git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
+
 # query transcripts
 isopedia isoform -i index/ -g query.gtf -o out.profile.tsv.gz
 
