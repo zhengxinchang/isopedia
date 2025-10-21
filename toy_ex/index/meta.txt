@@ -1,0 +1,3 @@
+name	Tissue	platform
+HG002_pb_chr22	blood	PB
+HG002_ont_chr22	blood	ONT
