@@ -107,6 +107,12 @@ git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 isopedia profile -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
 isopedia profile -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 
+`--tid` include transcript id in the profile file , only work when `-g` (GTF) is passed.
+
+`--gid` include gene id in the profile file, only work when `-g` (GTF) is passed.
+
+`--rname` include read name in the profile file, only work when `-i` (BAM/CRAM) is passed.
+
 # make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
 
 # merging, only first two column will be read in this step.
@@ -140,11 +146,7 @@ key parameters:
 
 `--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
 
-`--tid` include transcript id in the profile file , only work when `-g` (GTF) is passed.
-
-`--gid` include gene id in the profile file, only work when `-g` (GTF) is passed.
-
-`--rname` include read name in the profile file, only work when `-i` (BAM/CRAM) is passed.
+`--info` include additional information such as read name(indexing BAM/CRAM), transcript IDs(indexing GTF), and/or gene IDs(indexing GTF) in the annotation output.
 
 <details>
 <summary>
@@ -155,44 +157,43 @@ All parameters:
 Usage: isopedia isoform [OPTIONS] --idxdir <IDXDIR> --gtf <GTF> --output <OUTPUT>
 
 Options:
-  -i, --bam <BAM>
-          Input file in BAM/CRAM format
+  -i, --idxdir <IDXDIR>
+          Path to the index directory
 
   -g, --gtf <GTF>
-          Input file in GTF format
+          Path to the GTF file
 
-  -r, --reference <REFERENCE>
-          Reference file for CRAMs. Must provide for CRAM format input
+  -f, --flank <FLANK>
+          Flanking size (in bases) before and after the position
+          
+          [default: 10]
+
+  -m, --min-read <MIN_READ>
+          Minimum number of reads required to define a positive sample
+          
+          [default: 1]
 
   -o, --output <OUTPUT>
-          Name of the output signal file
+          Output file for search results
 
-      --mapq <MAPQ>
-          Minimal mapping quality of reads
+      --info
+          Whether to include additional information in the output
+
+  -w, --warmup-mem <WARMUP_MEM>
+          Memory size to use for warming up (in gigabytes). Example: 4GB. Increasing this will significantly improve performance; set it as large as your system allows
           
-          [default: 5]
+          [default: 4]
 
-      --use-secondary
-          Include secondary alignments
-
-      --rname
-          Include read names in the output, only for BAM/CRAM input
-
-      --tid
-          Include transcript IDs in the output, only for GTF input
-
-      --gid
-          Include gene IDs in the output, only for GTF input
-
-      --debug
-          Debug mode
+  -c, --cached_nodes <LRU_SIZE>
+          Maximum number of cached nodes per tree
+          
+          [default: 10000]
 
   -h, --help
           Print help (see a summary with '-h')
 
   -V, --version
           Print version
-
 ```
 
 </details>
