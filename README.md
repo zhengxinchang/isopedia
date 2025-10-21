@@ -219,9 +219,9 @@ The output of the search command is a tab-separated file with the following colu
 | positive_count/sample_size  | Positive count / sample size                                                |
 | attributes                 | Original attributes of the transcript from the input GTF file               |
 | FORMAT                     | Format of the values in each sample column                                  |
-| sample1                    | Values                                                                     |
+| sample1                    | Valuesv (CPM:COUNT:INFO)                                                                     |
 | …                          | …                                                                           |
-| sampleN                    | Values                                                                     |
+| sampleN                    | Values (CPM:COUNT:INFO)                                                                      |
 
 
 There are a few columns can be used to filter the results.
