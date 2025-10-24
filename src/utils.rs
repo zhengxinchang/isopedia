@@ -285,9 +285,9 @@ pub fn add_gz_suffix_if_needed<P: AsRef<Path>>(path: &P) -> PathBuf {
             path.clone()
         } else {
             let ext_str = ext.to_string_lossy();
-            let path_str = path.file_stem().unwrap().to_string_lossy();
-            dbg!(&ext_str);
-            dbg!(&path_str);
+            // let path_str = path.file_stem().unwrap().to_string_lossy();
+            // dbg!(&ext_str);
+            // dbg!(&path_str);
             if ext_str.is_empty() {
                 // dbg!(&ext_str);
                 path.with_extension("gz")

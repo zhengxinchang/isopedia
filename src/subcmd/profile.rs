@@ -8,10 +8,10 @@ use rust_htslib::bam::{
     Read, Record,
 };
 use rustc_hash::FxHashMap;
-use std::{io::BufReader, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::{
-    gtf::TranscriptChunker,
+    gtf::{open_gtf_reader, TranscriptChunker},
     io::MyGzWriter,
     reads::{AggrRead, SingleRead},
 };
@@ -431,9 +431,11 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
         let gtf_path = cli.gtf.as_ref().unwrap();
 
         info!("Loading GTF file...");
-        let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
-            BufReader::new(std::fs::File::open(gtf_path).expect("can not read gtf")),
-        );
+        // let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
+        //     BufReader::new(std::fs::File::open(gtf_path).expect("can not read gtf")),
+        // );
+
+        let gtfreader = open_gtf_reader(gtf_path.to_str().unwrap())?;
 
         let mut gtf = TranscriptChunker::new(gtfreader);
         let gtf_vec = gtf.get_all_transcripts_vec();

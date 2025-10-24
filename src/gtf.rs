@@ -1,8 +1,12 @@
 use crate::{reads::SingleRead, utils::trim_chr_prefix_to_upper};
 use bio_types::strand::ReqStrand;
 use core::panic;
+use flate2::read::MultiGzDecoder;
 use noodles_gtf::{self as GTF, io::Reader as gtfReader, record::Strand};
-use std::io::BufRead;
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Read, Seek},
+};
 
 #[derive(Debug, Clone)]
 pub struct Transcript {
@@ -217,4 +221,22 @@ impl<R: BufRead> Iterator for TranscriptChunker<R> {
     fn next(&mut self) -> Option<Self::Item> {
         self.get_next_transcript()
     }
+}
+
+pub fn open_gtf_reader(path: &str) -> std::io::Result<noodles_gtf::io::Reader<Box<dyn BufRead>>> {
+    let file = File::open(path)?;
+    let mut buf = [0u8; 2];
+    let mut peek = BufReader::new(file);
+    let n = peek.read(&mut buf)?;
+
+    let mut file = peek.into_inner();
+    file.rewind()?;
+
+    let reader: Box<dyn BufRead> = if n == 2 && buf == [0x1f, 0x8b] {
+        Box::new(BufReader::new(MultiGzDecoder::new(file)))
+    } else {
+        Box::new(BufReader::new(file))
+    };
+
+    Ok(noodles_gtf::io::Reader::new(reader))
 }

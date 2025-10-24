@@ -1,10 +1,10 @@
-use std::{fs::File, io::BufReader, path::PathBuf, vec};
+use std::{fs::File, path::PathBuf, vec};
 
 use crate::{
     bptree::BPForest,
     constants::*,
     dataset_info::DatasetInfo,
-    gtf::TranscriptChunker,
+    gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
     isoform::{self, MergedIsoform},
     isoformarchive::read_record_from_mmap,
@@ -151,9 +151,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
     info!("Loading GTF file...");
-    let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
-        BufReader::new(std::fs::File::open(cli.gtf.clone()).expect("can not read gtf")),
-    );
+    // let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
+    //     BufReader::new(std::fs::File::open(cli.gtf.clone()).expect("can not read gtf")),
+    // );
+
+    let gtfreader = open_gtf_reader(cli.gtf.to_str().unwrap())?;
 
     let mut gtf = TranscriptChunker::new(gtfreader);
     let gtf_vec = gtf.get_all_transcripts_vec();

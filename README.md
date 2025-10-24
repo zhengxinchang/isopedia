@@ -517,15 +517,17 @@ https://zhengxinchang.github.io/isopedia/
 ![isopedia-splice-view](./img/isopedia-splice-view.png)
 
 
-# Memory Usage
+# Computational resource usge
 
 
-## ENCODE long-read RNA-seq datasets(107 samples)
-| Step                       | Peak Memory Usage (GB) |
-|----------------------------|------------------------|
-| isopedia merge             | 7.12                   |
-| isopedia-idx               | 3.84                   |
-| isopedia isoform(158K transcripts from GENCODE)      | 15.82                  |
+Isopedia 1.4.0 was tested on 1,007 long-read transcriptome datasets from SRA and ENCODE.
+
+
+| Step                       | Peak Mem (GB) | Avg Mem (GB) | Time |
+|----------------------------|------------------------| --- |---|
+| isopedia merge             | 7.12                   | | |
+| isopedia index               | 3.84                   | |  |
+| isopedia isoform(158K transcripts from GENCODE)      | 15.82  |                 | |
 
 
 
