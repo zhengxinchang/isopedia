@@ -1,4 +1,4 @@
-use crate::constants::{BUF_SIZE_4M, BUF_SIZE_64M};
+use crate::constants::{BUF_SIZE_1M, BUF_SIZE_4M, BUF_SIZE_64M};
 use crate::constants::{MAGIC, ORDER};
 use ahash::HashSet;
 use indexmap::IndexMap;
@@ -146,7 +146,7 @@ impl Tmpindex {
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
-                let reader = BufReader::with_capacity(BUF_SIZE_4M, file);
+                let reader = BufReader::with_capacity(BUF_SIZE_1M, file);
                 reader
             })
             .collect::<Vec<_>>();

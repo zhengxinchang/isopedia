@@ -272,7 +272,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
 
             if total_count % batch_size == 0 {
                 info!(
-                    "Processing {} records",
+                    "Processed {} records",
                     total_count.to_formatted_string(&Locale::en)
                 );
                 // batches += 1;

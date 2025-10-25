@@ -28,7 +28,7 @@ use noodles_gtf::io::Reader as gtfReader;
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-anno-fusion")]
+#[command(name = "isopedia fusion")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
@@ -38,17 +38,17 @@ use serde::Serialize;
 Examples:
 
 # Annotate a fusion by providing the fusion breakpoints
-isopedia-anno-fusion --idxdir /path/to/index --pos chr1:1000,chr2:2000 -o out.txt
+isopedia fusion --idxdir /path/to/index --pos chr1:1000,chr2:2000 -o out.txt
 
 # Annotate a list of fusions using a bed file
 
-isopedia-anno-fusion --idxdir /path/to/index --pos-bed /path/to/fusion_breakpoints.bed -o out.txt
+isopedia fusion --idxdir /path/to/index --pos-bed /path/to/fusion_breakpoints.bed -o out.txt
 
 Format of fusion_breakpoints.bed:
 chr2 \t 50795173 \t chr17 \t 61368325 \t BCAS4:BCAS3,UHR(optional)
 
 # Discover any potential fusions using a GTF file
-isopedia-anno-fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.txt
+isopedia fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.txt
 
 "#)]
 pub struct AnnFusionCli {

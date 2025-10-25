@@ -16,7 +16,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIter
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-index")]
+#[command(name = "isopedia index")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
@@ -49,12 +49,7 @@ pub struct IndexCli {
     #[arg(short, long, help = "Metadata for the samples in the index.")]
     pub meta: PathBuf,
 
-    #[arg(
-        short,
-        long,
-        help = "Number of threads to use. Default: 1",
-        default_value_t = 4
-    )]
+    #[arg(short, long, help = "Number of threads to use.", default_value_t = 4)]
     pub threads: usize,
 }
 
@@ -208,7 +203,7 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
                 .par_iter()
                 .enumerate()
                 .for_each(|(i, &chrom_id)| {
-                    info!("Indexing chromosome {}/{} ", i, nchrs);
+                    info!("Indexing chromosome #{}, total {}", i, nchrs);
 
                     match tmpidx.groups(chrom_id) {
                         Some(tmpidx_chunker) => {

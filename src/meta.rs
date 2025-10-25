@@ -57,7 +57,15 @@ impl Meta {
         }
     }
     pub fn parse<P: AsRef<Path>>(path: P, prefix: Option<&str>) -> Result<Meta> {
-        Meta::from_file(&path, prefix, None)
+        info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
+        let meta = Meta::from_file(&path, prefix, None)?;
+        info!(
+            "Parsed meta file: {} with {} samples and {} attributes",
+            path.as_ref().display(),
+            meta.samples.len(),
+            meta.header.len()
+        );
+        Ok(meta)
     }
 
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
@@ -223,6 +231,8 @@ impl Meta {
 
         Ok(())
     }
+
+    pub fn statement(&self) {}
 }
 
 impl GeneralOutputIO for Meta {
@@ -266,8 +276,6 @@ impl GeneralOutputIO for Meta {
         prefix: Option<&str>,
         _sep: Option<&str>,
     ) -> Result<Self> {
-        info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
-
         let mut header = String::new();
         let mut records = IndexMap::new();
         reader.read_line(&mut header)?;
@@ -280,7 +288,7 @@ impl GeneralOutputIO for Meta {
 
         let header = utils::line2fields(&header);
 
-        info!("Parsed {} fields from header: {:?}", header.len(), header);
+        // info!("Parsed {} fields from header: {:?}", header.len(), header);
 
         let mut samples = Vec::new();
         let mut line_no = 0;

@@ -16,7 +16,7 @@ use std::fs::File;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-ann-splice")]
+#[command(name = "isopedia splice")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "
