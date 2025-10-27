@@ -28,11 +28,11 @@ use serde::Serialize;
 #[clap(after_long_help = "Example:
 
 The manifest file example(tab-separated)
-(required)  (required)                   (optional) (optional)
-----------  ---------------------------  ---------- ---------
-name        path                          meta1      meta2
-sample1     /path/to/sample1.isoform.gz    A         15
-sample2     /path/to/sample2.isoform.gz    B         37
+(required)  (required)                   (optional) (optional) ....
+----------  ---------------------------  ---------- ---------  ----
+name        path                          meta1      meta2     ....
+sample1     /path/to/sample1.isoform.gz    A         15        ....
+sample2     /path/to/sample2.isoform.gz    B         37        ....
 
 Run aggregation:
 

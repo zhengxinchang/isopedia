@@ -52,10 +52,16 @@ pub struct AnnSpliceCli {
     #[arg(short, long)]
     pub output: PathBuf,
 
-    /// Memory size to use for warming up (in gigabytes).  
-    /// Example: 4GB. Increasing this will significantly improve performance;  
-    /// Set it to 0(default) if you only have small query and want to skip warming up step.
-    #[arg(short, long, default_value_t = 0)]
+    #[arg(
+        short,
+        long,
+        default_value_t = 0,
+        long_help = "
+    Memory size to use for warming up (in gigabytes).
+    Example: 4GB. Increasing this will significantly improve performance.
+    Set it to 0(default) if you only have small query and want to skip warming up step.
+    "
+    )]
     pub warmup_mem: usize,
 
     /// Maximum number of cached nodes per tree

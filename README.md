@@ -77,6 +77,10 @@ This figure dipicts how Isopedia determines a positive hit for a query in differ
 
 [place holder for index download link]
 
+|Name|Link|Sample Size|Index size after compression|Minimal required Memory for querying | Description |
+|----|----|-----------|-----------|---|---|
+|isopedia_index_v1.0|[Download](#)|1,007|462G|64Gb|107 ENCODE samples + 900 SRA samples|
+
 
 # Build your own index
 
@@ -95,6 +99,7 @@ HG002_pb_chr22   /path/to/hg002_pb_chr22.isoform.gz   PacBio
 HG002_ont_chr22   /path/to/hg002_ont_chr22.isoform.gz   ONT
 
 ```
+
 ## Example workflow
 
 ```bash
@@ -132,7 +137,7 @@ isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
 
 ### Purpose:
 
-search transcripts from input gtf file and return how many samples in the index have evidence. 
+Search transcripts from input gtf file and return how many samples in the index have evidence. 
 
 ### Example:
 
@@ -219,7 +224,7 @@ The output of the search command is a tab-separated file with the following colu
 | positive_count/sample_size  | Positive count / sample size                                                |
 | attributes                 | Original attributes of the transcript from the input GTF file               |
 | FORMAT                     | Format of the values in each sample column                                  |
-| sample1                    | Valuesv (CPM:COUNT:INFO)                                                                     |
+| sample1                    | Valuesv (CPM:COUNT:INFO)                                                                   |
 | …                          | …                                                                           |
 | sampleN                    | Values (CPM:COUNT:INFO)                                                                      |
 
@@ -234,7 +239,11 @@ There are a few columns can be used to filter the results.
 
 *CPM* values are provided in each sample column, which is defined as:
 
-$$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} * 1,000,000$$ 
+$$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} * 1,000,000 $$ 
+
+`INFO` field in each sample column contains additional information depending on the index content, such as read names (if BAM/CRAM files were indexed) or transcript/gene IDs (if GTF files were indexed). This information can be useful for further analysis or validation. It is recommended to include this field when building the index from GTF files.
+**Note that** the `INFO` field only be included when the index was created with `--rname`(BAM/CRAM) or `--tid`/`--gid` option and the `--info` flag is used during the query.
+
 
 
 <details>
@@ -522,12 +531,14 @@ https://zhengxinchang.github.io/isopedia/
 
 Isopedia 1.4.0 was tested on 1,007 long-read transcriptome datasets from SRA and ENCODE.
 
+> tested on AMD Ryzen 9 7940HX, 64 GB RAM.
 
-| Step                       | Peak Mem (GB) | Avg Mem (GB) | Time |
-|----------------------------|------------------------| --- |---|
-| isopedia merge             | 7.12                   | | |
-| isopedia index               | 3.84                   | |  |
-| isopedia isoform(158K transcripts from GENCODE)      | 15.82  |                 | |
+
+| Step                       | Peak Mem (GB)  | Time(H:MM:SS) |
+|----------------------------|------------------------ |---|
+| isopedia merge             | 54.77 Gb                 | 28:26:08 |
+| isopedia index               | 45.85 Gb              | 5:48:55  |
+| isopedia isoform(158K GENCODE V47 basic)      | 45.05 Gb  |   2:57:22|
 
 
 

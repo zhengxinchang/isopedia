@@ -24,7 +24,7 @@ use serde::Serialize;
 // Removed incorrect import of mmap::{PosixMadvise,posix_madvise}
 
 #[derive(Parser, Debug, Serialize)]
-#[command(name = "isopedia-ann-isoform")]
+#[command(name = "isopedia isoform")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(version = "0.1.0")]
 #[command(about = "

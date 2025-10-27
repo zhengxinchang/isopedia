@@ -31,11 +31,11 @@ The meta file is the file that was used in the merge step, columns more than 2 w
 The format of the meta file is tab-separated with the first line as header.
 
 Example of meta file:
-(required) (required)  (optional)  (optional)
----------  ----------  ----------  ---------
-name       path           meta1         meta2
-sample1    /a/b/c         15             A
-sample2    /a/b/d         37             B
+(required) (required)  (optional)  (optional) ....
+---------  ----------  ----------  ---------  ----
+name       path           meta1         meta2 ....
+sample1    /a/b/c         15             A    ....
+sample2    /a/b/d         37             B    ....
 
 ")]
 pub struct IndexCli {
