@@ -1,0 +1,4137 @@
+{
+    "meta": {
+        "attrs": [
+            "[SAMPLE]Sample",
+            "Tissue",
+            "platform"
+        ],
+        "data": {
+            "[SAMPLE]HG002_pb_chr22": [
+                "blood",
+                "PB"
+            ],
+            "[SAMPLE]HG002_ont_chr22": [
+                "blood",
+                "ONT"
+            ],
+            "[DBINFO]HG002_pb_chr22:31918,HG002_ont_chr22:38923": []
+        },
+        "left_most": 17731124,
+        "right_most": 17774505,
+        "all_sample_names": [
+            "[SAMPLE]HG002_pb_chr22",
+            "[SAMPLE]HG002_ont_chr22",
+            "[DBINFO]HG002_pb_chr22:31918,HG002_ont_chr22:38923"
+        ],
+        "record_no": 4,
+        "query_chr": "22",
+        "query_start": "17744013",
+        "query_end": "17750104"
+    },
+    "annotation": [
+        {
+            "feature": "gene",
+            "gene_id": "ENSG00000015475.19",
+            "chr": "chr22",
+            "start": 17734138,
+            "end": 17774770,
+            "strand": "-",
+            "attributes": {
+                "gene_id": "ENSG00000015475.19",
+                "gene_type": "protein_coding",
+                "gene_name": "BID",
+                "level": "2",
+                "hgnc_id": "HGNC:1050",
+                "tag": "ncRNA_host",
+                "havana_gene": "OTTHUMG00000150087.5"
+            },
+            "transcripts": {
+                "ENST00000317361.11": {
+                    "transcript_id": "ENST00000317361.11",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17734138,
+                    "end": 17774016,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000317361.11",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-201",
+                        "level": "2",
+                        "protein_id": "ENSP00000318822.7",
+                        "transcript_support_level": "1",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "CCDS",
+                        "ccdsid": "CCDS13747.1",
+                        "havana_gene": "OTTHUMG00000150087.5",
+                        "havana_transcript": "OTTHUMT00000316179.2"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17773610,
+                            "end": 17774016,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001349079.5",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17773610,
+                            "end": 17773689,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001349079.5",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17773687,
+                            "end": 17773689,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001349079.5",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003568392.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003568392.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003689682.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003689682.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734138,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735583,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735580,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17773690,
+                            "end": 17774016,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001349079.5",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000317361.11",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734138,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000317361.11",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-201",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000318822.7",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13747.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316179.2"
+                            }
+                        }
+                    ]
+                },
+                "ENST00000622694.5": {
+                    "transcript_id": "ENST00000622694.5",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17734138,
+                    "end": 17774469,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000622694.5",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-211",
+                        "level": "2",
+                        "protein_id": "ENSP00000480414.1",
+                        "transcript_support_level": "1",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "CCDS",
+                        "ccdsid": "CCDS13748.1",
+                        "havana_gene": "OTTHUMG00000150087.5",
+                        "havana_transcript": "OTTHUMT00000316178.1"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774469,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001540140.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750116,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750114,
+                            "end": 17750116,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003689682.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003689682.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734138,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735583,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735580,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774469,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001540140.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750117,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000622694.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734138,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000622694.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-211",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00001946765.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000480414.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316178.1"
+                            }
+                        }
+                    ]
+                },
+                "ENST00000614949.4": {
+                    "transcript_id": "ENST00000614949.4",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17734142,
+                    "end": 17774495,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000614949.4",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-210",
+                        "level": "2",
+                        "protein_id": "ENSP00000477773.1",
+                        "transcript_support_level": "5",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "CCDS",
+                        "ccdsid": "CCDS13749.1",
+                        "havana_gene": "OTTHUMG00000150087.5"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774495,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001917930.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003590401.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739423,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739421,
+                            "end": 17739423,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734142,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001389825.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735583,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001389825.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735580,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001389825.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774495,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001917930.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003590401.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739424,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000614949.4",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734142,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000614949.4",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-210",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001389825.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000477773.1",
+                                "transcript_support_level": "5",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        }
+                    ]
+                },
+                "ENST00000399765.5": {
+                    "transcript_id": "ENST00000399765.5",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17734175,
+                    "end": 17774489,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000399765.5",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-203",
+                        "level": "2",
+                        "protein_id": "ENSP00000382667.1",
+                        "transcript_support_level": "2",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "CCDS",
+                        "ccdsid": "CCDS13749.1",
+                        "havana_gene": "OTTHUMG00000150087.5",
+                        "havana_transcript": "OTTHUMT00000316181.1"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774489,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001540096.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739423,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739421,
+                            "end": 17739423,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734175,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00001540093.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735583,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00001540093.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735580,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00001540093.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774489,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001540096.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739424,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399765.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17734175,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399765.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-203",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00001540093.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382667.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316181.1"
+                            }
+                        }
+                    ]
+                },
+                "ENST00000399767.6": {
+                    "transcript_id": "ENST00000399767.6",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17735364,
+                    "end": 17774495,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000399767.6",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-204",
+                        "level": "2",
+                        "protein_id": "ENSP00000382669.1",
+                        "transcript_support_level": "2",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "CCDS",
+                        "ccdsid": "CCDS13749.1",
+                        "havana_gene": "OTTHUMG00000150087.5"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774495,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001917930.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003489267.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739423,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739421,
+                            "end": 17739423,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735364,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001856820.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735583,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001856820.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735580,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001856820.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774495,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00001917930.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003489267.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739424,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003616197.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000399767.6",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735364,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000399767.6",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-204",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00001856820.2",
+                                "level": "2",
+                                "protein_id": "ENSP00000382669.1",
+                                "transcript_support_level": "2",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13749.1",
+                                "havana_gene": "OTTHUMG00000150087.5"
+                            }
+                        }
+                    ]
+                },
+                "ENST00000342111.9": {
+                    "transcript_id": "ENST00000342111.9",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17735499,
+                    "end": 17774412,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000342111.9",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-202",
+                        "level": "2",
+                        "protein_id": "ENSP00000344594.5",
+                        "transcript_support_level": "1",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "basic",
+                        "havana_gene": "OTTHUMG00000150087.5",
+                        "havana_transcript": "OTTHUMT00000316180.3"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774412,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00002195037.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750116,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750114,
+                            "end": 17750116,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17740082,
+                            "end": 17740176,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00001374791.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17740082,
+                            "end": 17740176,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00001374791.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003668564.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739396,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003668564.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739393,
+                            "end": 17739395,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003668564.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00003683851.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735499,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "7",
+                                "exon_id": "ENSE00001428765.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774381,
+                            "end": 17774412,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00002195037.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750117,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739395,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003668564.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00003683851.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000342111.9",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735499,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000342111.9",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-202",
+                                "exon_number": "7",
+                                "exon_id": "ENSE00001428765.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000344594.5",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "basic",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000316180.3"
+                            }
+                        }
+                    ]
+                },
+                "ENST00000551952.5": {
+                    "transcript_id": "ENST00000551952.5",
+                    "gene_id": "ENSG00000015475.19",
+                    "start": 17735552,
+                    "end": 17774665,
+                    "attributes": {
+                        "gene_id": "ENSG00000015475.19",
+                        "transcript_id": "ENST00000551952.5",
+                        "gene_type": "protein_coding",
+                        "gene_name": "BID",
+                        "transcript_type": "protein_coding",
+                        "transcript_name": "BID-208",
+                        "level": "2",
+                        "protein_id": "ENSP00000449236.1",
+                        "transcript_support_level": "1",
+                        "hgnc_id": "HGNC:1050",
+                        "tag": "CCDS",
+                        "ccdsid": "CCDS13748.1",
+                        "havana_gene": "OTTHUMG00000150087.5",
+                        "havana_transcript": "OTTHUMT00000404247.1"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774640,
+                            "end": 17774665,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00002343949.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750105,
+                            "end": 17750116,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "start_codon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750114,
+                            "end": 17750116,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17743803,
+                            "end": 17744013,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "3",
+                                "exon_id": "ENSE00003565087.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003689682.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17739349,
+                            "end": 17739488,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "4",
+                                "exon_id": "ENSE00003689682.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17738017,
+                            "end": 17738229,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "5",
+                                "exon_id": "ENSE00003542752.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735552,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00003487532.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "CDS",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735583,
+                            "end": 17735591,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00003487532.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "stop_codon",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735580,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00003487532.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17774640,
+                            "end": 17774665,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00002343949.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17750117,
+                            "end": 17750174,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "2",
+                                "exon_id": "ENSE00003526724.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        },
+                        {
+                            "element_id": null,
+                            "feature": "UTR",
+                            "transcript_id": "ENST00000551952.5",
+                            "gene_id": "ENSG00000015475.19",
+                            "start": 17735552,
+                            "end": 17735582,
+                            "attributes": {
+                                "gene_id": "ENSG00000015475.19",
+                                "transcript_id": "ENST00000551952.5",
+                                "gene_type": "protein_coding",
+                                "gene_name": "BID",
+                                "transcript_type": "protein_coding",
+                                "transcript_name": "BID-208",
+                                "exon_number": "6",
+                                "exon_id": "ENSE00003487532.1",
+                                "level": "2",
+                                "protein_id": "ENSP00000449236.1",
+                                "transcript_support_level": "1",
+                                "hgnc_id": "HGNC:1050",
+                                "tag": "CCDS",
+                                "ccdsid": "CCDS13748.1",
+                                "havana_gene": "OTTHUMG00000150087.5",
+                                "havana_transcript": "OTTHUMT00000404247.1"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "feature": "gene",
+            "gene_id": "ENSG00000264757.1",
+            "chr": "chr22",
+            "start": 17764180,
+            "end": 17764259,
+            "strand": "-",
+            "attributes": {
+                "gene_id": "ENSG00000264757.1",
+                "gene_type": "miRNA",
+                "gene_name": "MIR3198-1",
+                "level": "3",
+                "hgnc_id": "HGNC:38236"
+            },
+            "transcripts": {
+                "ENST00000583102.1": {
+                    "transcript_id": "ENST00000583102.1",
+                    "gene_id": "ENSG00000264757.1",
+                    "start": 17764180,
+                    "end": 17764259,
+                    "attributes": {
+                        "gene_id": "ENSG00000264757.1",
+                        "transcript_id": "ENST00000583102.1",
+                        "gene_type": "miRNA",
+                        "gene_name": "MIR3198-1",
+                        "transcript_type": "miRNA",
+                        "transcript_name": "MIR3198-1-201",
+                        "level": "3",
+                        "transcript_support_level": "NA",
+                        "hgnc_id": "HGNC:38236",
+                        "tag": "Ensembl_canonical"
+                    },
+                    "elements": [
+                        {
+                            "element_id": null,
+                            "feature": "exon",
+                            "transcript_id": "ENST00000583102.1",
+                            "gene_id": "ENSG00000264757.1",
+                            "start": 17764180,
+                            "end": 17764259,
+                            "attributes": {
+                                "gene_id": "ENSG00000264757.1",
+                                "transcript_id": "ENST00000583102.1",
+                                "gene_type": "miRNA",
+                                "gene_name": "MIR3198-1",
+                                "transcript_type": "miRNA",
+                                "transcript_name": "MIR3198-1-201",
+                                "exon_number": "1",
+                                "exon_id": "ENSE00002734587.1",
+                                "level": "3",
+                                "transcript_support_level": "NA",
+                                "hgnc_id": "HGNC:38236",
+                                "tag": "Ensembl_canonical"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "isoforms": [
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17731124,
+            "start_pos_right": 17731124,
+            "end_pos_left": 17774505,
+            "end_pos_right": 17774505,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743806,
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743806
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17731124,
+                            "end": 17774505,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 42,
+            "cpm": 592.8770062534408,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17733524,
+            "start_pos_right": 17735434,
+            "end_pos_left": 17774409,
+            "end_pos_right": 17774502,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 2,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 23,
+                    "cpm": 720.5965286045491,
+                    "reads": [
+                        {
+                            "start": 17733524,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17733570,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17733610,
+                            "end": 17774442,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17733733,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734131,
+                            "end": 17774468,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734138,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734141,
+                            "end": 17774502,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734141,
+                            "end": 17774495,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734141,
+                            "end": 17774432,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734141,
+                            "end": 17774457,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734202,
+                            "end": 17774471,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734293,
+                            "end": 17774495,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734295,
+                            "end": 17774448,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734551,
+                            "end": 17774459,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735162,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735212,
+                            "end": 17774454,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735244,
+                            "end": 17774471,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735244,
+                            "end": 17774441,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735310,
+                            "end": 17774438,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735363,
+                            "end": 17774456,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735372,
+                            "end": 17774464,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735373,
+                            "end": 17774485,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735398,
+                            "end": 17774464,
+                            "strand": "+"
+                        }
+                    ]
+                },
+                "HG002_ont_chr22": {
+                    "sample": "HG002_ont_chr22",
+                    "count": 19,
+                    "cpm": 488.14325720011306,
+                    "reads": [
+                        {
+                            "start": 17735178,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735361,
+                            "end": 17774442,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735361,
+                            "end": 17774460,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735371,
+                            "end": 17774477,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735371,
+                            "end": 17774447,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735371,
+                            "end": 17774457,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735373,
+                            "end": 17774476,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735373,
+                            "end": 17774409,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735373,
+                            "end": 17774438,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735373,
+                            "end": 17774482,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735375,
+                            "end": 17774458,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735378,
+                            "end": 17774442,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735380,
+                            "end": 17774475,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735391,
+                            "end": 17774458,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735398,
+                            "end": 17774458,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735398,
+                            "end": 17774425,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735400,
+                            "end": 17774500,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735414,
+                            "end": 17774457,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735434,
+                            "end": 17774458,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17734141,
+            "start_pos_right": 17734141,
+            "end_pos_left": 17774444,
+            "end_pos_right": 17774444,
+            "splice_sites": [
+                17735591,
+                17738001,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738001
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17734141,
+                            "end": 17774444,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 5,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 7,
+            "start_pos_left": 17734142,
+            "start_pos_right": 17734142,
+            "end_pos_left": 17774471,
+            "end_pos_right": 17774471,
+            "splice_sites": [
+                17734430,
+                17735364,
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17734430,
+                    17735364
+                ],
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17734142,
+                            "end": 17774471,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 5,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 7,
+            "start_pos_left": 17734142,
+            "start_pos_right": 17734142,
+            "end_pos_left": 17774444,
+            "end_pos_right": 17774444,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17740081,
+                17740176,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17740081
+                ],
+                [
+                    17740176,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17734142,
+                            "end": 17774444,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 2,
+            "cpm": 28.232238393020992,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 5,
+            "start_pos_left": 17734142,
+            "start_pos_right": 17735444,
+            "end_pos_left": 17750166,
+            "end_pos_right": 17750175,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ]
+            ],
+            "positive_sample_size": 2,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17734142,
+                            "end": 17750166,
+                            "strand": "+"
+                        }
+                    ]
+                },
+                "HG002_ont_chr22": {
+                    "sample": "HG002_ont_chr22",
+                    "count": 1,
+                    "cpm": 25.69175037895332,
+                    "reads": [
+                        {
+                            "start": 17735444,
+                            "end": 17750175,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17734142,
+            "start_pos_right": 17734142,
+            "end_pos_left": 17774014,
+            "end_pos_right": 17774014,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17773541
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17773541
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17734142,
+                            "end": 17774014,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 9,
+            "cpm": 127.04507276859445,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17734142,
+            "start_pos_right": 17735373,
+            "end_pos_left": 17773752,
+            "end_pos_right": 17773983,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17773609
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17773609
+                ]
+            ],
+            "positive_sample_size": 2,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 8,
+                    "cpm": 250.6422708189736,
+                    "reads": [
+                        {
+                            "start": 17734142,
+                            "end": 17773914,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17734142,
+                            "end": 17773752,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735173,
+                            "end": 17773983,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735211,
+                            "end": 17773929,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735212,
+                            "end": 17773805,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735244,
+                            "end": 17773908,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735368,
+                            "end": 17773861,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735373,
+                            "end": 17773983,
+                            "strand": "+"
+                        }
+                    ]
+                },
+                "HG002_ont_chr22": {
+                    "sample": "HG002_ont_chr22",
+                    "count": 1,
+                    "cpm": 25.69175037895332,
+                    "reads": [
+                        {
+                            "start": 17735373,
+                            "end": 17773981,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 3,
+            "cpm": 42.34835758953149,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17734304,
+            "start_pos_right": 17735372,
+            "end_pos_left": 17774402,
+            "end_pos_right": 17774467,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17774354
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774354
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 3,
+                    "cpm": 93.9908515571151,
+                    "reads": [
+                        {
+                            "start": 17734304,
+                            "end": 17774402,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735240,
+                            "end": 17774457,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17735372,
+                            "end": 17774467,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 5,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 8,
+            "start_pos_left": 17735363,
+            "start_pos_right": 17735363,
+            "end_pos_left": 17774412,
+            "end_pos_right": 17774412,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17740081,
+                17740176,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17755675,
+                17755796,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17740081
+                ],
+                [
+                    17740176,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17755675
+                ],
+                [
+                    17755796,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17735363,
+                            "end": 17774412,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17735374,
+            "start_pos_right": 17735374,
+            "end_pos_left": 17774434,
+            "end_pos_right": 17774434,
+            "splice_sites": [
+                17736388,
+                17737449,
+                17738229,
+                17739348,
+                17739488,
+                17743802,
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17736388,
+                    17737449
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743802
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 1,
+                    "cpm": 31.3302838523717,
+                    "reads": [
+                        {
+                            "start": 17735374,
+                            "end": 17774434,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 1,
+            "cpm": 14.116119196510496,
+            "match_sj_idx": 4,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 6,
+            "start_pos_left": 17735377,
+            "start_pos_right": 17735377,
+            "end_pos_left": 17774458,
+            "end_pos_right": 17774458,
+            "splice_sites": [
+                17735591,
+                17738016,
+                17738229,
+                17739348,
+                17739488,
+                17743806,
+                17744013,
+                17750104,
+                17750174,
+                17774383
+            ],
+            "splice_junction": [
+                [
+                    17735591,
+                    17738016
+                ],
+                [
+                    17738229,
+                    17739348
+                ],
+                [
+                    17739488,
+                    17743806
+                ],
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774383
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_ont_chr22": {
+                    "sample": "HG002_ont_chr22",
+                    "count": 1,
+                    "cpm": 25.69175037895332,
+                    "reads": [
+                        {
+                            "start": 17735377,
+                            "end": 17774458,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "single_query",
+            "chr1": "22",
+            "pos1": "17744013",
+            "chr2": "22",
+            "pos2": "17750104",
+            "total_evidence": 3,
+            "cpm": 42.34835758953149,
+            "match_sj_idx": 1,
+            "dist_to_match_1": 0,
+            "dist_to_match_2": 0,
+            "n_exon": 3,
+            "start_pos_left": 17741490,
+            "start_pos_right": 17741658,
+            "end_pos_left": 17774440,
+            "end_pos_right": 17774469,
+            "splice_sites": [
+                17744013,
+                17750104,
+                17750174,
+                17774380
+            ],
+            "splice_junction": [
+                [
+                    17744013,
+                    17750104
+                ],
+                [
+                    17750174,
+                    17774380
+                ]
+            ],
+            "positive_sample_size": 1,
+            "positive_samples": {
+                "HG002_pb_chr22": {
+                    "sample": "HG002_pb_chr22",
+                    "count": 3,
+                    "cpm": 93.9908515571151,
+                    "reads": [
+                        {
+                            "start": 17741490,
+                            "end": 17774469,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17741491,
+                            "end": 17774440,
+                            "strand": "+"
+                        },
+                        {
+                            "start": 17741658,
+                            "end": 17774466,
+                            "strand": "+"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

@@ -519,26 +519,26 @@
 
                 fetchJSON() {
                     // Example: 
-                    return fetch("/aa.json")
-                        .then(response => {
-                            if (!response.ok) throw new Error("Network request failed " + response.status);
-                            return response.json();
-                        })
-                        .then(data => {
-                            this.getData(data);
-                        })
-                        .catch(err => {
-                            console.error("Failed to load JSON:", err);
-                            throw err;
-                        });
+                    // return fetch("/aa.json")
+                    //     .then(response => {
+                    //         if (!response.ok) throw new Error("Network request failed " + response.status);
+                    //         return response.json();
+                    //     })
+                    //     .then(data => {
+                    //         this.getData(data);
+                    //     })
+                    //     .catch(err => {
+                    //         console.error("Failed to load JSON:", err);
+                    //         throw err;
+                    //     });
 
                     // For local DATA, return a Promise so it can be used in then()
-                    // let DATA = {};
-                    // console.log("DATA", DATA);
-                    // return new Promise((resolve) => {
-                    //     this.getData(DATA);
-                    //     resolve();
-                    // });
+                    let DATA = {};
+                    console.log("DATA", DATA);
+                    return new Promise((resolve) => {
+                        this.getData(DATA);
+                        resolve();
+                    });
                 },
 
                 filter_ref() {

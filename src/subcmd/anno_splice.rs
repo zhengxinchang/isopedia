@@ -67,6 +67,10 @@ pub struct AnnSpliceCli {
     /// Maximum number of cached nodes per tree
     #[arg(short = 'c', long = "cached_nodes", default_value_t = 100_000)]
     pub lru_size: usize,
+
+    /// Debug mode
+    #[arg(short, long, default_value_t = false, help = "Enable debug mode")]
+    pub debug: bool,
 }
 
 impl AnnSpliceCli {
@@ -117,16 +121,13 @@ impl AnnSpliceCli {
         };
 
         if let Some(splice_str) = &self.splice {
-            if utils::parse_breakpoint_str(&splice_str).is_err() {
+            if utils::parse_splice_junction_str(&splice_str).is_err() {
                 error!("Failed to parse splice junction: {}", splice_str);
                 std::process::exit(1);
             }
         }
 
-        if self.warmup_mem == 0 {
-            error!("--warmup-mem: must be greater than 0");
-            is_ok = false;
-        } else {
+        if self.warmup_mem > 0 {
             let warmup_bytes = (self.warmup_mem as u64) * 1024 * 1024 * 1024;
             if warmup_bytes > max_mem_bytes {
                 error!(
@@ -208,7 +209,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         info!("parse breakpoints pair from command line...");
         let splice_str = cli.splice.clone().unwrap();
         let bp =
-            BreakPointPair::parse_string(&splice_str).expect("Can not parse splice junction...");
+            BreakPointPair::parse_string_sj(&splice_str).expect("Can not parse splice junction...");
         vec![bp]
     } else if cli.splice_bed.is_some() {
         let splice_bed_path = cli.splice_bed.clone().unwrap();
@@ -279,6 +280,9 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
 
                 let record: MergedIsoform =
                     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
+                if cli.debug {
+                    dbg!(&record);
+                }
                 match record.get_splice_report(query, cli.flank, &dataset_info) {
                     Some((middle_part, sample_vec)) => {
                         for item in &middle_part {

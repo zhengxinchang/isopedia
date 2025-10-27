@@ -39,20 +39,22 @@ conda install -y -c zhengxinchang isopedia
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
 # query transcripts
-isopedia isoform -i index/ -g query.gtf -o out.profile.tsv.gz
+isopedia isoform -i index/ -g query.gtf -o ./out.profile.tsv.gz
 
 # query one fusion gene (two breakpoints)
-isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o out.fusion.tsv.gz
+isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz
 
 # query multiple fusion genes
-isopedia fusion  -i index/ -P fusion_query.bed -o out.fusion.tsv.gz
+isopedia fusion  -i index/ -P fusion_query.bed -o ./out.fusion.tsv.gz
 
 # query gene regions and discover potential fusion events
-isopedia fusion  -i index/ -g gene.gtf -o out.fusion.discovery.tsv.gz
+isopedia fusion  -i index/ -g gene.gtf -o ./out.fusion.discovery.tsv.gz
 
-# query a splice junction and visualize it
-isopedia splice  -i index/ -s 17:7675236,17:7675993  -o out.splice.tsv.gz
-python script/isopedia-splice-viz.py  -i out.splice.tsv.gz -g gencode.v47.basic.annotation.gtf  -t script/temp.html  -o isopedia-splice-view
+# query a splice junction from the BID gene
+isopedia splice  -i index/ -s 22:17744013,17750104  -o ./out.splice.tsv.gz
+
+# visualize the splice junction
+isopedia-splice-viz.py  -i ./out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf   -o isopedia-splice-view
 ```
 
 For indexing GTF files, please refer to [Indexing GTF Files](doc/indexing_gtf.md) section.

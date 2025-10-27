@@ -124,6 +124,16 @@ pub fn parse_breakpoint_str(s: &str) -> Result<(String, u64, String, u64)> {
     Ok((left_chr, left_pos, right_chr, right_pos))
 }
 
+pub fn parse_splice_junction_str(s: &str) -> Result<(String, u64, u64)> {
+    let parts: Vec<&str> = s.split(|c| c == ':' || c == ',').collect();
+
+    let chr = trim_chr_prefix_to_upper(parts[0]);
+    let left_pos: u64 = parts[1].parse()?;
+    let right_pos: u64 = parts[2].parse()?;
+
+    Ok((chr, left_pos, right_pos))
+}
+
 pub fn u64diff2i32(a: u64, b: u64) -> i32 {
     if a >= b {
         let diff = a - b;

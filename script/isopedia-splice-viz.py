@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 import gzip
 import argparse
 import sys
 from collections import OrderedDict
 import json
+import os
 
 class IsoformRecord:
     
@@ -286,6 +288,11 @@ def trim_chr(chrom):
 def main():
     args = parse_args()
 
+    # get current path for the script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if args.template is None:
+        args.template = os.path.join(script_dir, "isopedia-splice-viz-temp.html")
+
     metatable = MetaTable()
     isoform_records = []
     sample_names = []
@@ -299,6 +306,7 @@ def main():
     with open(args.template, 'r') as template_file:
         template_content = template_file.read()
 
+    print(f"Loading input file: {args.input}", file=sys.stderr)
     with gzip.open(args.input, 'rt') as infile:
         for line in infile:
             if line.startswith("##"):
@@ -356,7 +364,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Visualize isoforms from isopedia-anno-splice output")
     parser.add_argument("-i","--input", required=True, help="Input file, the file is the output from isopedia-anno-splice with single query mode.")
     parser.add_argument("-g","--gtf", required=False, help="Reference GTF file")
-    parser.add_argument("-t","--template", required=False, help="Templates HTML file", default="temp.html")
+    parser.add_argument("-t","--template", required=False, help="Templates HTML file", default=None)
     parser.add_argument("-o","--output", required=True, help="Output file")
     return parser.parse_args()
 

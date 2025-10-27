@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Isopedia Splice View</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        /* Add your custom styles here */
+        /* set font size of all button */
+        button {
+            font-size: 11px;
+            margin-left: 2px;
+            margin-right: 2px;
+        }
+
+        .sub-item-title {
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .outline-box {
+            font-size: 11px;
+            border-radius: 5px;
+            border: #424141 solid 1px;
+            margin-top: 5px;
+            padding: 4px;
+        }
+    </style>
+</head>
+
+<body style="margin: 0; height: 100vh;font-size: 14px; background-color: #F0F0F0;">
+    <div id="app" style="display: flex; flex-direction: column; height: 100vh;">
+        <div id='header'
+            style="z-index:11;box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); color:#ba7027;  padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 2.5vh;  position: relative;">
+
+            <a href="https://github.com/zhengxinchang/isopedia" style="color:#ba7027;text-decoration: none;"
+                target="_blank">
+                <h4 style="margin: 0;">Isopedia Splice View</h4>
+            </a>
+
+
+            <div>ver. 1.0.0</div>
+
+        </div>
+
+        <div id="content" style="display: flex; height: 95vh;">
+
+            <div id="left"
+                style="z-index:10; box-shadow: 4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-right: none;">
+
+
+                <expand-box name="Query Info" :expanded="true">
+
+                    <chip>
+                        <template v-slot:label>Query Region</template>
+                        <template v-slot:content>{{meta && meta.query_chr || ""}}:{{meta && meta.query_start ||
+                            ""}}-{{meta && meta.query_end || ""}}</template>
+                    </chip>
+
+                    <chip>
+                        <template v-slot:label>#Isoforms Detected</template>
+                        <template v-slot:content>{{isoforms && isoforms.length || 0 }}</template>
+                    </chip>
+
+                    <chip>
+                        <template v-slot:label>#Reference Genes Overlapped</template>
+                        <template v-slot:content>{{annotation && annotation.length || 0 }}</template>
+                    </chip>
+
+                    <chip>
+                        <template v-slot:label>#Reference Transcripts Overlapped</template>
+                        <template v-slot:content>{{ann_transcript && ann_transcript.length || 0 }}</template>
+                    </chip>
+
+
+                </expand-box>
+
+                <expand-box name="Index Info" :expanded="true">
+
+                    <chip>
+                        <template v-slot:label>Shards</template>
+                        <template v-slot:content>1[fixed]</template>
+                    </chip>
+
+
+                    <chip>
+                        <template v-slot:label>Total Samples</template>
+                        <template v-slot:content>{{meta && meta.record_no || ""}}</template>
+                    </chip>
+
+                    <expand-box :expanded="false">
+
+                        <template v-slot:label>
+                            <chip style="padding-left:6px; padding-right:0px;">
+                                <template v-slot:label>Sample Attributes</template>
+                                <template v-slot:content>({{meta && meta.attrs.length || 0}})</template>
+                            </chip>
+                        </template>
+
+                        <div v-for="attr in meta && meta.attrs" :key="attr"
+                            style="font-size: 9px; margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
+                            {{attr}}
+                        </div>
+                    </expand-box>
+                </expand-box>
+
+                <expand-box name="Sample Metadata Table">
+                    <div class="outline-box" style="overflow: auto; max-height: 500px;max-width: 100%;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th v-for="attr in meta && meta.attrs" :key="attr">{{attr}}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="[name, data] in (meta ? Object.entries(meta.data) : [])" :key="name">
+                                    <td>{{name}}</td>
+                                    <td v-for="val in data" :key="val">{{val}}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </expand-box>
+
+
+                <expand-box name="Help">
+
+
+                </expand-box>
+
+            </div>
+
+            <div id="middle" style="z-index:9; width: 70%; background-color: lightblue; border: 0px solid black;">
+                <svg ref="svg" style="width: 100%; height: 100%; background-color: #FAFAFA;"></svg>
+            </div>
+
+            <div id="right"
+                style="z-index:10; box-shadow: -4px 0 6px rgba(0, 0, 0, 0.2);  width: 15%; background-color: #F0F0F0; padding: 3px;  overflow: auto;border: 0px solid black;border-left: none;">
+
+                <expand-box name="Zoom" :expanded="true">
+                    <button @click="zoomIn">Zoom In</button>
+                    <button @click="zoomOut">Zoom Out</button>
+                    <button @click="resetView">Reset</button>
+                </expand-box>
+
+
+                <expand-box name="Filter&Sort">
+
+
+                    <div class="outline-box">
+                        <div class="sub-item-title">Reference Annotation(upper)</div>
+
+                        <label style="display: flex; align-items: center;">
+                            <input v-model="flt_ref_overlap_query" type="checkbox" name="agree">
+                            Overlap query region
+                        </label>
+                        <div>
+                            <button @click="filter_ref">Apply</button>
+                            <button @click="reset_filter_ref">Reset</button>
+                        </div>
+
+                    </div>
+
+                    <div class="outline-box">
+
+                        <div class="sub-item-title">Isoform Signals(bottom)</div>
+
+                        <range-filter-box name="Support Read Range" :min="evidence_range[0]" :max="evidence_range[1]"
+                            v-model="flt_evidence_range">
+                            Support Read Range
+                            <hover-help>
+                                This filter allows you to select isoforms based on the number of supporting reads.
+                                Adjust the range to include isoforms that have a specific number of reads supporting
+                                their structure.
+                            </hover-help>
+                        </range-filter-box>
+
+                        <range-filter-box name="Support Sample Range" :min="positive_sample_range[0]"
+                            :max="positive_sample_range[1]" v-model="flt_sample_size_range">
+
+                            Support Sample Range
+                            <hover-help>
+                                This filter allows you to select isoforms based on the number of samples that support
+                                them. Adjust the range to include isoforms that are supported by a specific number of
+                                samples.
+                            </hover-help>
+
+                        </range-filter-box>
+
+                        <div style="margin-top: 5px;">
+                            <button @click="filter_isoform">Apply</button>
+                            <button @click="reset_filter_isoform">Reset</button>
+                        </div>
+
+
+                    </div>
+
+                </expand-box>
+
+                <expand-box name="Selected Reference Details">
+                    <template v-slot:label>
+                        <div style="display: flex; align-items: center;">
+                            <span>Selected Isoform Details</span>
+                            <hover-help style="margin-left: 4px;">
+                                Detailed information about the currently selected reference transcript. It includes
+                                various attributes and metrics that describe the isoform's characteristics and its
+                                support
+                                evidence from original annotation GTF/GFF file.
+                            </hover-help>
+                        </div>
+                    </template>
+                    <div class="outline-box" style="overflow-y: auto; max-height: 400px; min-height: 100px;">
+                        <div v-show="sel_anno_idx!=null">
+
+                            <div v-for="item in Object.entries(sel_anno_data)" :key="item">
+                                <chip v-if="item[0] != 'elements' && item[0] != 'pass' && item[0] != 'init_idx'">
+                                    <template v-slot:label>{{item[0]}}</template>
+                                    <template v-slot:content>{{item[1]}}</template>
+                                </chip>
+
+                                <expand-box v-if="item[0] == 'elements'">
+
+                                    <template v-slot:label>
+                                        <chip style="padding-left:6px; padding-right:0px;">
+                                            <template v-slot:label>Elements</template>
+                                            <template v-slot:content>({{item[1].length || 0}})</template>
+                                        </chip>
+                                    </template>
+
+                                    <div v-for="(el, idx) in item[1]" :key="idx"
+                                        style="margin-top: 4px; padding: 4px; border: 1px solid gray; border-radius: 4px;">
+                                        <div><strong>Feature:</strong> {{el.feature}}</div>
+                                        <div><strong>Start:</strong> {{el.start}}</div>
+                                        <div><strong>End:</strong> {{el.end}}</div>
+                                    </div>
+                                </expand-box>
+
+                </expand-box>
+            </div>
+        </div>
+    </div>
+
+    </expand-box>
+
+    <expand-box name="Selected Isoform Details">
+
+
+        <div class="outline-box" style="overflow-y: auto; max-height: 400px; min-height: 100px;">
+            <div v-show="sel_isoform_idx!= null">
+
+                <chip>
+                    <template v-slot:label>Position</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.chr1}}:
+                        {{sel_isoform_data && sel_isoform_data.pos1}}-{{sel_isoform_data && sel_isoform_data.pos2}}
+                    </template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Support reads</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.total_evidence}}</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Avg CPM</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.cpm}}</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>#Exons in the isoform</template>
+                    <template v-slot:content>{{sel_isoform_data && sel_isoform_data.n_exon}}</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Query region distance to splice sites</template>
+                    <template v-slot:content>
+                        left: {{sel_isoform_data && sel_isoform_data.dist_to_match_1}}
+                        right: {{sel_isoform_data && sel_isoform_data.dist_to_match_2}}
+                    </template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Query region matched splice junction</template>
+                    <template v-slot:content>the {{sel_isoform_data && sel_isoform_data.match_sj_idx}}th from
+                        left</template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Left read span region
+                        <hover-help>
+                            The genomic coordinates covered by the 5' position of all
+                            supporting reads of the isoform. This region provides insights into the extent of
+                            read coverage on the left side of the isoform.
+                        </hover-help>
+
+                    </template>
+                    <template v-slot:content>
+                        {{sel_isoform_data && sel_isoform_data.chr1}}:
+                        {{sel_isoform_data && sel_isoform_data.start_pos_left}}-
+                        {{sel_isoform_data && sel_isoform_data.start_pos_right}}
+                    </template>
+                </chip>
+
+                <chip>
+                    <template v-slot:label>Right read span region
+
+                        <hover-help>
+                            The genomic coordinates covered by the 3' position of all
+                            supporting reads of the isoform. This region provides insights into the extent of
+                            read coverage on the right side of the isoform.
+                        </hover-help>
+                    </template>
+                    <template v-slot:content>
+                        {{sel_isoform_data && sel_isoform_data.chr1}}:
+                        {{sel_isoform_data && sel_isoform_data.end_pos_left}}-
+                        {{sel_isoform_data && sel_isoform_data.end_pos_right}}
+                    </template>
+                </chip>
+
+
+                <expand-box name="Splice Sites" :expanded="false">
+
+                    <template v-slot:label>
+
+                        <chip style="padding-left:6px; padding-right:0px;">
+                            <template v-slot:label>Splice Junctions</template>
+                            <template v-slot:content>({{sel_isoform_data.splice_junction &&
+                                sel_isoform_data.splice_junction.length || 0}})</template>
+                        </chip>
+                    </template>
+                    <div v-for="(sj, idx) in sel_isoform_data && sel_isoform_data.splice_junction" :key="idx">
+                        {{sj[0]}}-{{sj[1]}}
+                    </div>
+
+                </expand-box>
+
+                <expand-box>
+                    <template v-slot:label>
+                        <chip style="padding-left:6px; padding-right:0px;">
+                            <template v-slot:label>Positive Samples</template>
+                            <template v-slot:content>({{sel_isoform_data && sel_isoform_data.positive_sample_size ||
+                                0}})</template>
+                        </chip>
+                    </template>
+
+                    <expand-box :expanded="false"
+                        v-for="(sample, idx) in sel_isoform_data && sel_isoform_data.positive_samples" :key="idx">
+
+                        <template style="font-size:10px" v-slot:label>
+                            <div style="font-size: 10px;">
+                                {{sample.sample}} <br /> {{sample.count}} reads <br /> CPM: {{sample.cpm}}
+                            </div>
+
+                        </template>
+                        <div>
+
+                            <table>
+                                <tbody>
+                                    <tr v-for="(item, index) in meta && meta.data && meta.data[sample.sample]"
+                                        :key="index">
+                                        <td>{{meta &&meta.attrs[index]}}</td>
+                                        <td>{{item}}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </expand-box>
+                </expand-box>
+            </div>
+
+        </div>
+    </expand-box>
+
+
+    </div>
+
+    </div>
+
+    <div id='footer'
+        style="z-index:12; box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.2); padding-left: 10px; display: flex; height:2.5vh;  justify-content: center; align-items: center; ">
+
+        <div>
+            <a href="https://fritzsedlazeck.github.io/"
+                style="text-decoration: none; color:blueviolet; padding-right: 5px;" target="_blank">@Sedlazeck
+                Lab, Baylor College of Medicine</a>
+        </div>
+    </div>
+
+    <div id="tooltip" style="position:absolute; display:none; padding:4px; background:black; color:white;
+                    border-radius:4px; font-size:12px; pointer-events:none; z-index:9999;">
+    </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        const app = createApp({
+            data() {
+                return {
+                    meta: null,
+                    annotation: null,
+                    isoforms: null,
+                    ann_transcript: [],
+                    ann_gene: {},
+
+                    query_left: null,
+                    query_right: null,
+                    query_chr: null,
+
+                    svg: null,
+                    svgW: 0,
+                    svgH: 0,
+                    margin: { top: 40, right: 50, bottom: 40, left: 80 },
+                    innerW: 0,
+                    innerH: 0,
+
+                    x0: null,
+                    xz: null,
+
+                    yBand: null,
+
+                    yRefBand: null,
+
+                    // g elements
+                    gRoot: null,
+                    gTop: null,
+                    gBottom: null,
+                    gXAxis: null,
+                    gYAxis: null,
+                    gYAxisRef: null,
+                    gContent: null,
+                    gContentRef: null,
+                    // heights
+                    refH: 160,
+                    bodyH: 0,
+
+                    // data
+                    sjData: [],
+                    exonData: [],
+                    readspanData: [],
+                    // highlight_box_isoform: [],
+                    ref_labels: [],
+                    ref_exons: [],
+                    ref_cds: [],
+                    ref_stop_codons: [],
+                    ref_start_codons: [],
+                    ref_utrs: [],
+                    ref_tx_count: 0,
+                    isoform_count: 0,
+
+                    kShared: 1,
+                    xShared: 0,
+
+                    // filter
+                    flt_ref_overlap_query: false,
+                    flt_evidence_range: [0, 0],
+                    flt_sample_size_range: [0, 0],
+
+                    // overall infos
+
+                    evidence_range: [0, 0],
+                    positive_sample_range: [0, 0],
+
+
+                    // selected
+                    sel_isoform_idx: null,
+                    sel_isoform_data: {},
+                    sel_anno_idx: null,
+                    sel_anno_data: {},
+                };
+            },
+
+            methods: {
+
+                getData(data) {
+                    this.meta = data.meta;
+                    this.annotation = data.annotation;
+                    this.isoforms = data.isoforms;
+                    this.isoforms.forEach((isofrom, idx) => {
+                        isofrom.pass = true;
+                        isofrom.init_idx = idx;
+                    });
+
+                    let curr_tx_idx = 0;
+                    this.annotation.forEach(gene => {
+
+                        this.ann_gene[gene.gene_id] = {
+                            gene_id: gene.gene_id,
+                            gene_name: gene.gene_name,
+                            chrom: gene.chr,
+                            strand: gene.strand,
+                            tx_count: Object.keys(gene.transcripts).length,
+                            ...gene.attributes
+                        }
+
+                        Object.keys(gene.transcripts).forEach(txId => {
+
+                            const transcript = gene.transcripts[txId];
+
+                            this.ann_transcript.push({
+                                tx_id: txId,
+                                init_idx: curr_tx_idx,
+                                gene_id: gene.gene_id,
+                                gene_name: gene.gene_name,
+                                chrom: gene.chr,
+                                strand: gene.strand,
+                                tx_start: transcript.start,
+                                tx_end: transcript.end,
+                                ...transcript.attributes,
+                                elements: transcript.elements,
+                                pass: true
+                            });
+                            curr_tx_idx += 1;
+                        });
+                    });
+                },
+
+                fetchJSON() {
+                    // Example: 
+                    // return fetch("/aa.json")
+                    //     .then(response => {
+                    //         if (!response.ok) throw new Error("Network request failed " + response.status);
+                    //         return response.json();
+                    //     })
+                    //     .then(data => {
+                    //         this.getData(data);
+                    //     })
+                    //     .catch(err => {
+                    //         console.error("Failed to load JSON:", err);
+                    //         throw err;
+                    //     });
+
+                    // For local DATA, return a Promise so it can be used in then()
+                    let DATA={"meta": {"attrs": ["[SAMPLE]Sample", "Tissue", "platform"], "data": {"[SAMPLE]HG002_pb_chr22": ["blood", "PB"], "[SAMPLE]HG002_ont_chr22": ["blood", "ONT"], "[DBINFO]HG002_pb_chr22:31918,HG002_ont_chr22:38923": []}, "left_most": 17731124, "right_most": 17774505, "all_sample_names": ["[SAMPLE]HG002_pb_chr22", "[SAMPLE]HG002_ont_chr22", "[DBINFO]HG002_pb_chr22:31918,HG002_ont_chr22:38923"], "record_no": 4, "query_chr": "22", "query_start": "17744013", "query_end": "17750104"}, "annotation": [{"feature": "gene", "gene_id": "ENSG00000015475.19", "chr": "chr22", "start": 17734138, "end": 17774770, "strand": "-", "attributes": {"gene_id": "ENSG00000015475.19", "gene_type": "protein_coding", "gene_name": "BID", "level": "2", "hgnc_id": "HGNC:1050", "tag": "ncRNA_host", "havana_gene": "OTTHUMG00000150087.5"}, "transcripts": {"ENST00000317361.11": {"transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17734138, "end": 17774016, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17773610, "end": 17774016, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "1", "exon_id": "ENSE00001349079.5", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17773610, "end": 17773689, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "1", "exon_id": "ENSE00001349079.5", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17773687, "end": 17773689, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "1", "exon_id": "ENSE00001349079.5", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "2", "exon_id": "ENSE00003568392.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "2", "exon_id": "ENSE00003568392.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "4", "exon_id": "ENSE00003689682.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "4", "exon_id": "ENSE00003689682.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "5", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "5", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17734138, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17735583, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17735580, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17773690, "end": 17774016, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "1", "exon_id": "ENSE00001349079.5", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000317361.11", "gene_id": "ENSG00000015475.19", "start": 17734138, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000317361.11", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-201", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000318822.7", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13747.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316179.2"}}]}, "ENST00000622694.5": {"transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17734138, "end": 17774469, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774469, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "1", "exon_id": "ENSE00001540140.2", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750116, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17750114, "end": 17750116, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "4", "exon_id": "ENSE00003689682.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "4", "exon_id": "ENSE00003689682.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "5", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "5", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17734138, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17735583, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17735580, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774469, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "1", "exon_id": "ENSE00001540140.2", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17750117, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000622694.5", "gene_id": "ENSG00000015475.19", "start": 17734138, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000622694.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-211", "exon_number": "6", "exon_id": "ENSE00001946765.2", "level": "2", "protein_id": "ENSP00000480414.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316178.1"}}]}, "ENST00000614949.4": {"transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17734142, "end": 17774495, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774495, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "1", "exon_id": "ENSE00001917930.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "2", "exon_id": "ENSE00003590401.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739423, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17739421, "end": 17739423, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "4", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "4", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17734142, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "5", "exon_id": "ENSE00001389825.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17735583, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "5", "exon_id": "ENSE00001389825.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17735580, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "5", "exon_id": "ENSE00001389825.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774495, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "1", "exon_id": "ENSE00001917930.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "2", "exon_id": "ENSE00003590401.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17739424, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000614949.4", "gene_id": "ENSG00000015475.19", "start": 17734142, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000614949.4", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-210", "exon_number": "5", "exon_id": "ENSE00001389825.1", "level": "2", "protein_id": "ENSP00000477773.1", "transcript_support_level": "5", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}]}, "ENST00000399765.5": {"transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17734175, "end": 17774489, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774489, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "1", "exon_id": "ENSE00001540096.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "2", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739423, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "2", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17739421, "end": 17739423, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "2", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "3", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "3", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17734175, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "4", "exon_id": "ENSE00001540093.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17735583, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "4", "exon_id": "ENSE00001540093.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17735580, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "4", "exon_id": "ENSE00001540093.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774489, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "1", "exon_id": "ENSE00001540096.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17739424, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "2", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399765.5", "gene_id": "ENSG00000015475.19", "start": 17734175, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399765.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-203", "exon_number": "4", "exon_id": "ENSE00001540093.1", "level": "2", "protein_id": "ENSP00000382667.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316181.1"}}]}, "ENST00000399767.6": {"transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17735364, "end": 17774495, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774495, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "1", "exon_id": "ENSE00001917930.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "2", "exon_id": "ENSE00003489267.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739423, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17739421, "end": 17739423, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "4", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "4", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17735364, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "5", "exon_id": "ENSE00001856820.2", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17735583, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "5", "exon_id": "ENSE00001856820.2", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17735580, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "5", "exon_id": "ENSE00001856820.2", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774495, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "1", "exon_id": "ENSE00001917930.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "2", "exon_id": "ENSE00003489267.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17739424, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "3", "exon_id": "ENSE00003616197.1", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000399767.6", "gene_id": "ENSG00000015475.19", "start": 17735364, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000399767.6", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-204", "exon_number": "5", "exon_id": "ENSE00001856820.2", "level": "2", "protein_id": "ENSP00000382669.1", "transcript_support_level": "2", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13749.1", "havana_gene": "OTTHUMG00000150087.5"}}]}, "ENST00000342111.9": {"transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17735499, "end": 17774412, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774412, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "1", "exon_id": "ENSE00002195037.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750116, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17750114, "end": 17750116, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17740082, "end": 17740176, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "4", "exon_id": "ENSE00001374791.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17740082, "end": 17740176, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "4", "exon_id": "ENSE00001374791.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "5", "exon_id": "ENSE00003668564.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17739396, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "5", "exon_id": "ENSE00003668564.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17739393, "end": 17739395, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "5", "exon_id": "ENSE00003668564.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "6", "exon_id": "ENSE00003683851.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17735499, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "7", "exon_id": "ENSE00001428765.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17774381, "end": 17774412, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "1", "exon_id": "ENSE00002195037.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17750117, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739395, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "5", "exon_id": "ENSE00003668564.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "6", "exon_id": "ENSE00003683851.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000342111.9", "gene_id": "ENSG00000015475.19", "start": 17735499, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000342111.9", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-202", "exon_number": "7", "exon_id": "ENSE00001428765.1", "level": "2", "protein_id": "ENSP00000344594.5", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "basic", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000316180.3"}}]}, "ENST00000551952.5": {"transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17735552, "end": 17774665, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17774640, "end": 17774665, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "1", "exon_id": "ENSE00002343949.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17750105, "end": 17750116, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "start_codon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17750114, "end": 17750116, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17743803, "end": 17744013, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "3", "exon_id": "ENSE00003565087.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "4", "exon_id": "ENSE00003689682.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17739349, "end": 17739488, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "4", "exon_id": "ENSE00003689682.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "5", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17738017, "end": 17738229, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "5", "exon_id": "ENSE00003542752.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "exon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17735552, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "6", "exon_id": "ENSE00003487532.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "CDS", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17735583, "end": 17735591, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "6", "exon_id": "ENSE00003487532.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "stop_codon", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17735580, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "6", "exon_id": "ENSE00003487532.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17774640, "end": 17774665, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "1", "exon_id": "ENSE00002343949.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17750117, "end": 17750174, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "2", "exon_id": "ENSE00003526724.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}, {"element_id": null, "feature": "UTR", "transcript_id": "ENST00000551952.5", "gene_id": "ENSG00000015475.19", "start": 17735552, "end": 17735582, "attributes": {"gene_id": "ENSG00000015475.19", "transcript_id": "ENST00000551952.5", "gene_type": "protein_coding", "gene_name": "BID", "transcript_type": "protein_coding", "transcript_name": "BID-208", "exon_number": "6", "exon_id": "ENSE00003487532.1", "level": "2", "protein_id": "ENSP00000449236.1", "transcript_support_level": "1", "hgnc_id": "HGNC:1050", "tag": "CCDS", "ccdsid": "CCDS13748.1", "havana_gene": "OTTHUMG00000150087.5", "havana_transcript": "OTTHUMT00000404247.1"}}]}}}, {"feature": "gene", "gene_id": "ENSG00000264757.1", "chr": "chr22", "start": 17764180, "end": 17764259, "strand": "-", "attributes": {"gene_id": "ENSG00000264757.1", "gene_type": "miRNA", "gene_name": "MIR3198-1", "level": "3", "hgnc_id": "HGNC:38236"}, "transcripts": {"ENST00000583102.1": {"transcript_id": "ENST00000583102.1", "gene_id": "ENSG00000264757.1", "start": 17764180, "end": 17764259, "attributes": {"gene_id": "ENSG00000264757.1", "transcript_id": "ENST00000583102.1", "gene_type": "miRNA", "gene_name": "MIR3198-1", "transcript_type": "miRNA", "transcript_name": "MIR3198-1-201", "level": "3", "transcript_support_level": "NA", "hgnc_id": "HGNC:38236", "tag": "Ensembl_canonical"}, "elements": [{"element_id": null, "feature": "exon", "transcript_id": "ENST00000583102.1", "gene_id": "ENSG00000264757.1", "start": 17764180, "end": 17764259, "attributes": {"gene_id": "ENSG00000264757.1", "transcript_id": "ENST00000583102.1", "gene_type": "miRNA", "gene_name": "MIR3198-1", "transcript_type": "miRNA", "transcript_name": "MIR3198-1-201", "exon_number": "1", "exon_id": "ENSE00002734587.1", "level": "3", "transcript_support_level": "NA", "hgnc_id": "HGNC:38236", "tag": "Ensembl_canonical"}}]}}}], "isoforms": [{"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17731124, "start_pos_right": 17731124, "end_pos_left": 17774505, "end_pos_right": 17774505, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743806, 17744013, 17750104, 17750174, 17774380], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743806], [17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17731124, "end": 17774505, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 42, "cpm": 592.8770062534408, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17733524, "start_pos_right": 17735434, "end_pos_left": 17774409, "end_pos_right": 17774502, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17774380], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 2, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 23, "cpm": 720.5965286045491, "reads": [{"start": 17733524, "end": 17774469, "strand": "+"}, {"start": 17733570, "end": 17774469, "strand": "+"}, {"start": 17733610, "end": 17774442, "strand": "+"}, {"start": 17733733, "end": 17774469, "strand": "+"}, {"start": 17734131, "end": 17774468, "strand": "+"}, {"start": 17734138, "end": 17774469, "strand": "+"}, {"start": 17734141, "end": 17774502, "strand": "+"}, {"start": 17734141, "end": 17774495, "strand": "+"}, {"start": 17734141, "end": 17774432, "strand": "+"}, {"start": 17734141, "end": 17774457, "strand": "+"}, {"start": 17734202, "end": 17774471, "strand": "+"}, {"start": 17734293, "end": 17774495, "strand": "+"}, {"start": 17734295, "end": 17774448, "strand": "+"}, {"start": 17734551, "end": 17774459, "strand": "+"}, {"start": 17735162, "end": 17774469, "strand": "+"}, {"start": 17735212, "end": 17774454, "strand": "+"}, {"start": 17735244, "end": 17774471, "strand": "+"}, {"start": 17735244, "end": 17774441, "strand": "+"}, {"start": 17735310, "end": 17774438, "strand": "+"}, {"start": 17735363, "end": 17774456, "strand": "+"}, {"start": 17735372, "end": 17774464, "strand": "+"}, {"start": 17735373, "end": 17774485, "strand": "+"}, {"start": 17735398, "end": 17774464, "strand": "+"}]}, "HG002_ont_chr22": {"sample": "HG002_ont_chr22", "count": 19, "cpm": 488.14325720011306, "reads": [{"start": 17735178, "end": 17774469, "strand": "+"}, {"start": 17735361, "end": 17774442, "strand": "+"}, {"start": 17735361, "end": 17774460, "strand": "+"}, {"start": 17735371, "end": 17774477, "strand": "+"}, {"start": 17735371, "end": 17774447, "strand": "+"}, {"start": 17735371, "end": 17774457, "strand": "+"}, {"start": 17735373, "end": 17774476, "strand": "+"}, {"start": 17735373, "end": 17774409, "strand": "+"}, {"start": 17735373, "end": 17774438, "strand": "+"}, {"start": 17735373, "end": 17774482, "strand": "+"}, {"start": 17735375, "end": 17774458, "strand": "+"}, {"start": 17735378, "end": 17774442, "strand": "+"}, {"start": 17735380, "end": 17774475, "strand": "+"}, {"start": 17735391, "end": 17774458, "strand": "+"}, {"start": 17735398, "end": 17774458, "strand": "+"}, {"start": 17735398, "end": 17774425, "strand": "+"}, {"start": 17735400, "end": 17774500, "strand": "+"}, {"start": 17735414, "end": 17774457, "strand": "+"}, {"start": 17735434, "end": 17774458, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17734141, "start_pos_right": 17734141, "end_pos_left": 17774444, "end_pos_right": 17774444, "splice_sites": [17735591, 17738001, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17774380], "splice_junction": [[17735591, 17738001], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17734141, "end": 17774444, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 5, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 7, "start_pos_left": 17734142, "start_pos_right": 17734142, "end_pos_left": 17774471, "end_pos_right": 17774471, "splice_sites": [17734430, 17735364, 17735591, 17738016, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17774380], "splice_junction": [[17734430, 17735364], [17735591, 17738016], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17734142, "end": 17774471, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 5, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 7, "start_pos_left": 17734142, "start_pos_right": 17734142, "end_pos_left": 17774444, "end_pos_right": 17774444, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17740081, 17740176, 17743802, 17744013, 17750104, 17750174, 17774380], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17740081], [17740176, 17743802], [17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17734142, "end": 17774444, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 2, "cpm": 28.232238393020992, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 5, "start_pos_left": 17734142, "start_pos_right": 17735444, "end_pos_left": 17750166, "end_pos_right": 17750175, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104]], "positive_sample_size": 2, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17734142, "end": 17750166, "strand": "+"}]}, "HG002_ont_chr22": {"sample": "HG002_ont_chr22", "count": 1, "cpm": 25.69175037895332, "reads": [{"start": 17735444, "end": 17750175, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17734142, "start_pos_right": 17734142, "end_pos_left": 17774014, "end_pos_right": 17774014, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17773541], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17773541]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17734142, "end": 17774014, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 9, "cpm": 127.04507276859445, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17734142, "start_pos_right": 17735373, "end_pos_left": 17773752, "end_pos_right": 17773983, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17773609], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17773609]], "positive_sample_size": 2, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 8, "cpm": 250.6422708189736, "reads": [{"start": 17734142, "end": 17773914, "strand": "+"}, {"start": 17734142, "end": 17773752, "strand": "+"}, {"start": 17735173, "end": 17773983, "strand": "+"}, {"start": 17735211, "end": 17773929, "strand": "+"}, {"start": 17735212, "end": 17773805, "strand": "+"}, {"start": 17735244, "end": 17773908, "strand": "+"}, {"start": 17735368, "end": 17773861, "strand": "+"}, {"start": 17735373, "end": 17773983, "strand": "+"}]}, "HG002_ont_chr22": {"sample": "HG002_ont_chr22", "count": 1, "cpm": 25.69175037895332, "reads": [{"start": 17735373, "end": 17773981, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 3, "cpm": 42.34835758953149, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17734304, "start_pos_right": 17735372, "end_pos_left": 17774402, "end_pos_right": 17774467, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17774354], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17774354]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 3, "cpm": 93.9908515571151, "reads": [{"start": 17734304, "end": 17774402, "strand": "+"}, {"start": 17735240, "end": 17774457, "strand": "+"}, {"start": 17735372, "end": 17774467, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 5, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 8, "start_pos_left": 17735363, "start_pos_right": 17735363, "end_pos_left": 17774412, "end_pos_right": 17774412, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17740081, 17740176, 17743802, 17744013, 17750104, 17750174, 17755675, 17755796, 17774380], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17740081], [17740176, 17743802], [17744013, 17750104], [17750174, 17755675], [17755796, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17735363, "end": 17774412, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17735374, "start_pos_right": 17735374, "end_pos_left": 17774434, "end_pos_right": 17774434, "splice_sites": [17736388, 17737449, 17738229, 17739348, 17739488, 17743802, 17744013, 17750104, 17750174, 17774380], "splice_junction": [[17736388, 17737449], [17738229, 17739348], [17739488, 17743802], [17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 1, "cpm": 31.3302838523717, "reads": [{"start": 17735374, "end": 17774434, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 1, "cpm": 14.116119196510496, "match_sj_idx": 4, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 6, "start_pos_left": 17735377, "start_pos_right": 17735377, "end_pos_left": 17774458, "end_pos_right": 17774458, "splice_sites": [17735591, 17738016, 17738229, 17739348, 17739488, 17743806, 17744013, 17750104, 17750174, 17774383], "splice_junction": [[17735591, 17738016], [17738229, 17739348], [17739488, 17743806], [17744013, 17750104], [17750174, 17774383]], "positive_sample_size": 1, "positive_samples": {"HG002_ont_chr22": {"sample": "HG002_ont_chr22", "count": 1, "cpm": 25.69175037895332, "reads": [{"start": 17735377, "end": 17774458, "strand": "+"}]}}}, {"id": "single_query", "chr1": "22", "pos1": "17744013", "chr2": "22", "pos2": "17750104", "total_evidence": 3, "cpm": 42.34835758953149, "match_sj_idx": 1, "dist_to_match_1": 0, "dist_to_match_2": 0, "n_exon": 3, "start_pos_left": 17741490, "start_pos_right": 17741658, "end_pos_left": 17774440, "end_pos_right": 17774469, "splice_sites": [17744013, 17750104, 17750174, 17774380], "splice_junction": [[17744013, 17750104], [17750174, 17774380]], "positive_sample_size": 1, "positive_samples": {"HG002_pb_chr22": {"sample": "HG002_pb_chr22", "count": 3, "cpm": 93.9908515571151, "reads": [{"start": 17741490, "end": 17774469, "strand": "+"}, {"start": 17741491, "end": 17774440, "strand": "+"}, {"start": 17741658, "end": 17774466, "strand": "+"}]}}}]};
+                    console.log("DATA", DATA);
+                    return new Promise((resolve) => {
+                        this.getData(DATA);
+                        resolve();
+                    });
+                },
+
+                filter_ref() {
+                    // console.log(this.flt_ref_overlap_query);
+
+                    this.ann_transcript.forEach(tx => {
+                        let passed = true;
+                        if (this.flt_ref_overlap_query) {
+                            if (tx.tx_end < this.query_left || tx.tx_start > this.query_right) {
+                                passed = false;
+                            }
+                        }
+                        tx.pass = passed;
+                    });
+
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    this.enableDrag();
+
+                },
+                reset_filter_ref() {
+                    this.ann_transcript.forEach(tx => {
+                        tx.pass = true;
+                    });
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    this.enableDrag();
+                },
+                filter_isoform() {
+
+                    this.isoforms.forEach(iso => {
+                        let passed = true;
+                        if (this.flt_evidence_range) {
+                            if (iso.total_evidence < this.flt_evidence_range[0] || iso.total_evidence > this.flt_evidence_range[1]) {
+                                passed = false;
+                            }
+                        }
+                        if (this.flt_sample_size_range) {
+                            if (iso.positive_sample_size < this.flt_sample_size_range[0] || iso.positive_sample_size > this.flt_sample_size_range[1]) {
+                                passed = false;
+                            }
+                        }
+                        iso.pass = passed;
+                    });
+
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    this.enableDrag();
+
+
+                },
+                reset_filter_isoform() {
+                    this.isoforms.forEach(iso => {
+                        iso.pass = true;
+                    });
+                    this.process_data();
+                    this.init();
+                    this.draw();
+                    this.drawQueryRegion();
+                    this.enableDrag();
+                },
+
+                visibleRowsFromBand(bandScale, panelH, maxRow, rate) {
+                    const domain = bandScale.domain();
+                    if (!domain.length) return domain;
+
+                    let step = typeof bandScale.step === "function" ? bandScale.step() : bandScale.bandwidth();
+                    const first = domain[0];
+                    step = step * (rate || 1);
+
+                    const visible = Math.max(1, Math.floor(panelH / step));
+
+                    const last = Math.min(maxRow, first + visible - 1);
+
+                    return d3.range(first, last + 1);
+                },
+
+
+                bandTicks(bandScale, panelH) {
+                    const domain = bandScale.domain();
+                    const maxTicks = Math.min(50, Math.max(3, Math.floor(panelH / 22)));
+                    const step = Math.max(1, Math.ceil(domain.length / maxTicks));
+                    const ticks = [];
+                    for (let i = 0; i < domain.length; i += step) ticks.push(domain[i]);
+                    return ticks;
+                },
+
+
+                renderXAxis() {
+
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    this.xz = tId.rescaleX(this.x0);
+
+                    this.gXAxis.call(d3.axisTop(this.xz).ticks(Math.max(2, Math.floor(this.innerW / 80))));
+                },
+
+
+                renderTop() {
+                    const ticks = this.bandTicks(this.yRefBand, this.refH);
+                    this.gYAxisRef.call(d3.axisLeft(this.yRefBand).tickValues(ticks));
+                    this.updateLines(this.gContentRef.selectAll("line.ref-exon"), this.xz, this.yRefBand);
+                    this.updateLines(this.gContentRef.selectAll("line.ref-utrs"), this.xz, this.yRefBand);
+                    this.updateLines(this.gContentRef.selectAll("line.ref-introns"), this.xz, this.yRefBand);
+                    this.updateText(this.gContentRef.selectAll("text.ref-labels"), this.xz, this.yRefBand);
+
+                },
+
+
+                renderBottom() {
+                    const ticks = this.bandTicks(this.yBand, this.bodyH);
+                    this.gYAxis.call(d3.axisLeft(this.yBand).tickValues(ticks));
+
+                    this.updateLines(this.gContent.selectAll("line.splice"), this.xz, this.yBand);
+                    this.updateLines(this.gContent.selectAll("line.exon"), this.xz, this.yBand);
+                    this.updateLines(this.gContent.selectAll("line.readspan"), this.xz, this.yBand);
+
+                },
+
+                renderQueryRegion() {
+                    this.gContent.selectAll("rect.query-region")
+                        .attr("x", d => this.xz(d.x1))
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);
+                        });
+
+                    this.gContentRef.selectAll("rect.query-region")
+                        .attr("x", d => this.xz(d.x1))
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);
+                        });
+                },
+
+
+                updateLines(sel, xScale, yScale) {
+
+
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    this.xz = tId.rescaleX(this.x0);
+
+                    sel
+                        .attr("x1", d => this.xz(d.coord[0]))
+                        .attr("x2", d => this.xz(d.coord[1]))
+                        .style("cursor", "pointer")
+                        .style("user-select", "none")
+                        .each((d, i, nodes) => {
+                            const y = yScale(d.row);
+
+                            const el = d3.select(nodes[i]);
+                            if (y == null) {
+                                el.style("display", "none").attr("y1", null).attr("y2", null);
+                            } else {
+                                const ym = y + yScale.bandwidth() / 2;
+                                el.style("display", null).attr("y1", ym).attr("y2", ym);
+                            }
+                        });
+                },
+
+                bindLines(sel, data, cls, color, width, addDataTags = false) {
+
+                    if (addDataTags) {
+
+                        sel.data(data)
+                            .join("line")
+                            .attr("class", cls)
+                            .attr("stroke", color)
+                            .attr("stroke-width", width)
+                            .attr("vector-effect", "non-scaling-stroke")
+                            .attr("data-row", d => d.row)
+                            .attr("data-category", d => d.category)
+                            .on("mouseover", (event, d) => this.showTooltip(event, d))
+                            .on("mouseout", () => this.hideTooltip())
+                            .on("dblclick", (event, d) => {
+
+                                this.highlightRow(d);
+                            });
+                    } else {
+                        sel.data(data)
+                            .join("line")
+                            .attr("class", cls)
+                            .attr("stroke", color)
+                            .attr("stroke-width", width)
+                            .attr("vector-effect", "non-scaling-stroke")
+                            .on("mouseover", (event, d) => this.showTooltip(event, d))
+
+                            .on("mouseout", () => this.hideTooltip())
+                            .on("dblclick", (event, d) => {
+
+                                this.highlightRow(d);
+                            });
+                    }
+
+
+                },
+
+                bindText(sel, data, cls, color, size) {
+                    sel.data(data)
+                        .join("text")
+                        .text(d => `${d.gene_name}    (${d.tx_id})`)
+                        .attr("class", cls)
+                        .attr("fill", color)
+                        .attr("font-size", size)
+                        .attr("vector-effect", "non-scaling-stroke");
+                },
+
+                updateText(sel, xScale, yScale) {
+
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+                    this.xz = tId.rescaleX(this.x0);
+
+                    sel
+                        .attr("x", d => this.xz(d.end))
+                        .attr("y", d => d.row)
+                        .each((d, i, nodes) => {
+                            const y = yScale(d.row);
+
+                            const el = d3.select(nodes[i]);
+                            if (y == null) {
+                                el.style("display", "none").attr("y", null);
+                            } else {
+                                const ym = y + yScale.bandwidth() / 2;
+                                el.style("display", null).attr("y", ym);
+                            }
+                        });
+                },
+
+                showTooltip(event, d) {
+
+                    const [x, y] = d3.pointer(event, document.body);
+
+                    d3.select("#tooltip")
+                        .style("display", "block")
+                        .html(d.text)
+                        .style("left", x + 10 + "px")
+                        .style("top", y + 10 + "px");
+                },
+                hideTooltip() {
+                    d3.select("#tooltip").style("display", "none");
+                },
+
+                highlightRow(d) {
+                    const selector = `line[data-row='${d.row}'][data-category='${d.category}']`;
+                    if (d.category === "isoform") {
+
+                        this.gContent.selectAll("line.exon").attr("stroke", "black");
+                        this.gContent.selectAll("line.readspan").attr("stroke", "blue");
+                        this.gContent.selectAll(selector).attr("stroke", "red");
+
+                        this.sel_isoform_idx = d.init_idx - 1;
+                        this.sel_isoform_data = this.isoforms[this.sel_isoform_idx];
+                    } else if (d.category === "reference") {
+
+                        this.gContentRef.selectAll("line.ref-exon").attr("stroke", "black");
+                        this.gContentRef.selectAll("line.ref-utrs").attr("stroke", "orange");
+                        this.gContentRef.selectAll(selector).attr("stroke", "blue");
+                        this.sel_anno_idx = d.init_idx - 1;
+                        this.sel_anno_data = this.ann_transcript[this.sel_anno_idx];
+                    }
+                },
+
+                zoomIn() {
+                    const newK = this.kShared * 1.2;
+                    if (newK > 150) return;
+                    this.kShared = newK;
+                    this.xShared = this.xShared - (this.innerW / 2) * (newK - this.kShared) / newK;
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+
+                    startDomainRef = this.yRefBand.domain().map(d => d);
+                    startDomainData = this.yBand.domain().map(d => d);
+
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1.2);
+
+                    // console.log("rowsTop", rowsTop);
+
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1.2);
+                    // console.log("rowsBottom", rowsBottom);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+
+                    // X 轴
+                    this.xz = tId.rescaleX(this.x0);
+                    this.renderXAxis();
+
+
+                    this.renderQueryRegion();
+                    // this.renderHighlightBox();
+                },
+
+                zoomOut() {
+
+                    const newK = this.kShared / 1.2;
+                    if (newK < 1) return;
+                    this.kShared = newK;
+                    this.xShared = this.xShared - (this.innerW / 2) * (newK - this.kShared) / newK;
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+                    // 顶部
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1 / 1.2);
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1 / 1.2);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+
+                    // X 轴
+                    this.xz = tId.rescaleX(this.x0);
+                    this.renderXAxis();
+
+                    this.renderQueryRegion();
+                    this.renderHighlightBox();
+                },
+
+                resetView() {
+
+                    const xdomain = [this.meta.left_most, this.meta.right_most];
+
+                    // X
+                    this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
+                    this.xz = this.x0.copy();
+
+
+                    this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
+
+                    // Top Y band（range 固定 0..refH，domain 初始化为全部行 1..M）
+                    this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
+
+
+                    // 让两个面板都以 identity 计算可视域
+                    this.kShared = 1;
+                    this.xShared = 0;
+                    this.xz = this.x0.copy();
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+                    this.renderQueryRegion();
+
+                    // 初始一次完整渲染（等价于 identity 变换）
+                    this.renderXAxis();
+
+                    // 顶部
+
+
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1);
+
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+                    // 底部
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+                },
+
+
+                enableDrag() {
+                    let isDragging = false;
+                    let startX = 0;
+                    let startY = 0;
+                    let startSharedX = 0;
+                    let startDomainRef = [];
+                    let startDomainData = [];
+
+                    // 鼠标按下
+                    this.svg.on("mousedown", (event) => {
+                        isDragging = true;
+                        startX = event.clientX;
+                        startY = event.clientY;
+                        startSharedX = this.xShared;
+                        startDomainRef = this.yRefBand.domain().map(d => d);
+                        startDomainData = this.yBand.domain().map(d => d);
+                    });
+
+                    // 鼠标移动
+                    d3.select(window).on("mousemove", (event) => {
+                        if (!isDragging) return;
+
+                        const dx = event.clientX - startX;
+                        const dy = event.clientY - startY;
+
+                        // ---- 水平拖动：更新 xShared，保持上下同步 ----
+                        this.xShared = startSharedX + dx;
+                        this.xz = this.x0.copy()
+                            .range([0, this.innerW].map(d => this.kShared * d + this.xShared));
+
+                        this.renderXAxis();
+                        this.renderQueryRegion();
+                        this.renderTop();
+                        this.renderBottom();
+                        // this.renderHighlightBox();
+
+
+                        let gNode = event.target.closest("g");
+
+                        if (!gNode) return;
+
+                        // ---- 垂直拖动：分别移动顶部和底部 ----
+                        if (dy !== 0) {
+                            // Top
+                            if (gNode.getAttribute("class") === "content-ref") {
+
+                                let shiftedRef = startDomainRef.map(r => r - Math.round(dy / this.yRefBand.bandwidth()));
+
+                                if (startDomainRef[0] == 1 && shiftedRef[0] <= 1) return;
+
+                                if (startDomainRef[startDomainRef.length - 1] == this.ref_tx_count && shiftedRef[shiftedRef.length - 1] >= this.ref_tx_count) return;
+
+                                shiftedRef = shiftedRef.filter(r => r > 0 && r <= this.ref_tx_count);
+
+                                if (shiftedRef.length > 0) {
+                                    this.yRefBand.domain(shiftedRef);
+                                    this.renderTop();
+
+                                }
+                            }
+
+                            // Bottom
+                            if (gNode.getAttribute("class") === "content") {
+
+                                let shiftedData = startDomainData.map(r => r - Math.round(dy / this.yBand.bandwidth()));
+
+                                if (startDomainData[0] == 1 && shiftedData[0] <= 1) return;
+                                if (startDomainData[startDomainData.length - 1] == this.isoform_count && shiftedData[shiftedData.length - 1] >= this.isoform_count) return;
+
+                                shiftedData = shiftedData.filter(r => r > 0 && r <= this.isoform_count);
+                                if (shiftedData.length > 0) {
+                                    this.yBand.domain(shiftedData);
+                                    this.renderBottom();
+
+                                }
+                            }
+
+                            // this.renderHighlightBox();
+                        }
+                    });
+
+                    // 鼠标松开
+                    d3.select(window).on("mouseup", () => {
+                        isDragging = false;
+                    });
+
+                },
+
+                process_data() {
+                    this.ref_tx_count = 0;
+                    this.ref_exons = [];
+                    this.ref_cds = [];
+                    this.ref_stop_codons = [];
+                    this.ref_start_codons = [];
+                    this.ref_utrs = [];
+                    this.ref_introns = [];
+                    this.ref_labels = [];
+                    this.isoform_count = 0;
+                    this.ann_transcript.forEach(tx => {
+                        if (tx.pass == false) return;
+                        this.ref_tx_count += 1;
+                        this.ref_labels.push({
+                            tx_id: tx.tx_id,
+                            gene_id: tx.gene_id,
+                            gene_name: tx.gene_name,
+                            row: this.ref_tx_count,
+                            start: tx.tx_start,
+                            end: tx.tx_end,
+                        });
+
+                        let intron = [];
+
+                        tx.elements.forEach(el => {
+                            const push = (arr) => arr.push({
+                                init_idx: tx.init_idx,
+                                feature: el.feature,
+                                row: this.ref_tx_count,
+                                coord: [el.start, el.end],
+                                tx_id: el.transcript_id,
+                                gene_id: el.gene_id,
+                                category: 'reference',
+                                gene_name: el.attributes && el.attributes.gene_name || 'NA',
+                                text: `
+                                <div><strong>Type: ${el.feature}</strong> </div>
+                                <div>Position: ${tx.chrom}: ${el.start} - ${el.end}</div>
+                                <div>Transcript ID: ${el.transcript_id}</div>
+                                <div>Gene ID: ${el.gene_id}</div>
+                                <div>Gene Name: ${el.attributes && el.attributes.gene_name || 'NA'}</div>
+                                `
+
+                            });
+                            if (el.feature === 'exon') {
+                                push(this.ref_exons)
+                                intron.push(el.start);
+                                intron.push(el.end);
+                            }
+                            else if (el.feature === 'CDS') push(this.ref_cds);
+                            else if (el.feature === 'stop_codon') push(this.ref_stop_codons);
+                            else if (el.feature === 'start_codon') push(this.ref_start_codons);
+                            else if (el.feature === 'UTR') push(this.ref_utrs);
+                        });
+
+                        // remove the first and last element (not intron)
+                        intron = intron.slice(1, -1);
+                        for (let i = 0; i < intron.length; i += 2) {
+                            this.ref_introns.push({
+                                coord: [intron[i], intron[i + 1]], row: this.ref_tx_count,
+                                category: 'reference',
+                                text: `
+                                <div><strong>Type: Intron</strong> </div>
+                                <div>Position: ${tx.chrom}: ${intron[i]} - ${intron[i + 1]}</div>
+                                <div>Transcript ID: ${tx.tx_id}</div>
+                                <div>Gene ID: ${tx.gene_id}</div>
+                                <div>Gene Name: ${tx.gene_name}</div>
+                                `
+                            });
+                        }
+
+                    });
+
+                    // 2 isoform
+                    this.sjData = [];
+                    this.exonData = [];
+                    this.readspanData = [];
+                    this.isoforms.forEach((iso, i) => { iso._row = i + 1; });
+
+                    this.isoforms.forEach(iso => {
+                        if (iso.pass == false) return;
+                        this.isoform_count += 1;
+                        iso._row = this.isoform_count;
+                        (iso.splice_junction || []).forEach(sj => {
+                            this.sjData.push({
+                                coord: sj,
+                                row: iso._row,
+                                category: 'isoform',
+                                init_idx: iso.init_idx,
+                                text: `
+                                <div><strong>Type: Splice Junction</strong> </div>
+                                <div>Position: ${iso.chr1}: ${sj[0]} - ${sj[1]}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+                            });
+                        });
+                        const splice_sites = (iso.splice_sites || []).slice();
+                        splice_sites.unshift(iso.start_pos_right);
+                        splice_sites.push(iso.end_pos_left);
+                        splice_sites.forEach((pos, i) => {
+                            if (i % 2 === 0 && splice_sites[i + 1] != null) {
+                                this.exonData.push({
+                                    coord: [pos, splice_sites[i + 1]],
+                                    row: iso._row,
+                                    init_idx: iso.init_idx,
+                                    category: 'isoform',
+                                    text: `
+                                <div><strong>Type: Exon</strong> </div>
+                                <div>Position: ${iso.chr1}: ${pos} - ${splice_sites[i + 1]}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+
+                                });
+                            }
+                        });
+                        this.readspanData.push({
+                            coord: [iso.start_pos_left, iso.start_pos_right],
+                            row: iso._row,
+                            init_idx: iso.init_idx,
+                            category: 'isoform',
+                            text: `
+                                <div><strong>Type: Reads Left Covered Region</strong> </div>
+                                <div>Position: ${iso.chr1}: ${iso.start_pos_left} - ${iso.start_pos_right}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+                        });
+                        this.readspanData.push({
+                            coord: [iso.end_pos_left, iso.end_pos_right],
+                            row: iso._row,
+                            category: 'isoform',
+                            init_idx: iso.init_idx,
+                            text: `
+                                <div><strong>Type: Reads Right Covered Region</strong> </div>
+                                <div>Position: ${iso.chr1}: ${iso.end_pos_left} - ${iso.end_pos_right}</div>
+                                <br/>
+                                <div><strong>Isoform Level Info:</strong></div>
+                                <div>Total Support Reads: ${iso.total_evidence}</div>
+                                <div>Support Sample Size: ${iso.positive_sample_size}</div>
+                                <div>Isoform Exon Number: ${(iso.splice_junction || []).length + 1}</div>
+                                `
+                        });
+                    });
+
+                },
+
+                firstTimeInit() {
+
+                    let that = this;
+                    this.query_chr = this.isoforms[0].chr1;
+                    this.isoforms.forEach(iso => {
+
+                        if (that.evidence_range[0] == 0 || iso.total_evidence < that.evidence_range[0]) {
+                            that.evidence_range[0] = iso.total_evidence;
+                        }
+                        if (that.evidence_range[1] == 0 || iso.total_evidence > that.evidence_range[1]) {
+                            that.evidence_range[1] = iso.total_evidence;
+                        }
+                        if (that.positive_sample_range[0] == 0 || iso.positive_sample_size < this.positive_sample_range[0]) {
+                            that.positive_sample_range[0] = iso.positive_sample_size;
+                        }
+                        if (that.positive_sample_range[1] == 0 || iso.positive_sample_size > that.positive_sample_range[1]) {
+                            that.positive_sample_range[1] = iso.positive_sample_size;
+                        }
+
+                    });
+
+                },
+
+                init() {
+
+
+                    const { width, height } = this.svg.node().getBoundingClientRect();
+                    this.svgW = width;
+                    this.svgH = height;
+                    this.innerW = Math.max(10, width - this.margin.left - this.margin.right);
+                    this.innerH = Math.max(10, height - this.margin.top - this.margin.bottom);
+                    this.bodyH = Math.max(10, this.innerH - this.refH);
+
+                    const xdomain = [this.meta.left_most, this.meta.right_most];
+
+                    this.x0 = d3.scaleLinear().domain(xdomain).range([0, this.innerW]);
+                    this.xz = this.x0.copy();
+
+                    this.yBand = d3.scaleBand().domain(d3.range(1, this.isoform_count + 1)).range([0, this.bodyH]).padding(0.3);
+
+                    this.yRefBand = d3.scaleBand().domain(d3.range(1, this.ref_tx_count + 1)).range([0, this.refH]).padding(0.3);
+
+
+                    this.svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
+
+                    this.gRoot = this.svg.append("g")
+                        .attr("transform", `translate(${this.margin.left},${this.margin.top})`);
+
+                    this.gTop = this.gRoot.append("g")
+                        .attr("class", "top-ref")
+                        .attr("transform", "translate(0,0)");
+
+                    this.gBottom = this.gRoot.append("g")
+                        .attr("class", "bottom-body")
+                        .attr("transform", `translate(0,${this.refH})`);
+
+                    // crop region
+                    const defs = this.svg.append("defs");
+                    defs.append("clipPath").attr("id", "clipTop")
+                        .append("rect").attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.refH);
+                    defs.append("clipPath").attr("id", "clipBottom")
+                        .append("rect").attr("x", 0).attr("y", 0)
+                        .attr("width", this.innerW).attr("height", this.bodyH);
+
+
+                    this.gXAxis = this.gTop.append("g")
+                        .attr("class", "x-axis")
+                        .attr("transform", "translate(0,0)")
+                        .call(d3.axisTop(this.xz).ticks(10));
+
+                    this.gYAxisRef = this.gTop.append("g").attr("class", "y-axis-ref");
+                    this.gYAxis = this.gBottom.append("g").attr("class", "y-axis");
+
+                    // clip region
+                    this.gContentRef = this.gTop.append("g").attr("class", "content-ref")
+                        .attr("clip-path", "url(#clipTop)");
+
+                    this.gContentRef.append("rect")
+                        .attr("class", "bg-ref")
+                        .attr("x", 0)
+                        .attr("y", 0)
+                        .attr("width", this.innerW)
+                        .attr("height", this.refH)
+                        .attr("fill", "lightblue")
+                        .attr("fill-opacity", 0.1)
+                        .style("pointer-events", "all");   // make sure the event is captured
+
+
+                    this.gContent = this.gBottom.append("g").attr("class", "content")
+                        .attr("clip-path", "url(#clipBottom)");
+
+                    this.gContent.append("rect")
+                        .attr("class", "bg-content")
+                        .attr("x", 0)
+                        .attr("y", 0)
+                        .attr("width", this.innerW)
+                        .attr("height", this.bodyH)
+                        .attr("fill", "lightpink")
+                        .attr("fill-opacity", 0.1)
+                        .style("pointer-events", "all");
+
+                    // y labels
+
+                    this.gYAxisRef.append("text")
+                        .attr("class", "y-label-ref")
+                        .attr("transform", "rotate(-90)")       // rotate left
+                        .attr("y", -50)                         // left shift 50
+                        .attr("x", -this.refH / 2)              // vertical center
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("fill", "black")
+                        .text("Reference Annotation");
+
+                    // 给底部 Y 轴加 label
+                    this.gYAxis.append("text")
+                        .attr("class", "y-label-data")
+                        .attr("transform", "rotate(-90)")
+                        .attr("y", -50)
+                        .attr("x", -this.bodyH / 2)            // vertical center
+                        .attr("dy", "1em")
+                        .style("text-anchor", "middle")
+                        .style("fill", "black")
+                        .text("Isopedia Index");
+
+                    this.gXAxis.append("text")
+                        .attr("class", "x-label")
+                        .attr("x", this.innerW / 2)
+                        .attr("y", -25)
+                        .style("text-anchor", "middle")
+                        .style("fill", "black")
+                        .text("Genomic Position");
+
+
+                },
+                drawQueryRegion() {
+
+                    const iso0 = this.isoforms[0];
+                    const x1 = +iso0.pos1;
+                    const x2 = +iso0.pos2;
+                    const xLeft = Math.min(x1, x2);
+                    const xRight = Math.max(x1, x2);
+                    this.query_left = xLeft;
+                    this.query_right = xRight;
+                    this.gContent
+                        .selectAll("rect.query-region")
+                        .data([{ x1: xLeft, x2: xRight }])
+                        .join("rect")
+                        .attr("class", "query-region")
+                        .attr("x", d => this.xz(d.x1))
+                        .attr("y", 0)
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);
+                        })
+                        .attr("height", this.bodyH)
+                        .attr("fill", "purple")
+                        .attr("fill-opacity", 0.42)
+                        .style("pointer-events", "none");
+
+                    this.gContentRef
+                        .selectAll("rect.query-region")
+                        .data([{ x1: xLeft, x2: xRight }])
+                        .join("rect")
+                        .attr("class", "query-region")
+                        .attr("x", d => this.xz(d.x1))
+                        .attr("y", 0)
+                        .attr("width", d => {
+                            const w = this.xz(d.x2) - this.xz(d.x1);
+                            return Math.max(1, w);
+                        })
+                        .attr("height", this.refH)
+                        .attr("fill", "purple")
+                        .attr("fill-opacity", 0.42)
+                        .style("pointer-events", "none");
+                },
+
+                draw() {
+
+                    this.drawQueryRegion();
+                    // this.drawHighlightBox();
+                    this.bindLines(this.gContent.selectAll("line.splice"), this.sjData, "splice", "pink", 0.8);
+                    this.bindLines(this.gContent.selectAll("line.exon"), this.exonData, "exon", "black", 4, true);
+                    this.bindLines(this.gContent.selectAll("line.readspan"), this.readspanData, "readspan", "blue", 4, true);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-introns"), this.ref_introns, "ref-introns", "green", 0.8);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-exon"), this.ref_exons, "ref-exon", "black", 4, true);
+                    this.bindLines(this.gContentRef.selectAll("line.ref-utrs"), this.ref_utrs, "ref-utrs", "orange", 4, true);
+                    this.bindText(this.gContentRef.selectAll("text.ref-labels"), this.ref_labels, "ref-labels", "black", 6);
+
+                    // make sure shared transform is identity
+                    const tId = d3.zoomIdentity.scale(this.kShared).translate(this.xShared, 0);
+
+                    // initial render
+                    this.renderXAxis();
+
+                    const rowsTop = this.visibleRowsFromBand(this.yRefBand, this.refH, this.ref_tx_count, 1);
+
+                    this.yRefBand.domain(rowsTop);
+                    this.renderTop();
+
+                    const rowsBottom = this.visibleRowsFromBand(this.yBand, this.bodyH, this.isoform_count, 1);
+                    this.yBand.domain(rowsBottom);
+                    this.renderBottom();
+                },
+
+            },
+
+            mounted() {
+                this.svg = d3.select(this.$refs.svg);
+
+                this.fetchJSON().then(() => {
+                    this.process_data();
+                    this.firstTimeInit();
+                    this.init();
+                    this.draw();
+                    this.enableDrag();
+                });
+            }
+        });
+
+        app.component('expand-box', {
+
+            data() {
+                return {
+                    curr_expanded: null,
+                };
+            },
+            props: {
+                'name': {
+                    type: String,
+                    required: true
+                },
+                'expanded': {
+                    type: Boolean,
+                    default: true,
+                }
+            },
+            created() {
+                this.curr_expanded = this.expanded;
+            },
+            template: `
+                <div style="margin-top:4px;">
+                    <div @click="toggle" style="font-size:12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2); padding-left:2px;padding-right:2px; background-color: lightgray; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;"> 
+                        
+                        <slot name="label">
+                            {{ name }}
+                        </slot>
+
+                        <span v-if="curr_expanded">[&minus;]</span><span v-else>[+]</span></div>
+                    <div v-if="curr_expanded" style="margin-left: 10px; margin-top: 5px;">
+                        <slot></slot>
+                    </div>
+                </div>
+            `,
+            methods: {
+                toggle() {
+                    this.curr_expanded = !this.curr_expanded;
+                }
+            }
+        });
+
+        app.component("range-filter-box", {
+            data() {
+                return {
+                    local_min: 0,
+                    local_max: 0,
+                    record_min: 0,
+                    record_max: 0,
+                }
+            },
+            props: {
+                'name': {
+                    type: String,
+                    required: true
+                },
+                'min': {
+                    type: Number,
+                    required: true
+                },
+                'max': {
+                    type: Number,
+                    required: true
+                },
+                'modelValue': {
+                    type: Array,
+                    required: true
+                }
+            },
+            mounted() {
+                this.local_min = this.min;
+                this.local_max = this.max;
+                this.record_min = this.min;
+                this.record_max = this.max;
+
+            },
+            emits: ['update:modelValue'],
+            template: `
+                <div style="font-size: 11px;">
+                    
+
+                    <slot >
+                        <div>{{name}}:</div>
+                    </slot>
+
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input  type="number" v-model.number="local_min" :min="min" :max="max" style="width: 60px;font-size:11px" />
+                        <span> - </span>
+                        <input type="number" v-model.number="local_max" :min="min" :max="max" style="width: 60px;font-size:11px;" />
+                        <span style="cursor:pointer;" @click='reset'> &#8634; </span>
+                    </div>
+                </div>
+            `,
+            watch: {
+                local_max(newVal) {
+                    this.$emit('update:modelValue', [this.local_min, this.local_max]);
+                },
+                local_min(newVal) {
+                    this.$emit('update:modelValue', [this.local_min, this.local_max]);
+                },
+                min(newVal) {
+                    this.local_min = newVal;
+                    this.record_min = newVal;
+                },
+                max(newVal) {
+                    this.local_max = newVal;
+                    this.record_max = newVal;
+                }
+            },
+            methods: {
+                reset() {
+                    this.local_min = this.record_min;
+                    this.local_max = this.record_max;
+                    this.$emit('update:modelValue', [this.local_min, this.local_max]);
+                }
+            }
+
+        });
+
+        // credit to chatgpt
+        app.component('hover-help', {
+            template: `
+            <div style="display: inline-block; position: relative; cursor: help; user-select: none;">
+            <span style="border-bottom: 1px dotted black;">[?]</span>
+            <div class="hover-help-text"
+                style="display: none; position: fixed; z-index: 9999; background-color: black; color: #fff;
+                        text-align: left; border-radius: 6px; padding: 5px; width: max-content; max-width: 300px;">
+                <slot></slot>
+
+            </div>
+            </div>
+        `,
+            mounted() {
+                const trigger = this.$el.querySelector("span");
+                const helpText = this.$el.querySelector(".hover-help-text");
+
+                trigger.addEventListener("mouseenter", () => {
+                    helpText.style.display = "block";
+
+                    const rect = trigger.getBoundingClientRect();
+                    const padding = 8;
+
+                    let top = rect.top - helpText.offsetHeight - padding;
+                    let left = rect.left;
+
+
+                    if (top < 0) {
+
+                        top = rect.bottom + padding;
+                    }
+
+                    if (left + helpText.offsetWidth > window.innerWidth) {
+                        left = window.innerWidth - helpText.offsetWidth - padding;
+                    }
+                    if (left < 0) left = padding;
+
+                    helpText.style.top = top + "px";
+                    helpText.style.left = left + "px";
+                });
+
+                trigger.addEventListener("mouseleave", () => {
+                    helpText.style.display = "none";
+                });
+            }
+        });
+
+
+        app.component('chip', {
+
+            template: `
+                <div style="display: flex; justify-content: space-between; align-items: center;
+                            background-color: lightgray; border-radius: 4px; padding: 2px 8px; margin-top:4px; font-size: 10px">
+                <span style="text-align: left;">
+                   <strong> <slot name="label"></slot> </strong>
+                </span>
+
+                <span style="margin-left: auto; text-align: right;">
+                    <slot name="content"></slot>
+                </span>
+                </div>
+            `,
+
+        })
+
+        app.mount('#app');
+
+    </script>
+</body>
+
+</html>

@@ -50,12 +50,25 @@ impl BreakPointPair {
     }
 
     pub fn parse_string(s: &str) -> Result<Self> {
-        let (left_chr, left_pos, right_chr, right_pos) = utils::parse_breakpoint_str(s).unwrap();
+        let (left_chr, left_pos, right_chr, right_pos) = utils::parse_breakpoint_str(s)?;
 
         Ok(Self {
             left_chr,
             left_pos,
             right_chr,
+            right_pos,
+            id: "single_query".to_string(),
+            rest_info: "".to_string(),
+        })
+    }
+
+    pub fn parse_string_sj(s: &str) -> Result<Self> {
+        let (chr, left_pos, right_pos) = utils::parse_splice_junction_str(s)?;
+
+        Ok(Self {
+            left_chr: chr.clone(),
+            left_pos,
+            right_chr: chr,
             right_pos,
             id: "single_query".to_string(),
             rest_info: "".to_string(),
