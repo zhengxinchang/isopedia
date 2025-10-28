@@ -79,13 +79,12 @@ This figure dipicts how Isopedia determines a positive hit for a query in differ
 
 [place holder for index download link]
 
-|Name|Link|Sample Size|Index size after compression|Minimal required Memory for querying | Description |
+|Name|Link|Sample Size|Index size(compressed size)|Minimal required Memory for querying | Description |
 |----|----|-----------|-----------|---|---|
-|isopedia_index_v1.0|[Download](#)|1,007|462G|64Gb|107 ENCODE samples + 900 SRA samples|
+|isopedia_index_v1.0|[Download](#)|1,007|462G(109G)|64Gb|107 ENCODE samples + 900 SRA samples|
 
 
 # Build your own index
-
 
 Isopedia supports building local index in your own datasets. prerequests are listed below:
 

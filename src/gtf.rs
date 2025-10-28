@@ -43,7 +43,9 @@ impl Transcript {
             gene_id: String::new(),
             trans_id: String::new(),
             records: Vec::new(),
-            strand: record.strand().expect("GTF must have strand information"),
+            strand: record.strand().expect(
+                format!("GTF must have strand information for transcript/exon records, however the record below is missing\n {:?}", record).as_str(),
+            ),
         };
 
         trans.chrom = trim_chr_prefix_to_upper(record.reference_sequence_name());

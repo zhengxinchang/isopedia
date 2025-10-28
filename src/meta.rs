@@ -60,10 +60,11 @@ impl Meta {
         info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
         let meta = Meta::from_file(&path, prefix, None)?;
         info!(
-            "Parsed meta file: {} with {} samples and {} attributes",
+            "Parsed meta file: {} with {} samples and {} attributes: {:?}",
             path.as_ref().display(),
             meta.samples.len(),
-            meta.header.len()
+            meta.header.len(),
+            meta.header
         );
         Ok(meta)
     }
