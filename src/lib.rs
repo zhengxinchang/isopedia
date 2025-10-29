@@ -1,3 +1,4 @@
+pub mod assemble;
 pub mod bptree;
 pub mod breakpoints;
 pub mod chromosome;

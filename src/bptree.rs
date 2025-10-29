@@ -859,6 +859,7 @@ impl BPForest {
         Ok(())
     }
 
+    // basic search functions
     pub fn search0_one_pos(
         &mut self,
         chrom_name: &str,
@@ -871,16 +872,8 @@ impl BPForest {
                 return vec![];
             }
         };
-        // let tree: &mut BPTree = self
-        //     .trees_by_chrom
-        //     .entry(chrom_id)
-        //     .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
-
-        // // dbg!("aaa");
-        // tree.single_pos_search(pos)
 
         if self.trees_by_chrom.contains_key(&chrom_id) == false {
-            // dbg!("bbb");
             self.trees_by_chrom.clear();
         }
         let tree: &mut BPTree = self
@@ -890,6 +883,7 @@ impl BPForest {
         return tree.single_pos_search(pos);
     }
 
+    // basic search functions
     pub fn search0_one_range(
         &mut self,
         chrom_name: &str,
@@ -918,6 +912,7 @@ impl BPForest {
         return tree.range_search2(pos, flank);
     }
 
+    // basic multi-position search functions
     fn search1_multi_exact(
         &mut self,
         positions: &Vec<(String, u64)>,
@@ -938,6 +933,7 @@ impl BPForest {
         }
     }
 
+    // basic multi-position range search functions
     fn search1_multi_range(
         &mut self,
         positions: &Vec<(String, u64)>,
@@ -956,10 +952,6 @@ impl BPForest {
                 )
             })
             .collect();
-
-        // for ee in &res_vec {
-        //     dbg!(ee.len());
-        // }
 
         if min_matched_splice_site == 0 || min_matched_splice_site >= positions.len() {
             // all splice sites must match
@@ -982,6 +974,8 @@ impl BPForest {
         }
     }
 
+    // basic multi-position partial match search functions
+    // the min_match is defined as the min number of positions that an isoform must cover
     pub fn search2_partial_match(
         &mut self,
         positions: &Vec<(String, u64)>,
@@ -997,7 +991,8 @@ impl BPForest {
     }
 }
 
-/// find the common elements in the vecs, if one element appears in at least min_match vecs, it is considered as common
+/// find the common elements in the vecs, if one element
+/// appears in at least min_match vecs, it is considered as common
 /// min_match is set to 2 in case the mono exon isoforms
 pub fn find_partial_common(
     vecs: &[Vec<MergedIsoformOffsetPtr>],
@@ -1020,21 +1015,6 @@ pub fn find_partial_common(
 }
 
 pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOffsetPtr> {
-    // let mut n44 = 0;
-
-    // for v in &vecs {
-    //     // println!("input vec len: {}", v.len());
-    //     for vv in v {
-    //         if vv.n_splice_sites == 44 {
-    //             n44 += 1;
-    //             println!("{:?}", vv);
-    //         }
-    //     }
-    // }
-
-    // println!("n44: {}", n44);
-    // println!("number of vecs: {}", vecs.len());
-
     if vecs.is_empty() {
         return vec![];
     }
@@ -1045,33 +1025,11 @@ pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsof
         v.dedup(); // 避免重复
     }
 
-    // for v in &vecs {
-    //     // println!("input vec len: {}", v.len());
-    //     for vv in v {
-    //         if vv.n_splice_sites == 44 {
-    //             n44 += 1;
-    //             println!("{:?}", vv);
-    //         }
-    //     }
-    // }
-
-    // 从第一个 vec 开始交集
     let mut result = vecs[0].clone();
-
-    // for xx in &result {
-    //     println!("initial: {:?}", xx);
-    // }
 
     for v in vecs.iter().skip(1) {
         result = intersect_sorted(&result, v);
 
-        // for rr in v {
-        //     println!("@{:?}", rr);
-
-        // }
-
-        // println!("intersected: {:?}", &result);
-        // println!("==: {}", result.len());
         if result.is_empty() {
             break;
         }
