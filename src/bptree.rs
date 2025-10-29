@@ -916,9 +916,9 @@ impl BPForest {
     fn search1_multi_exact(
         &mut self,
         positions: &Vec<(String, u64)>,
-        min_match: usize,
+        // min_match: usize,
         lru_size: usize,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -926,11 +926,13 @@ impl BPForest {
             })
             .collect();
 
-        if min_match == 0 || min_match >= positions.len() {
-            return find_common(res_vec);
-        } else {
-            return find_partial_common(&res_vec, min_match);
-        }
+        // if min_match == 0 || min_match >= positions.len() {
+        //     return find_common(res_vec);
+        // } else {
+        //     return find_partial_common(&res_vec, min_match);
+        // }
+
+        res_vec
     }
 
     // basic multi-position range search functions
@@ -938,9 +940,9 @@ impl BPForest {
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
-        min_matched_splice_site: usize, // must larger than 0 and less than positions.len()
+        // min_matched_splice_site: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
         let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
@@ -953,12 +955,13 @@ impl BPForest {
             })
             .collect();
 
-        if min_matched_splice_site == 0 || min_matched_splice_site >= positions.len() {
-            // all splice sites must match
-            find_common(res_vec)
-        } else {
-            find_partial_common(&res_vec, min_matched_splice_site)
-        }
+        res_vec
+        // if min_matched_splice_site == 0 || min_matched_splice_site >= positions.len() {
+        //     // all splice sites must match
+        //     find_common(res_vec)
+        // } else {
+        //     find_partial_common(&res_vec, min_matched_splice_site)
+        // }
     }
 
     pub fn search2_all_match(
@@ -966,11 +969,17 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         lru_size: usize,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    ) -> (
+        Vec<MergedIsoformOffsetPtr>,      // common results
+        Vec<Vec<MergedIsoformOffsetPtr>>, // all results, the length equals to positions.len()
+    ) {
         if flank == 0 {
-            self.search1_multi_exact(positions, 0, lru_size)
+            let res = self.search1_multi_exact(positions, lru_size);
+
+            (find_common(res.clone()), res)
         } else {
-            self.search1_multi_range(positions, flank, 0, lru_size)
+            let res = self.search1_multi_range(positions, flank, lru_size);
+            (find_common(res.clone()), res)
         }
     }
 
@@ -984,9 +993,22 @@ impl BPForest {
         lru_size: usize,
     ) -> Vec<MergedIsoformOffsetPtr> {
         if flank == 0 {
-            self.search1_multi_exact(positions, min_match, lru_size)
+            let res = self.search1_multi_exact(positions, lru_size);
+
+            if min_match == 0 || min_match >= positions.len() {
+                // defeinsivly make sure the min_match is valid
+                // all splice sites must match
+                find_common(res)
+            } else {
+                find_partial_common(&res, min_match)
+            }
         } else {
-            self.search1_multi_range(positions, flank, min_match, lru_size)
+            let res = self.search1_multi_range(positions, flank, lru_size);
+            if min_match == 0 || min_match >= positions.len() {
+                find_common(res)
+            } else {
+                find_partial_common(&res, min_match)
+            }
         }
     }
 }
@@ -1034,7 +1056,7 @@ pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsof
             break;
         }
     }
-    // println!("final result: {:?}", &result);
+
     result
 }
 
