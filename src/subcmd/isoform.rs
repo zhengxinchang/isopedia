@@ -230,7 +230,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut released_bytes = 0;
     const RELEASE_STEP: usize = 1024 * 1024 * 1024; // 1GB
 
-    let mut assembler = Assembler::init();
+    let mut assembler = Assembler::init(dataset_info.get_size());
 
     for trans in gtf_vec {
         iter_count += 1;
@@ -294,7 +294,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         // enable the assembler to assemble fragmented reads into isoforms
         if cli.use_incomplete {
             assembler.reset();
-            let asm: Vec<(usize, u32)> = assembler.assemble(&queries, &all_res);
+            let asm: Vec<(usize, u32)> =
+                assembler.assemble(&queries, &all_res, &archive_mmap, cli.flank);
+            assembler.print_matrix();
 
             if asm.len() > 0 {
                 ism_hit_count += 1;

@@ -7,6 +7,7 @@ use crate::{
     fusion::{FusionAggrReads, FusionSingleRead},
     io::SampleChip,
     reads::{AggrRead, Segment, Strand},
+    subcmd::splice,
     utils::{self, calc_cpm},
 };
 use flate2::bufread::GzEncoder;
@@ -420,6 +421,85 @@ impl MergedIsoform {
             }
         }
         fusion_evidence_vec
+    }
+
+    // make sure the all splice junctions from this isoform can match with the query splice juncitons(no need to cover all query SJs)
+    // return the first matched position index, -1 means no match
+    pub fn match_splice_junctions(
+        &self,
+        reference_sjs: &Vec<(u64, u64)>,
+        flank: u64,
+    ) -> (bool, i32, u32) {
+        let mut matched_count = 0;
+        let mut first_match_pos = -1i32;
+        let mut is_all_matched = true;
+        // for (qidx ,query_sj) in splice_sjs.iter().enumerate() {
+        //     for isoform_sj in self.splice_junctions_vec.iter() {
+        //         if (isoform_sj.0.abs_diff(query_sj.0) <= flank)
+        //             && (isoform_sj.1.abs_diff(query_sj.1) <= flank)
+        //         {
+        //             matched_count += 1;
+        //             if first_match_pos == -1 {
+        //                 first_match_pos = qidx as i32;
+        //             }
+        //             break;
+        //         }
+        //     }
+        // }
+
+        if self.splice_junctions_vec.len() > reference_sjs.len() {
+            is_all_matched = false;
+            return (is_all_matched, first_match_pos, matched_count);
+        }
+
+        let mut qidx = 0;
+        let mut sidx = 0;
+
+        loop {
+            if qidx >= reference_sjs.len() || sidx >= self.splice_junctions_vec.len() {
+                // if qidx < reference_sjs.len(){
+                // /*
+                //     q -- -- -- -- --
+                //     s.   -- -- --
+                //  */
+                //     is_all_matched = false;
+                // }
+
+                if sidx < self.splice_junctions_vec.len() {
+                    /*
+                       q -- -- -- --
+                       s.   -- -- -- --
+                    */
+                    is_all_matched = false;
+                }
+
+                break;
+            }
+
+            let query_sj = &reference_sjs[qidx];
+            let isoform_sj = &self.splice_junctions_vec[sidx];
+
+            if (isoform_sj.0.abs_diff(query_sj.0) <= flank)
+                && (isoform_sj.1.abs_diff(query_sj.1) <= flank)
+            {
+                matched_count += 1;
+                if first_match_pos == -1 {
+                    first_match_pos = qidx as i32;
+                }
+                qidx += 1;
+                sidx += 1;
+            } else {
+                if first_match_pos == -1 {
+                    qidx += 1;
+                } else {
+                    // skip sjs
+                    is_all_matched = false;
+                    break;
+                }
+            }
+        }
+
+        (is_all_matched, first_match_pos, matched_count)
     }
 
     /// Each isoform will be re-scattered at read level, and regrouped by their fusion hash.
