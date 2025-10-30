@@ -71,6 +71,10 @@ pub struct AnnIsoCli {
     /// Maximum number of cached nodes per tree
     #[arg(short = 'c', long = "cached_nodes", default_value_t = 10_000)]
     pub lru_size: usize,
+
+    /// Debug mode
+    #[arg(long, default_value_t = false)]
+    pub debug: bool,
 }
 
 impl AnnIsoCli {
@@ -231,6 +235,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     const RELEASE_STEP: usize = 1024 * 1024 * 1024; // 1GB
 
     let mut assembler = Assembler::init(dataset_info.get_size());
+    let mut assembled = (false, Vec::with_capacity(dataset_info.get_size()));
 
     for trans in gtf_vec {
         iter_count += 1;
@@ -258,11 +263,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 released_bytes = release_up_to;
                 // info!(
                 //     "Released first {} MB from page cache",
-                //     released_bytes / 1024 / 1024
-                // );
-            } else {
-                // info!(
-                //     "posix_madvise failed at {} MB",
                 //     released_bytes / 1024 / 1024
                 // );
             }
@@ -294,11 +294,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         // enable the assembler to assemble fragmented reads into isoforms
         if cli.use_incomplete {
             assembler.reset();
-            let asm: Vec<(usize, u32)> =
-                assembler.assemble(&queries, &all_res, &archive_mmap, cli.flank);
-            assembler.print_matrix();
+            assembled = assembler.assemble(&queries, &all_res, &archive_mmap, cli.flank);
 
-            if asm.len() > 0 {
+            // assembler.print_matrix();
+
+            if assembled.0 {
                 ism_hit_count += 1;
             }
         }
@@ -383,19 +383,53 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             ));
             out_line.add_field(&trans.get_attributes());
 
-            for (i, val) in acc_sample_evidence_arr.iter().enumerate() {
-                let cpm = utils::calc_cpm(val, &dataset_info.sample_total_evidence_vec[i]);
+            for (i, acc_readc) in acc_sample_evidence_arr.iter().enumerate() {
+                let cpm = utils::calc_cpm(acc_readc, &dataset_info.sample_total_evidence_vec[i]);
 
                 let samplechip = if cli.info {
-                    SampleChip::new(
-                        Some(dataset_info.get_sample_names()[i].clone()),
-                        vec![format!("{}:{}:{}", cpm, val, acc_sample_read_info_arr[i])],
-                    )
+                    // only include in-compelte results when FSM mode is off
+                    if cli.use_incomplete && *acc_readc == 0 {
+                        let incomp_cpm = utils::calc_cpm(
+                            &assembled.1[i],
+                            &dataset_info.sample_total_evidence_vec[i],
+                        );
+
+                        SampleChip::new(
+                            Some(dataset_info.get_sample_names()[i].clone()),
+                            vec![format!(
+                                "{}:{}:LEVEL=INCOMPLETE;{}",
+                                incomp_cpm, assembled.1[i], ""
+                            )],
+                        )
+                    } else {
+                        SampleChip::new(
+                            Some(dataset_info.get_sample_names()[i].clone()),
+                            vec![format!(
+                                "{}:{}:LEVEL=COMPLETE;{}",
+                                cpm, acc_readc, acc_sample_read_info_arr[i]
+                            )],
+                        )
+                    }
                 } else {
-                    SampleChip::new(
-                        Some(dataset_info.get_sample_names()[i].clone()),
-                        vec![format!("{}:{}:NULL", cpm, val)],
-                    )
+                    if cli.use_incomplete && *acc_readc == 0 {
+                        let incomp_cpm = utils::calc_cpm(
+                            &assembled.1[i],
+                            &dataset_info.sample_total_evidence_vec[i],
+                        );
+
+                        SampleChip::new(
+                            Some(dataset_info.get_sample_names()[i].clone()),
+                            vec![format!(
+                                "{}:{}:LEVEL=INCOMPLETE",
+                                incomp_cpm, assembled.1[i]
+                            )],
+                        )
+                    } else {
+                        SampleChip::new(
+                            Some(dataset_info.get_sample_names()[i].clone()),
+                            vec![format!("{}:{}:LEVEL=COMPLETE", cpm, acc_readc)],
+                        )
+                    }
                 };
 
                 out_line.add_sample(samplechip);
