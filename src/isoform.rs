@@ -3,11 +3,11 @@ use std::{io::Read, vec};
 use crate::{
     // constants::MAX_SAMPLE_SIZE,
     breakpoints::BreakPointPair,
+    cmd::splice,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     io::SampleChip,
     reads::{AggrRead, Segment, Strand},
-    subcmd::splice,
     utils::{self, calc_cpm},
 };
 use flate2::bufread::GzEncoder;

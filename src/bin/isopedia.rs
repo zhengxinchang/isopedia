@@ -1,18 +1,18 @@
 use clap::{Parser, Subcommand};
 
+use isopedia::cmd::fusion::run_anno_fusion;
+use isopedia::cmd::fusion::AnnFusionCli;
+use isopedia::cmd::index::run_idx;
+use isopedia::cmd::index::IndexCli;
+use isopedia::cmd::isoform::run_anno_isoform;
+use isopedia::cmd::isoform::AnnIsoCli;
+use isopedia::cmd::merge::run_merge;
+use isopedia::cmd::merge::MergeCli;
+use isopedia::cmd::profile::run_profile;
+use isopedia::cmd::profile::ProfileCli;
+use isopedia::cmd::splice::run_anno_splice;
+use isopedia::cmd::splice::AnnSpliceCli;
 use isopedia::logger::init_logger;
-use isopedia::subcmd::fusion::run_anno_fusion;
-use isopedia::subcmd::fusion::AnnFusionCli;
-use isopedia::subcmd::index::run_idx;
-use isopedia::subcmd::index::IndexCli;
-use isopedia::subcmd::isoform::run_anno_isoform;
-use isopedia::subcmd::isoform::AnnIsoCli;
-use isopedia::subcmd::merge::run_merge;
-use isopedia::subcmd::merge::MergeCli;
-use isopedia::subcmd::profile::run_profile;
-use isopedia::subcmd::profile::ProfileCli;
-use isopedia::subcmd::splice::run_anno_splice;
-use isopedia::subcmd::splice::AnnSpliceCli;
 
 #[derive(Parser)]
 #[command(
