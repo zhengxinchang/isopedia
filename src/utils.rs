@@ -72,6 +72,10 @@ pub fn calc_cpm(val_u32: &u32, total_u32: &u32) -> f64 {
 /// Current function only read the first max_bytes, but can be improved by
 /// reading the file with imputation strategies
 pub fn warmup(path: &Path, max_bytes: usize) -> Result<()> {
+    if max_bytes == 0 {
+        return Ok(());
+    }
+
     let mut f = File::open(path)?;
     // let file_size = get_file_size(path)?;
 

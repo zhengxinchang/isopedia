@@ -65,12 +65,20 @@ pub struct AnnIsoCli {
     /// Memory size to use for warming up (in gigabytes).  
     /// Example: 4GB. Increasing this will significantly improve performance;  
     /// set it as large as your system allows.
-    #[arg(short, long, default_value_t = 4)]
+    #[arg(short, long, default_value_t = 0)]
     pub warmup_mem: usize,
 
     /// Maximum number of cached nodes per tree
     #[arg(short = 'c', long = "cached_nodes", default_value_t = 10_000)]
     pub lru_size: usize,
+
+    /// Maximum number of cached isoform chunks in memory
+    #[arg(long, default_value_t = 4)]
+    pub cached_chunk_number: usize,
+
+    /// Cached isoform chunk size in Mb
+    #[arg(long, default_value_t = 512)]
+    pub cached_chunk_size_mb: u64,
 
     /// Debug mode
     #[arg(long, default_value_t = false)]
@@ -119,10 +127,7 @@ impl AnnIsoCli {
             }
         };
 
-        if self.warmup_mem == 0 {
-            error!("--warmup-mem: must be greater than 0");
-            is_ok = false;
-        } else {
+        if self.warmup_mem > 0 {
             let warmup_bytes = (self.warmup_mem as u64) * 1024 * 1024 * 1024;
             if warmup_bytes > max_mem_bytes {
                 error!(
@@ -157,12 +162,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
-    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
     info!("Loading GTF file...");
-    // let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
-    //     BufReader::new(std::fs::File::open(cli.gtf.clone()).expect("can not read gtf")),
-    // );
 
     let gtfreader = open_gtf_reader(cli.gtf.to_str().unwrap())?;
 
@@ -213,24 +214,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
 
     info!("Loading index file");
-    let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-        .expect("Can not open aggregated records file...");
-
-    let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
-
-    //     let archive_mmap = unsafe {
-    //     memmap2::MmapOptions::new()
-    //         .map_copy(&archive_file_handle)? // MAP_SHARED
-    // };
-
-    archive_mmap
-        .advise(memmap2::Advice::Sequential)
-        .expect("Failed to set mmap advice");
 
     let mut archive_cache = ArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
-        512 * 1024 * 1024, // 512MB chunk size
-        4,                 // max 4 chunks in cache ~2GB
+        cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
+        cli.cached_chunk_number,                // max 4 chunks in cache ~2GB
     );
 
     info!("Processing transcripts");
@@ -241,14 +229,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut acc_sample_read_info_arr = vec!["".to_string(); dataset_info.get_size()];
 
     let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
-
-    let mut released_bytes = 0;
-    const RELEASE_STEP: usize = 1024 * 1024 * 1024; // 1GB
-
     let mut assembler = Assembler::init(dataset_info.get_size());
     let mut assembled = (false, Vec::with_capacity(dataset_info.get_size()));
-
-    let gtfvec_mem = gtf_vec.len() * std::mem::size_of::<crate::gtf::Transcript>() / 1024;
 
     for trans in gtf_vec {
         iter_count += 1;
@@ -261,46 +243,13 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             );
             iter_count = 0;
 
-            let release_up_to = released_bytes + RELEASE_STEP;
-            let base_ptr = archive_mmap.as_ptr() as *mut libc::c_void;
-
-            let ret = unsafe {
-                posix_madvise(
-                    base_ptr.add(released_bytes),
-                    RELEASE_STEP,
-                    POSIX_MADV_DONTNEED,
-                )
-            };
-
-            if ret == 0 {
-                released_bytes = release_up_to;
-                info!(
-                    "Released first {} MB from page cache",
-                    released_bytes / 1024 / 1024
-                );
+            if cli.debug {
                 log_mem_stats();
             }
-
-            // reports memory trees, gtf object, assembler isoform_out
-            let isoform_out_mem = &isoform_out.get_mem_size() / 1024;
-            let forest_mem = &forest.get_mem_size() / 1024;
-            let assembler_mem = std::mem::size_of_val(&assembler) / 1024;
-
-            info!(
-                "Memory usage (bytes): index trees {}kB, gtf object {}kB, assembler {}kB, isoform_out {}kB",
-                forest_mem.to_formatted_string(&Locale::en),
-                gtfvec_mem.to_formatted_string(&Locale::en),
-                assembler_mem.to_formatted_string(&Locale::en),
-                isoform_out_mem.to_formatted_string(&Locale::en),
-            );
         }
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
-
-        // dbg!(&queries);
-
-        // println!("query: {:?},query len {}", &queries, queries.len());
 
         let (hits, all_res) = forest.search2_all_match(&queries, cli.flank, cli.lru_size);
 
@@ -309,8 +258,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             .into_iter()
             .filter(|x| x.n_splice_sites == queries.len() as u32)
             .collect();
-
-        // println!("found {} targets", target.len());
 
         if target.len() == 0 {
             miss_count += 1;
@@ -338,8 +285,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             acc_sample_read_info_arr.fill("NULL".to_string());
 
             for offset in &target {
-                let record: MergedIsoform =
-                    read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
+                // let record: MergedIsoform =
+                //     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
 
                 let record: MergedIsoform = archive_cache.read_bytes(offset);
 
