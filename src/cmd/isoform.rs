@@ -8,7 +8,7 @@ use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
     isoform::{self, MergedIsoform},
-    isoformarchive::read_record_from_mmap,
+    isoformarchive::{read_record_from_mmap, ArchiveCache},
     meta::Meta,
     output::{GeneralTableOutput, IsoformTableOut},
     tmpidx::MergedIsoformOffsetPtr,
@@ -227,6 +227,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         .advise(memmap2::Advice::Sequential)
         .expect("Failed to set mmap advice");
 
+    let mut archive_cache = ArchiveCache::new(
+        cli.idxdir.clone().join(MERGED_FILE_NAME),
+        512 * 1024 * 1024, // 512MB chunk size
+        4,                 // max 4 chunks in cache ~2GB
+    );
+
     info!("Processing transcripts");
     let mut iter_count = 0;
     let mut batch = 0;
@@ -334,6 +340,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             for offset in &target {
                 let record: MergedIsoform =
                     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
+
+                let record: MergedIsoform = archive_cache.read_bytes(offset);
 
                 acc_pos_count
                     .iter_mut()
