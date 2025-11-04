@@ -339,3 +339,14 @@ mod tests {
         // assert_eq!(new_path3, PathBuf::from("file.gz"));
     }
 }
+
+pub fn log_mem_stats() {
+    if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+        for line in status.lines() {
+            if line.starts_with("VmRSS") || line.starts_with("VmData") || line.starts_with("VmSwap")
+            {
+                eprintln!("{}", line);
+            }
+        }
+    }
+}

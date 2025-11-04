@@ -378,6 +378,21 @@ pub struct Cache {
 }
 
 impl Cache {
+    pub fn get_mem_size(&self) -> usize {
+        let mut total = std::mem::size_of_val(self);
+        for (_key, node_arc) in self.lru.iter() {
+            let node = node_arc.as_ref();
+            total += std::mem::size_of_val(node);
+            total += std::mem::size_of_val(&node.header); // 4096 bytes fixed
+                                                          // Vec pointer
+            total += std::mem::size_of_val(&node.data.merge_isoform_offset_vec);
+            // Vec capacity (heap)
+            total += node.data.merge_isoform_offset_vec.capacity()
+                * std::mem::size_of::<MergedIsoformOffsetPtr>();
+        }
+        total
+    }
+
     pub fn create(file_path: &PathBuf) -> Self {
         let header = CacheHeader::new();
         let file = File::create(file_path).unwrap();
@@ -1010,6 +1025,16 @@ impl BPForest {
                 find_partial_common(&res, min_match)
             }
         }
+    }
+
+    pub fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+        for (_chrom_id, tree) in &self.trees_by_chrom {
+            if let Some(cache) = &tree.cache {
+                total += cache.get_mem_size();
+            }
+        }
+        total
     }
 }
 

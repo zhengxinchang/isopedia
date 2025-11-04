@@ -12,7 +12,7 @@ use crate::{
     meta::Meta,
     output::{GeneralTableOutput, IsoformTableOut},
     tmpidx::MergedIsoformOffsetPtr,
-    utils::{self, get_total_memory_bytes, warmup},
+    utils::{self, get_total_memory_bytes, log_mem_stats, warmup},
 };
 use anyhow::Result;
 use clap::{command, Parser};
@@ -218,6 +218,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
 
+    //     let archive_mmap = unsafe {
+    //     memmap2::MmapOptions::new()
+    //         .map_copy(&archive_file_handle)? // MAP_SHARED
+    // };
+
     archive_mmap
         .advise(memmap2::Advice::Sequential)
         .expect("Failed to set mmap advice");
@@ -236,6 +241,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut assembler = Assembler::init(dataset_info.get_size());
     let mut assembled = (false, Vec::with_capacity(dataset_info.get_size()));
+
+    let gtfvec_mem = gtf_vec.len() * std::mem::size_of::<crate::gtf::Transcript>() / 1024;
 
     for trans in gtf_vec {
         iter_count += 1;
@@ -261,11 +268,25 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
             if ret == 0 {
                 released_bytes = release_up_to;
-                // info!(
-                //     "Released first {} MB from page cache",
-                //     released_bytes / 1024 / 1024
-                // );
+                info!(
+                    "Released first {} MB from page cache",
+                    released_bytes / 1024 / 1024
+                );
+                log_mem_stats();
             }
+
+            // reports memory trees, gtf object, assembler isoform_out
+            let isoform_out_mem = &isoform_out.get_mem_size() / 1024;
+            let forest_mem = &forest.get_mem_size() / 1024;
+            let assembler_mem = std::mem::size_of_val(&assembler) / 1024;
+
+            info!(
+                "Memory usage (bytes): index trees {}kB, gtf object {}kB, assembler {}kB, isoform_out {}kB",
+                forest_mem.to_formatted_string(&Locale::en),
+                gtfvec_mem.to_formatted_string(&Locale::en),
+                assembler_mem.to_formatted_string(&Locale::en),
+                isoform_out_mem.to_formatted_string(&Locale::en),
+            );
         }
 
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
@@ -293,14 +314,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
         // enable the assembler to assemble fragmented reads into isoforms
         if cli.use_incomplete {
-            assembler.reset();
-            assembled = assembler.assemble(&queries, &all_res, &archive_mmap, cli.flank);
+            // assembler.reset();
+            // assembled = assembler.assemble(&queries, &all_res, &archive_mmap, cli.flank);
 
-            // assembler.print_matrix();
-
-            if assembled.0 {
-                ism_hit_count += 1;
-            }
+            // if assembled.0 {
+            //     ism_hit_count += 1;
+            // }
         }
 
         let mut out_line = Line::new();
@@ -462,6 +481,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             isoform_out.add_line(&out_line)?;
         }
     }
+
+    log_mem_stats();
 
     let total = fsm_hit_count + miss_count;
     info!(
