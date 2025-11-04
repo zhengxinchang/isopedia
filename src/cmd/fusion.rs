@@ -14,16 +14,15 @@ use crate::{
     gene_index::GeneIntervalTree,
     io::*,
     isoform::MergedIsoform,
-    isoformarchive::{self, read_record_from_mmap},
+    isoformarchive::ArchiveCache,
     meta::Meta,
-    output::{FusionBrkPtTableOut, FusionDiscoveryTableOut, GeneralTableOutput},
+    results::TableOutput,
     utils,
 };
 use anyhow::{anyhow, Context, Result};
 use clap::{command, Parser};
 
 use log::{error, info, warn};
-use memmap2::{Advice, Mmap};
 use noodles_gtf::io::Reader as gtfReader;
 use serde::Serialize;
 
@@ -80,13 +79,21 @@ pub struct AnnFusionCli {
     #[arg(short, long)]
     pub output: PathBuf,
 
-    /// debug mode
-    #[arg(long, default_value_t = false)]
-    pub debug: bool,
-
     /// number of cached nodes for each tree in maximal
     #[arg(short = 'c', long = "cached_nodes", default_value_t = 1_000_000)]
     pub lru_size: usize,
+
+    /// Maximum number of cached isoform chunks in memory
+    #[arg(long, default_value_t = 4)]
+    pub cached_chunk_number: usize,
+
+    /// Cached isoform chunk size in Mb
+    #[arg(long, default_value_t = 128)]
+    pub cached_chunk_size_mb: u64,
+
+    /// debug mode
+    #[arg(long, default_value_t = false)]
+    pub debug: bool,
 }
 
 impl AnnFusionCli {
@@ -208,11 +215,10 @@ type BreakpointType = ((String, u64), (String, u64), String);
 fn anno_single_fusion(
     breakpoints: BreakpointType,
     // mywriter: &mut MyGzWriter,
-    fusionbrkpt_out: &mut FusionBrkPtTableOut,
+    fusionbrkpt_out: &mut TableOutput,
     cli: &AnnFusionCli,
     forest: &mut BPForest,
-    archive_mmap: &Mmap,
-    archive_buf: &mut Vec<u8>,
+    archive_cache: &mut ArchiveCache,
     dbinfo: &DatasetInfo,
 ) -> Result<()> {
     info!(
@@ -246,8 +252,7 @@ fn anno_single_fusion(
     // process the left targets
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
-        let merged_isoform =
-            isoformarchive::read_record_from_mmap(archive_mmap, &target, archive_buf);
+        let merged_isoform = archive_cache.read_bytes(&target);
         let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
             &breakpoints.1 .0,
             breakpoints.1 .1,
@@ -266,8 +271,7 @@ fn anno_single_fusion(
     // process the right targets
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform: MergedIsoform =
-            isoformarchive::read_record_from_mmap(&archive_mmap, &target, archive_buf);
+        let merged_isoform: MergedIsoform = archive_cache.read_bytes(&target);
         let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
             &breakpoints.0 .0,
             breakpoints.0 .1,
@@ -343,16 +347,11 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
-    let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-        .context("Failed to open merged file for mmap")?;
-
-    let archive_mmap =
-        unsafe { Mmap::map(&archive_file_handle).context("Failed to map merged file")? };
-    archive_mmap
-        .advise(Advice::Random)
-        .context("Failed to set mmap advice")?;
-
-    let mut archive_buf = Vec::<u8>::with_capacity(1024 * 1024);
+    let mut archive_cache = ArchiveCache::new(
+        cli.idxdir.clone().join(MERGED_FILE_NAME),
+        cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
+        cli.cached_chunk_number,                // max 4 chunks in cache ~2GB
+    );
 
     if cli.pos.is_some() || cli.pos_bed.is_some() {
         const FUSION_BRKPT_FORMAT_STR: &str = "COUNT";
@@ -375,7 +374,8 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
             dbinfo.add_sample_evidence(&name, evidence);
         }
 
-        let mut fusionbrkpt_out = FusionBrkPtTableOut::new(
+        let mut fusionbrkpt_out = TableOutput::new(
+            cli.output.clone(),
             out_header,
             dbinfo,
             meta.clone(),
@@ -398,8 +398,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                 &mut fusionbrkpt_out,
                 &cli,
                 &mut forest,
-                &archive_mmap,
-                &mut archive_buf,
+                &mut archive_cache,
                 &dataset_info,
             )?;
             // mywriter.finish()?;
@@ -421,16 +420,13 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                     &mut fusionbrkpt_out,
                     &cli,
                     &mut forest,
-                    &archive_mmap,
-                    &mut archive_buf,
+                    &mut archive_cache,
                     &dataset_info,
                 )?;
             }
-            // mywriter.finish()?;
         }
         info!("Total processed samples: {}", dataset_info.get_size());
-        // info!("Results written to {}", cli.output.display());
-        fusionbrkpt_out.save_to_file(&cli.output)?;
+        fusionbrkpt_out.finish()?;
     } else if cli.gene_gtf.is_some() {
         const FUGEN_GENE_REGION_FORMAT_STR: &str = "COUNT";
 
@@ -455,7 +451,8 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
             out_header.add_sample_name(&name)?;
         }
 
-        let mut fusiondiscovery_out = FusionDiscoveryTableOut::new(
+        let mut fusiondiscovery_out = TableOutput::new(
+            cli.output.clone(),
             out_header,
             dbinfo,
             meta.clone(),
@@ -505,8 +502,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                 }
 
                 for rec_ptr in targets {
-                    let isoform: MergedIsoform =
-                        read_record_from_mmap(&archive_mmap, &rec_ptr, &mut archive_buf);
+                    let isoform: MergedIsoform = archive_cache.read_bytes(&rec_ptr);
 
                     let candidates = isoform.to_fusion_candidates();
 
@@ -537,12 +533,8 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         info!("Total processed genes: {}", gene_indexing.count);
         info!("Total skipped genes: {}", skipped_genes);
         info!("Total processed samples: {}", dataset_info.get_size());
-        // info!("Results written to {}", cli.output.display());
-        fusiondiscovery_out.save_to_file(&cli.output)?;
+        fusiondiscovery_out.finish()?;
     }
-
-    // info!("Total processed samples: {}", dataset_info.get_size());
-    // info!("Results written to {}", cli.output.display());
     info!("Finished!");
     Ok(())
 }

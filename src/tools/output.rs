@@ -4,7 +4,8 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::output::{GeneralTableOutput, IsoformTableOut};
+// use crate::output_traits::GeneralTableOutputTrait;
+use crate::results::TableOutput;
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(after_long_help = "
@@ -58,10 +59,10 @@ pub fn merge(cli: &OutputArg) -> Result<()> {
     let base = cli.input[0].clone();
     match cli.mode.as_str() {
         "merge-isoform" => {
-            let mut base_out = IsoformTableOut::load(&base)?;
+            let mut base_out = TableOutput::load(&base)?;
             for other in &cli.input[1..] {
-                let other_out = IsoformTableOut::load(other)?;
-                base_out.merge(&other_out)?;
+                let other_out = TableOutput::load(other)?;
+                base_out.merge_isoform(&other_out)?;
             }
 
             base_out.save_to_file(&cli.output)?;

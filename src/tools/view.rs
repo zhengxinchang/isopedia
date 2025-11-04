@@ -117,7 +117,7 @@ pub fn view_archive(cli: &ViewArgs) {
 
     for chrom_id in chromamp.get_chrom_idxs() {
         let cache_name = &cli.idx.join(format!("bptree_{}.idx", chrom_id));
-        let mut cache = crate::bptree::Cache::from_disk_mmap(cache_name, 10)
+        let mut cache = crate::bptree::Cache::from_disk(cache_name, 10)
             .expect("Failed to load cache from disk");
 
         let leafs = cache.get_leaf_notes();

@@ -67,7 +67,8 @@ t3:build
 	target/release/isopedia index  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
 t4:build
-	/usr/bin/time -v  target/release/isopedia isoform -i test/HG002_idx/ -f 10 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz
+	target/release/isopedia isoform -i test/HG002_idx/ \
+	-f 10 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz --debug 
 
 t41:build
 	target/release/isopedia isoform -i test/HG002_idx/ -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.gz

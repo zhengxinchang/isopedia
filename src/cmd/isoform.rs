@@ -8,17 +8,16 @@ use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
     isoform::{self, MergedIsoform},
-    isoformarchive::{read_record_from_mmap, ArchiveCache},
+    isoformarchive::ArchiveCache,
     meta::Meta,
-    output::{GeneralTableOutput, IsoformTableOut},
+    // output_traits::GeneralTableOutputTrait,
+    results::TableOutput,
     tmpidx::MergedIsoformOffsetPtr,
-    utils::{self, get_total_memory_bytes, log_mem_stats, warmup},
+    utils::{self, log_mem_stats},
 };
 use anyhow::Result;
 use clap::{command, Parser};
 use log::{error, info};
-use memmap2::Mmap;
-use nix::libc::{self, posix_madvise, POSIX_MADV_DONTNEED};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 // use nix::sys::mman::{posix_madvise, PosixMadvise};
@@ -62,14 +61,8 @@ pub struct AnnIsoCli {
     #[arg(long, default_value_t = false)]
     pub use_incomplete: bool,
 
-    /// Memory size to use for warming up (in gigabytes).  
-    /// Example: 4GB. Increasing this will significantly improve performance;  
-    /// set it as large as your system allows.
-    #[arg(short, long, default_value_t = 0)]
-    pub warmup_mem: usize,
-
-    /// Maximum number of cached nodes per tree
-    #[arg(short = 'c', long = "cached_nodes", default_value_t = 10_000)]
+    /// Maximum number of cached tree nodes in memory
+    #[arg(long = "cached_nodes", default_value_t = 1000)]
     pub lru_size: usize,
 
     /// Maximum number of cached isoform chunks in memory
@@ -77,7 +70,7 @@ pub struct AnnIsoCli {
     pub cached_chunk_number: usize,
 
     /// Cached isoform chunk size in Mb
-    #[arg(long, default_value_t = 512)]
+    #[arg(long, default_value_t = 128)]
     pub cached_chunk_size_mb: u64,
 
     /// Debug mode
@@ -117,26 +110,6 @@ impl AnnIsoCli {
         if !self.gtf.exists() {
             error!("--gtf: gtf file {} does not exist", self.gtf.display());
             is_ok = false;
-        }
-
-        let max_mem_bytes = match get_total_memory_bytes() {
-            Some(bytes) => bytes,
-            None => {
-                error!("Failed to get total memory bytes");
-                std::process::exit(1);
-            }
-        };
-
-        if self.warmup_mem > 0 {
-            let warmup_bytes = (self.warmup_mem as u64) * 1024 * 1024 * 1024;
-            if warmup_bytes > max_mem_bytes {
-                error!(
-                    "--warmup-mem: {} GB larger than system memory, please set it to less than {} GB",
-                    self.warmup_mem,
-                    max_mem_bytes / (1024 * 1024 * 1024)
-                );
-                is_ok = false;
-            }
         }
 
         if is_ok != true {
@@ -202,16 +175,25 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         out_header.add_sample_name(&name)?;
     }
 
-    let mut isoform_out = IsoformTableOut::new(
-        out_header,
-        db_infos,
+    let mut tableout = TableOutput::new(
+        cli.output.clone(),
+        out_header.clone(),
+        db_infos.clone(),
         meta.clone(),
         ISOFORM_FORMAT.to_string(),
     );
 
-    info!("Warmup index file");
-    let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
-    warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
+    // let mut isoform_out = IsoformTableOut::new(
+    //     cli.output.clone().with_extension("old.gz"),
+    //     out_header,
+    //     db_infos,
+    //     meta.clone(),
+    //     ISOFORM_FORMAT.to_string(),
+    // );
+
+    // info!("Warmup index file");
+    // let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
+    // warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
 
     info!("Loading index file");
 
@@ -244,6 +226,17 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             iter_count = 0;
 
             if cli.debug {
+                let isoform_out_mem = &tableout.get_mem_size();
+                let tree_mem = forest.get_mem_size();
+                let acc_sample_read_info_arr_mem: usize =
+                    acc_sample_read_info_arr.iter().map(|s| s.len()).sum();
+                info!(
+                    "Current output in-memory size: {} MB, tree in-memory size: {} MB, read info array size: {} MB",
+                    isoform_out_mem / (1024 * 1024),
+                    tree_mem / (1024 * 1024),
+                    acc_sample_read_info_arr_mem / (1024 * 1024)
+                );
+
                 log_mem_stats();
             }
         }
@@ -408,7 +401,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
                 out_line.add_sample(samplechip);
             }
-            isoform_out.add_line(&out_line)?;
+            // isoform_out.add_line(&out_line)?;
+            tableout.add_line(&out_line)?;
         } else {
             out_line.add_field(&trans.chrom);
             out_line.add_field(&trans.start.to_string());
@@ -433,11 +427,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 );
                 out_line.add_sample(samplechip);
             }
-            isoform_out.add_line(&out_line)?;
+            // isoform_out.add_line(&out_line)?;
+            tableout.add_line(&out_line)?;
         }
     }
 
-    log_mem_stats();
+    // log_mem_stats();
 
     let total = fsm_hit_count + miss_count;
     info!(
@@ -463,7 +458,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         fsm_hit_count as f64 / (fsm_hit_count + miss_count) as f64 * 100f64
     );
     // info!("Writing output to {}", cli.output.display());
-    isoform_out.save_to_file(&cli.output)?;
+    // isoform_out.finish()?;
+    tableout.finish()?;
     info!("Finished");
     Ok(())
 }

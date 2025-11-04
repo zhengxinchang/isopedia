@@ -39,6 +39,10 @@ impl MyGzWriter {
         }
     }
 
+    pub fn path(&self) -> &str {
+        &self.file_name
+    }
+
     pub fn flush(&mut self) -> io::Result<()> {
         match &mut self.inner {
             Some(writer) => writer.flush(),

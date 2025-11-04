@@ -339,26 +339,3 @@ impl GeneralOutputIO for Meta {
         })
     }
 }
-
-#[cfg(test)]
-
-mod tests {
-    use crate::output::{GeneralTableOutput, IsoformTableOut};
-
-    use super::*;
-    use std::io::Cursor;
-
-    #[test]
-    fn test_meta_merge() {
-        let meta1_path = "test/test.output.isoform.gz";
-        // let meta2_path = "/hdd1/isopedia_datadownload/gencode.v47.basic.annotation.isoform2.gz";
-        let meta2_path = "test/test.output.isoform.gz";
-        let mut isofom_out1 = IsoformTableOut::load(meta1_path).unwrap();
-        let mut isofom_out2 = IsoformTableOut::load(meta2_path).unwrap();
-        let meta1 = isofom_out1.meta.clone();
-        let meta2 = isofom_out2.meta.clone();
-        let mut merged_meta = meta1.clone();
-        merged_meta.merge(&meta2).unwrap();
-        merged_meta.save_to_file("test/merged.meta.txt").unwrap();
-    }
-}

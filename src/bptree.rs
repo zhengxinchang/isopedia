@@ -375,6 +375,7 @@ pub struct Cache {
     pub payload_file_path: Option<PathBuf>,
     pub mmap: Option<memmap2::Mmap>,
     pub lru: LruCache<u64, Arc<Node>>,
+    // mmap: Option<_>,
 }
 
 impl Cache {
@@ -489,7 +490,7 @@ impl Cache {
         leaves
     }
 
-    pub fn from_disk<P: AsRef<Path>>(file_path: P, lru_size: usize) -> Cache {
+    pub fn from_disk<P: AsRef<Path>>(file_path: P, lru_size: usize) -> Result<Cache> {
         let mut file: File = File::open(&file_path).unwrap();
         let mut header_bytes = [0; 4096];
         file.read_exact(&mut header_bytes).unwrap();
@@ -506,7 +507,7 @@ impl Cache {
         }
 
         let header = CacheHeader::from_bytes(&header_bytes).unwrap();
-        Cache {
+        Ok(Cache {
             header,
             file,
             file_path: PathBuf::from(file_path.as_ref()),
@@ -514,7 +515,7 @@ impl Cache {
             payload_file_path: None,
             mmap: None,
             lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
-        }
+        })
     }
 
     pub fn from_disk_mmap<P: AsRef<Path>>(idx_path: P, lru_size: usize) -> Result<Cache> {
@@ -533,6 +534,42 @@ impl Cache {
     }
 
     pub fn get_node2(&mut self, node_id: u64) -> Option<Arc<Node>> {
+        if let Some(n) = self.lru.get(&node_id) {
+            return Some(Arc::clone(n));
+        }
+
+        if node_id == 0 || node_id > self.header.total_nodes {
+            return None;
+        }
+
+        // 计算偏移并读取节点头部
+        let off = (node_id * 4096) as u64;
+        let mut hdr_buf = [0u8; 4096];
+        if let Err(e) = self.file.read_at(&mut hdr_buf, off) {
+            eprintln!("Failed to read node header at {}: {}", off, e);
+            return None;
+        }
+        let mut node = Node::load_header_from_bytes(&hdr_buf);
+
+        // 读取 payload 区域
+        let po = node.header.payload_offset + self.header.payload_start_offset as u64;
+        let ps = node.header.payload_size as usize;
+        if ps > 0 {
+            let mut data_buf = vec![0u8; ps];
+            if let Err(e) = self.file.read_at(&mut data_buf, po) {
+                eprintln!("Failed to read payload at {}: {}", po, e);
+                return None;
+            }
+            node.load_record_pointers_from_bytes(&data_buf);
+        }
+
+        let arc_node = Arc::new(node);
+        self.lru.put(node_id, Arc::clone(&arc_node));
+
+        Some(arc_node)
+    }
+
+    pub fn get_node3(&mut self, node_id: u64) -> Option<Arc<Node>> {
         if let Some(n) = self.lru.get(&node_id) {
             // 命中缓存，克隆 Arc 返回
             return Some(Arc::clone(n));
@@ -609,14 +646,14 @@ impl BPTree {
     }
 
     pub fn from_disk(idx_path: &PathBuf, chrom_id: u16, lru_size: usize) -> BPTree {
-        let cache = Cache::from_disk_mmap(
+        let cache = Cache::from_disk(
             idx_path
                 .join(format!("bptree_{}.idx", chrom_id))
                 .to_str()
                 .unwrap(),
             lru_size,
         )
-        .expect("Can not open cache file");
+        .unwrap_or_else(|_| panic!("Can not load bptree cache from {:?}", idx_path));
         BPTree {
             root: 0,
             idxdir: PathBuf::from(idx_path),
@@ -786,16 +823,6 @@ impl BPTree {
             }
         };
 
-        // // span the range in the leaf node
-
-        // dbg!(
-        //     &node.header.node_id,
-        //     &node.header.keys[0],
-        //     &node.get_max_key(),
-        //     &start,
-        //     &end
-        // );
-
         let mut results = Vec::new();
         // results.reserve(estimated_size);
 
@@ -807,10 +834,6 @@ impl BPTree {
                 }
 
                 if *k > end {
-                    // dbg!("break at key:", k);
-                    // dbg!("current results:", &results);
-
-                    // println!("node max key: {}", node.get_max_key());
                     return results;
                 }
 

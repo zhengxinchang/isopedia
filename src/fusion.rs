@@ -4,8 +4,8 @@ use crate::{
     dataset_info::DatasetInfo,
     gene_index::{CandidateMatchStatus, GeneInterval, GeneIntervalTree},
     io::{Line, SampleChip},
-    output::{FusionDiscoveryTableOut, GeneralTableOutput},
     reads::Segment,
+    results::TableOutput,
     utils::{hash_vec, is_overlap},
 };
 use ahash::HashSet;
@@ -498,7 +498,7 @@ impl FusionCluster {
     pub fn generate_record_line(
         &self,
         index_info: &DatasetInfo,
-        fusiondiscovery_out: &mut FusionDiscoveryTableOut,
+        fusiondiscovery_out: &mut TableOutput,
     ) -> Result<()> {
         // let mut out_str = String::new();
         let total_samples = index_info.get_size();

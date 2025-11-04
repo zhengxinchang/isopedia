@@ -3,9 +3,7 @@ use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
 use crate::io::{self, DBInfos, Line};
 use crate::isoform::MergedIsoform;
-use crate::isoformarchive::read_record_from_mmap;
-use crate::output::{GeneralTableOutput, SpliceTableOut};
-use crate::utils::{get_total_memory_bytes, warmup};
+use crate::results::TableOutput;
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
 use clap::{arg, Parser};
@@ -52,21 +50,17 @@ pub struct AnnSpliceCli {
     #[arg(short, long)]
     pub output: PathBuf,
 
-    #[arg(
-        short,
-        long,
-        default_value_t = 0,
-        long_help = "
-    Memory size to use for warming up (in gigabytes).
-    Example: 4GB. Increasing this will significantly improve performance.
-    Set it to 0(default) if you only have small query and want to skip warming up step.
-    "
-    )]
-    pub warmup_mem: usize,
-
     /// Maximum number of cached nodes per tree
     #[arg(short = 'c', long = "cached_nodes", default_value_t = 100_000)]
     pub lru_size: usize,
+
+    /// Maximum number of cached isoform chunks in memory
+    #[arg(long, default_value_t = 4)]
+    pub cached_chunk_number: usize,
+
+    /// Cached isoform chunk size in Mb
+    #[arg(long, default_value_t = 128)]
+    pub cached_chunk_size_mb: u64,
 
     /// Debug mode
     #[arg(short, long, default_value_t = false, help = "Enable debug mode")]
@@ -112,30 +106,10 @@ impl AnnSpliceCli {
             }
         }
 
-        let max_mem_bytes = match get_total_memory_bytes() {
-            Some(bytes) => bytes,
-            None => {
-                error!("Failed to get total memory bytes");
-                std::process::exit(1);
-            }
-        };
-
         if let Some(splice_str) = &self.splice {
             if utils::parse_splice_junction_str(&splice_str).is_err() {
                 error!("Failed to parse splice junction: {}", splice_str);
                 std::process::exit(1);
-            }
-        }
-
-        if self.warmup_mem > 0 {
-            let warmup_bytes = (self.warmup_mem as u64) * 1024 * 1024 * 1024;
-            if warmup_bytes > max_mem_bytes {
-                error!(
-                    "--warmup-mem: {} GB larger than system memory, please set it to less than {} GB",
-                    self.warmup_mem,
-                    max_mem_bytes / (1024 * 1024 * 1024)
-                );
-                is_ok = false;
             }
         }
 
@@ -160,31 +134,27 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     greetings(&cli);
     cli.validate();
 
-    if cli.warmup_mem > 0 {
-        info!("Warmup index file");
-        let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
-        warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
-    }
-
     info!("loading indexes");
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
-    let mut archive_buf: Vec<u8> = Vec::with_capacity(1024 * 1024); // 1MB buffer
 
     info!("loading metadata");
     let meta = meta::Meta::parse(cli.idxdir.join(META_FILE_NAME), None)?;
 
-    let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-        .expect("Can not open aggregated records file...");
+    // let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
+    //     .expect("Can not open aggregated records file...");
 
-    let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
+    // let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
 
-    archive_mmap
-        .advise(memmap2::Advice::Sequential)
-        .expect("Failed to set mmap advice");
+    // archive_mmap
+    //     .advise(memmap2::Advice::Sequential)
+    //     .expect("Failed to set mmap advice");
 
-    // init the output writer
-    // let mut mywriter = MyGzWriter::new(&cli.output)?;
+    let mut archive_cache = crate::isoformarchive::ArchiveCache::new(
+        cli.idxdir.clone().join(MERGED_FILE_NAME),
+        cli.cached_chunk_size_mb * 1024 * 1024, // chunk size
+        cli.cached_chunk_number,                // number of chunks
+    );
 
     const SPLICE_FORMAT: &str = "COUNT:CPM:START,END,STRAND";
 
@@ -251,8 +221,13 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         out_header.add_sample_name(&name)?;
     }
 
-    let mut splice_out =
-        SpliceTableOut::new(out_header, dbinfo, meta.clone(), SPLICE_FORMAT.to_string());
+    let mut tableout = TableOutput::new(
+        cli.output.clone(),
+        out_header,
+        dbinfo,
+        meta.clone(),
+        SPLICE_FORMAT.to_string(),
+    );
 
     // make output
     let mut out_str = String::with_capacity(1024);
@@ -279,8 +254,8 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
 
                 out_line.update_format_str(SPLICE_FORMAT);
 
-                let record: MergedIsoform =
-                    read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
+                let record: MergedIsoform = archive_cache.read_bytes(&offset);
+                // read_record_from_mmap(&archive_mmap, &offset, &mut archive_buf);
                 if cli.debug {
                     dbg!(&record);
                 }
@@ -293,7 +268,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
                         for samplec in &sample_vec {
                             out_line.add_sample(samplec.clone());
                         }
-                        splice_out.add_line(&out_line)?;
+                        tableout.add_line(&out_line)?;
                     }
                     None => {}
                 }
@@ -301,9 +276,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         }
     }
 
-    splice_out.save_to_file(cli.output.clone())?;
-
-    // mywriter.finish()?;
+    tableout.finish()?;
 
     info!("Finished!");
 

@@ -40,3 +40,4 @@ rand = "0.8"
 
 [profile.release]
 panic = 'abort'
+debug = true

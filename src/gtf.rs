@@ -43,9 +43,9 @@ impl Transcript {
             gene_id: String::new(),
             trans_id: String::new(),
             records: Vec::new(),
-            strand: record.strand().expect(
-                format!("GTF must have strand information for transcript/exon records, however the record below is missing\n {:?}", record).as_str(),
-            ),
+            strand: record.strand().unwrap_or_else(||{
+                panic!("GTF must have strand information for transcript/exon records, however this record is missing.\nRecord: {record:?}")
+            }),
         };
 
         trans.chrom = trim_chr_prefix_to_upper(record.reference_sequence_name());
@@ -53,14 +53,14 @@ impl Transcript {
             .attributes()
             .iter()
             .find(|x| x.key() == "gene_id")
-            .expect("GTF must have gene_id")
+            .unwrap_or_else(|| panic!("GTF must have gene id"))
             .value()
             .to_string();
         trans.trans_id = record
             .attributes()
             .iter()
             .find(|x| x.key() == "transcript_id")
-            .expect("GTF must have transcript_id")
+            .unwrap_or_else(|| panic!("GTF must have transcript_id"))
             .value()
             .to_string();
         trans.start = record.start().get() as u64 - 1;
