@@ -16,6 +16,7 @@ pub mod meta;
 // pub mod output_traits;
 pub mod reads;
 pub mod results;
+pub mod runtime;
 pub mod tmpidx;
 pub mod tools;
 pub mod utils;

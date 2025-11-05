@@ -2,10 +2,12 @@
 // a reusable matrix structure, that records the row and column max.
 //
 
-use crate::isoformarchive::read_record_from_mmap;
+use crate::cmd::isoform::AnnIsoCli;
+use crate::isoformarchive::ArchiveCache;
+use crate::runtime::Runtime;
 use crate::tmpidx::MergedIsoformOffsetPtr;
 use ahash::HashSet;
-use memmap2::Mmap;
+use anyhow::Result;
 pub struct Assembler {
     pub splice_sites: Vec<u32>,
     pub matix: Vec<Vec<u32>>,
@@ -65,9 +67,10 @@ impl Assembler {
         &mut self,
         queries: &Vec<(String, u64)>,
         all_res: &Vec<Vec<MergedIsoformOffsetPtr>>,
-        archive: &Mmap,
-        flank: u64,
-    ) -> (bool, Vec<u32>) {
+        archive: &mut ArchiveCache,
+        cli: &AnnIsoCli,
+        runtime: &mut Runtime,
+    ) -> Result<()> {
         let splice_junctions: Vec<u64> = queries.iter().map(|q| q.1).collect();
         // make Vec<(64,64)> for splice junciton
         let mut sj_pairs: Vec<(u64, u64)> = Vec::new();
@@ -82,21 +85,22 @@ impl Assembler {
 
         // for each res, check if it has at least two splice junctions.
 
-        let mut candidates = Vec::new();
-        let mut candidates_sig_set = HashSet::default();
+        let mut candidates_offsets = Vec::new();
+        let mut candidates_offsets_dedup = HashSet::default();
 
         // dbg!("Total isoform candidates: {}", all_res.iter().map(|r| r.len()).sum::<usize>());
         // dbg!(all_res.len());
 
-        for rec in all_res.iter() {
-            for r in rec {
-                if r.n_splice_sites >= 2 && r.n_splice_sites < queries.len() as u32 {
+        for offsets in all_res.iter() {
+            for offset in offsets {
+                if offset.n_splice_sites >= 2 && offset.n_splice_sites < queries.len() as u32 {
                     // only consider isoforms with at least 2 splice junctions
 
                     // only consider the isoforms not covering all splice junctions
-                    if !candidates_sig_set.contains(&r.offset) {
-                        candidates_sig_set.insert(r.offset);
-                        candidates.push(r);
+                    // ignore duplicated offsets
+                    if !candidates_offsets_dedup.contains(&offset.offset) {
+                        candidates_offsets_dedup.insert(offset.offset);
+                        candidates_offsets.push(offset);
                     }
                 }
             }
@@ -104,23 +108,22 @@ impl Assembler {
 
         // dbg!(candidates.len());
 
-        for cand_offset in candidates.iter() {
+        for cand_offset in candidates_offsets.iter() {
             // load the isoform from archive
-            let merged_rec = read_record_from_mmap(&archive, cand_offset, &mut self.record_buf);
+            let record = archive.read_bytes(*cand_offset);
 
             let (is_all_matched, first_match, matched_count) =
-                merged_rec.match_splice_junctions(&sj_pairs, flank);
-
-            // println!("query sj: {:?}\n", sj_pairs);
-            // println!("isofo sj: {:?}\n", merged_rec.splice_junctions_vec);
+                record.match_splice_junctions(&sj_pairs, cli.flank);
 
             if is_all_matched {
-                // mark the matrix
-                // println!("Matched isoform: {}, sample_vec {:?}, matched_count: {}, first_match_pos: {}\n", merged_rec.signature, merged_rec.get_sample_evidence_arr(), matched_count, first_match);
+                if cli.info {
+                    runtime.ism_trigger_add_read_info(&record)?;
+                }
+
                 for idx_col in first_match as usize..(first_match as usize + matched_count as usize)
                 {
                     for (idx_row, sample_evidence) in
-                        merged_rec.get_sample_evidence_arr().iter().enumerate()
+                        record.get_sample_evidence_arr().iter().enumerate()
                     {
                         if *sample_evidence > 0 {
                             self.add_at(idx_row, idx_col, *sample_evidence);
@@ -130,19 +133,20 @@ impl Assembler {
             }
         }
 
-        self.estimate_sample_cov_vec()
+        let (is_hit, cov_vec) = self.estimate_sample_cov_vec();
+
+        if is_hit {
+            runtime.add_one_ism_hit();
+            runtime.update_ism_record(&cov_vec)?;
+        }
+
+        Ok(())
     }
 
     fn _estimate_cov(sample_vec: &Vec<u32>, total_sample_size: &usize) -> u32 {
         // as of now, simply return the mean coverage
         let mut total_cov: u32 = 0;
         let mut count: u32 = 0;
-        // for cov in sample_vec.iter() {
-        //     if *cov > 0 {
-        //         total_cov += *cov;
-        //         count += 1;
-        //     }
-        // }
         for sidx in 0..*total_sample_size {
             let cov = sample_vec[sidx];
             if cov > 0 {

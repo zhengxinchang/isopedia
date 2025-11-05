@@ -3,7 +3,6 @@ use std::{io::Read, vec};
 use crate::{
     // constants::MAX_SAMPLE_SIZE,
     breakpoints::BreakPointPair,
-    cmd::splice,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     io::SampleChip,

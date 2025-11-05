@@ -68,7 +68,7 @@ t3:build
 
 t4:build
 	target/release/isopedia isoform -i test/HG002_idx/ \
-	-f 10 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz --debug 
+	-f 10 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz --use-incomplete
 
 t41:build
 	target/release/isopedia isoform -i test/HG002_idx/ -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.gz
