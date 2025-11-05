@@ -20,7 +20,44 @@ use isopedia::logger::init_logger;
     about = "[Isopedia] Simultaneous exploration of thousands of long-read transcriptomes by read-level indexing\n\nRepository: https://github.com/zhengxinchang/isopedia \nContact: Xinchang Zheng <zhengxc93@gmail.com>",
     author,
     version,
-    long_about = None,
+    after_long_help = "
+    
+    > [Query examples]
+
+    # query isoform
+    isopedia isoform -i /path/to/index -g query.gtf -o output_isoform.tsv.gz
+
+    # query fusion breakpoints
+    isopedia fusion --idxdir /path/to/index --pos chr1:1000,chr2:2000 -o single.tsv.gz
+    isopedia fusion --idxdir /path/to/index --pos-bed /path/to/fusion_breakpoints.bed -o batch.tsv.gz # batch query
+
+    # query gene regions to idenitify potential fusion events
+    isopedia fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.tsv.gz
+
+    # query splice junctions
+    isopedia splice --idxdir /path/to/index -s chr1:1000,chr2:2000 -o single.tsv.gz
+    isopedia splice --idxdir /path/to/index -S /path/to/sj.bed -o batch.tsv.gz # batch query
+    isopedia-splice-viz.py -i single.tsv.gz -g gencode.basic.gtf -o splice_viz.html # visualize splice junctions
+
+
+    > [Build your own index]
+
+    # step1: profile single sample
+    isopedia profile -i /path/to/sample.bam -o /path/to/profile.tsv.gz
+
+    # step2: merge multiple profiles
+    printf \"name \\t path \\n\" > manifest.tsv
+    printf \"sample1 \\t /path/to/sample1_profile.tsv.gz \\n\" >> manifest.tsv
+    printf \"sample2 \\t /path/to/sample2_profile.tsv.gz \\n\" >> manifest.tsv
+    isopedia merge -i manifest.tsv -o index/ 
+
+    # step3: build index
+    isopedia index -i index/ -m manifest.tsv
+
+    > [Full documentation]
+
+    https://github.com/zhengxinchang/isopedia
+    "
 )]
 struct Cli {
     #[command(subcommand)]
