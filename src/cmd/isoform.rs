@@ -59,7 +59,7 @@ pub struct AnnIsoCli {
 
     /// Include in-complete splice junction matches
     #[arg(long, default_value_t = false)]
-    pub use_incomplete: bool,
+    pub assemble: bool,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(long = "cached_nodes", default_value_t = 1000)]
@@ -206,19 +206,20 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     info!("Processing transcripts");
     let mut iter_count = 0;
     let mut batch = 0;
-    let mut acc_pos_count = vec![0u32; dataset_info.get_size()];
-    let mut acc_sample_evidence_arr = vec![0u32; dataset_info.get_size()];
-    let mut acc_sample_read_info_arr = vec!["".to_string(); dataset_info.get_size()];
+    // let mut acc_pos_count = vec![0u32; dataset_info.get_size()];
+    // let mut acc_sample_evidence_arr = vec![0u32; dataset_info.get_size()];
+    // let mut acc_sample_read_info_arr = vec!["".to_string(); dataset_info.get_size()];
 
-    let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
+    // let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
     let mut assembler = Assembler::init(dataset_info.get_size());
-    let mut assembled: Vec<u32> = Vec::with_capacity(dataset_info.get_size());
+    // let mut assembled: Vec<u32> = Vec::with_capacity(dataset_info.get_size());
 
     let mut runtime = Runtime::init(dataset_info.get_size());
 
     for trans in gtf_vec {
         iter_count += 1;
 
+        runtime.add_one_total();
         runtime.reset();
 
         if iter_count == 10_000 {
@@ -232,13 +233,10 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             if cli.debug {
                 let isoform_out_mem = &tableout.get_mem_size();
                 let tree_mem = forest.get_mem_size();
-                let acc_sample_read_info_arr_mem: usize =
-                    acc_sample_read_info_arr.iter().map(|s| s.len()).sum();
                 info!(
-                    "Current output in-memory size: {} MB, tree in-memory size: {} MB, read info array size: {} MB",
+                    "Current output in-memory size: {} MB, tree in-memory size: {} MB",
                     isoform_out_mem / (1024 * 1024),
                     tree_mem / (1024 * 1024),
-                    acc_sample_read_info_arr_mem / (1024 * 1024)
                 );
 
                 log_mem_stats();
@@ -251,15 +249,22 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         let (hits, all_res) = forest.search2_all_match(&queries, cli.flank, cli.lru_size);
 
         // enable the assembler to assemble fragmented reads into isoforms
-        if cli.use_incomplete {
+        let ism_hit = if cli.assemble {
             assembler.reset();
-            assembler.assemble(&queries, &all_res, &mut archive_cache, cli, &mut runtime)?;
+            let is_hit =
+                assembler.assemble(&queries, &all_res, &mut archive_cache, cli, &mut runtime);
 
+            if cli.debug {
+                assembler.print_matrix();
+            }
             // if is_good {
             //     runtime.add_one_ism_hit();
             //     runtime.update_ism_record(&assembled)?;
             // }
-        }
+            is_hit
+        } else {
+            false
+        };
 
         // make sure the returned isoform has exactly the same number of splice sites as the query
         let target: Vec<MergedIsoformOffsetPtr> = hits
@@ -267,10 +272,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             .filter(|x| x.n_splice_sites == queries.len() as u32)
             .collect();
 
-        if target.len() == 0 {
-            runtime.add_one_missed_hit();
-        } else {
+        if target.len() > 0 {
             runtime.add_one_fsm_hit();
+        } else {
+            if ism_hit {
+                runtime.add_one_ism_hit();
+            }
         }
 
         let mut out_line = Line::new();
@@ -278,9 +285,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
         if target.len() > 0 {
             // have hits
-            acc_pos_count.fill(0);
-            acc_sample_evidence_arr.fill(0);
-            acc_sample_read_info_arr.fill("NULL".to_string());
+            // acc_pos_count.fill(0);
+            // acc_sample_evidence_arr.fill(0);
+            // acc_sample_read_info_arr.fill("NULL".to_string());
 
             for offset in &target {
                 // let record: MergedIsoform =
@@ -349,7 +356,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             out_line.add_field(&trans.gene_id);
             // out_line.add_field(&trans.get_attributes());
 
-            let confidence = match cli.use_incomplete {
+            let confidence = match cli.assemble {
                 true => runtime.get_fsm_ism_confidence(&dataset_info),
                 false => runtime.get_fsm_confidence(&dataset_info),
             };
@@ -358,7 +365,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             out_line.add_field("yes");
             out_line.add_field(&cli.min_read.to_string());
 
-            let positive_count = match cli.use_incomplete {
+            let positive_count = match cli.assemble {
                 true => runtime.get_fsm_ism_positive_count_by_min_read(cli),
                 false => runtime.get_fsm_positive_count_by_min_read(&cli),
             };
@@ -464,7 +471,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     // log_mem_stats();
 
-    let total = runtime.fsm_hit + runtime.ism_hit + runtime.missed_hit;
+    let total = runtime.total;
+    let missed = total - runtime.fsm_hit - runtime.ism_hit;
     info!(
         "Processed {} transcripts",
         (10_000 * batch + iter_count).to_formatted_string(&Locale::en)
@@ -487,11 +495,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         );
     }
     info!(
-        "Index-wide stats: hit: {}, miss: {}, total: {}, pct: {:.2}%",
+        "Index-wide stats: hit(fsm): {}, hit(ism): {}, miss: {}, total: {}, pct: {:.2}%",
         runtime.fsm_hit.to_formatted_string(&Locale::en),
-        runtime.missed_hit.to_formatted_string(&Locale::en),
-        (runtime.fsm_hit + runtime.missed_hit).to_formatted_string(&Locale::en),
-        runtime.fsm_hit as f64 / (runtime.fsm_hit + runtime.missed_hit) as f64 * 100f64
+        runtime.ism_hit.to_formatted_string(&Locale::en),
+        missed.to_formatted_string(&Locale::en),
+        (runtime.total).to_formatted_string(&Locale::en),
+        (runtime.fsm_hit + runtime.ism_hit) as f64 / (runtime.total) as f64 * 100f64
     );
     // info!("Writing output to {}", cli.output.display());
     // isoform_out.finish()?;

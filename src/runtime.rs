@@ -3,6 +3,7 @@ use anyhow::Result;
 
 pub struct Runtime {
     n_sample: usize,
+    pub total: u64,
     pub fsm_hit: u64,
     pub ism_hit: u64,
     pub missed_hit: u64,
@@ -20,6 +21,7 @@ impl Runtime {
     pub fn init(n_sample: usize) -> Self {
         Runtime {
             n_sample,
+            total: 0,
             fsm_acc_positive_sample_vec_by_min_read: vec![0; n_sample],
             fsm_acc_sample_read_info_vec: vec!["NULL".to_string(); n_sample],
             fsm_acc_sample_evidence_arr: vec![0; n_sample],
@@ -67,6 +69,10 @@ impl Runtime {
 
     pub fn add_one_missed_hit(&mut self) {
         self.missed_hit += 1;
+    }
+
+    pub fn add_one_total(&mut self) {
+        self.total += 1;
     }
 
     pub fn get_fsm_positive_count_by_min_read(&self, cli: &AnnIsoCli) -> usize {
@@ -151,7 +157,7 @@ impl Runtime {
         let mut cpm_vec = Vec::with_capacity(self.n_sample);
         let mut read_info_vec = Vec::with_capacity(self.n_sample);
 
-        match cli.use_incomplete {
+        match cli.assemble {
             true => {
                 let read_info = self.get_fsm_ism_read_info_vec();
 

@@ -7,37 +7,25 @@ use crate::isoformarchive::ArchiveCache;
 use crate::runtime::Runtime;
 use crate::tmpidx::MergedIsoformOffsetPtr;
 use ahash::HashSet;
-use anyhow::Result;
 pub struct Assembler {
-    pub splice_sites: Vec<u32>,
-    pub matix: Vec<Vec<u32>>,
+    pub matix: Vec<u32>, // flattened matrix
     pub sample_count: usize,
-    pub splice_site_count: usize,
+    pub splice_junction_count: usize, // each junciton is a node
     pub record_buf: Vec<u8>,
 }
 
 impl Assembler {
-    pub fn init(index_size: usize) -> Self {
+    pub fn init(n_sample: usize) -> Self {
         //          sj1 sj2 sj3 ...
         // sample 1
         // sample 2
 
-        let mut matrix = Vec::new();
-        // for _ in 0..200 {
-        //     // 100 sjs
-        //     matrix.push(vec![0u32; index_size]);
-        // }
-
-        // outer is sample inner is splice site
-        for _ in 0..index_size {
-            matrix.push(vec![0u32; 200]); // 200 sjs
-        }
+        let matrix = Vec::new();
 
         Assembler {
-            splice_sites: Vec::new(),
-            matix: matrix, //outer is splice site, inner is sample
-            sample_count: index_size,
-            splice_site_count: 0,
+            matix: matrix, // flattened matrix
+            sample_count: n_sample,
+            splice_junction_count: 0,
             record_buf: Vec::new(),
         }
     }
@@ -46,21 +34,29 @@ impl Assembler {
     pub fn reset(&mut self) {
         // reset the matrix demensions
         // self.sample_count = 0;
-        self.splice_site_count = 0;
+        self.splice_junction_count = 0;
         // clear the matrix content
-        for row in self.matix.iter_mut() {
-            for val in row.iter_mut() {
-                *val = 0;
-            }
-        }
+        self.matix.clear();
     }
 
     fn add_at(&mut self, sample_idx: usize, splice_site_idx: usize, val: u32) {
-        self.matix[sample_idx][splice_site_idx] = self.matix[sample_idx][splice_site_idx] + val;
+        // expand if necessary
+        let required_size = sample_idx * self.splice_junction_count + splice_site_idx;
+        if self.matix.len() <= required_size {
+            self.matix.resize(required_size + 1, 0); // initialize new elements to 0
+        }
+
+        self.matix[sample_idx * self.splice_junction_count + splice_site_idx] =
+            self.matix[sample_idx * self.splice_junction_count + splice_site_idx] + val;
     }
 
     fn get(&self, sample_idx: usize, splice_site_idx: usize) -> u32 {
-        self.matix[sample_idx][splice_site_idx]
+        let base_idx = sample_idx * self.splice_junction_count + splice_site_idx;
+        if base_idx >= self.matix.len() {
+            return 0;
+        }
+
+        self.matix[base_idx]
     }
 
     pub fn assemble(
@@ -70,7 +66,7 @@ impl Assembler {
         archive: &mut ArchiveCache,
         cli: &AnnIsoCli,
         runtime: &mut Runtime,
-    ) -> Result<()> {
+    ) -> bool {
         let splice_junctions: Vec<u64> = queries.iter().map(|q| q.1).collect();
         // make Vec<(64,64)> for splice junciton
         let mut sj_pairs: Vec<(u64, u64)> = Vec::new();
@@ -81,23 +77,16 @@ impl Assembler {
         }
 
         // record the matrix size
-        self.splice_site_count = sj_pairs.len();
+        self.splice_junction_count = sj_pairs.len();
 
         // for each res, check if it has at least two splice junctions.
 
         let mut candidates_offsets = Vec::new();
         let mut candidates_offsets_dedup = HashSet::default();
 
-        // dbg!("Total isoform candidates: {}", all_res.iter().map(|r| r.len()).sum::<usize>());
-        // dbg!(all_res.len());
-
         for offsets in all_res.iter() {
             for offset in offsets {
                 if offset.n_splice_sites >= 2 && offset.n_splice_sites < queries.len() as u32 {
-                    // only consider isoforms with at least 2 splice junctions
-
-                    // only consider the isoforms not covering all splice junctions
-                    // ignore duplicated offsets
                     if !candidates_offsets_dedup.contains(&offset.offset) {
                         candidates_offsets_dedup.insert(offset.offset);
                         candidates_offsets.push(offset);
@@ -105,8 +94,6 @@ impl Assembler {
                 }
             }
         }
-
-        // dbg!(candidates.len());
 
         for cand_offset in candidates_offsets.iter() {
             // load the isoform from archive
@@ -117,7 +104,9 @@ impl Assembler {
 
             if is_all_matched {
                 if cli.info {
-                    runtime.ism_trigger_add_read_info(&record)?;
+                    runtime
+                        .ism_trigger_add_read_info(&record)
+                        .unwrap_or_else(|_| panic!("can not add read info for ism reads"));
                 }
 
                 for idx_col in first_match as usize..(first_match as usize + matched_count as usize)
@@ -136,18 +125,21 @@ impl Assembler {
         let (is_hit, cov_vec) = self.estimate_sample_cov_vec();
 
         if is_hit {
-            runtime.add_one_ism_hit();
-            runtime.update_ism_record(&cov_vec)?;
+            runtime
+                .update_ism_record(&cov_vec)
+                .unwrap_or_else(|_| panic!("can not update ism record"));
         }
 
-        Ok(())
+        // self.print_matrix();
+
+        is_hit
     }
 
-    fn _estimate_cov(sample_vec: &Vec<u32>, total_sample_size: &usize) -> u32 {
+    fn _estimate_cov(sample_vec: &Vec<u32>) -> u32 {
         // as of now, simply return the mean coverage
         let mut total_cov: u32 = 0;
         let mut count: u32 = 0;
-        for sidx in 0..*total_sample_size {
+        for sidx in 0..sample_vec.len() {
             let cov = sample_vec[sidx];
             if cov > 0 {
                 total_cov += cov;
@@ -159,7 +151,7 @@ impl Assembler {
         // dbg!(sample_vec.len());
 
         if count > 0 {
-            if count == *total_sample_size as u32 {
+            if count == sample_vec.len() as u32 {
                 total_cov / count
             } else {
                 0
@@ -169,32 +161,51 @@ impl Assembler {
         }
     }
 
+    pub fn get_sample_vec(&self, sample_idx: usize) -> Option<Vec<u32>> {
+        // dbg!(&self.matix);
+        // dbg!(self.sample_count);
+        // dbg!(&sample_idx);
+        // dbg!(self.splice_junction_count);
+        let base_idx = sample_idx * self.splice_junction_count;
+
+        if base_idx >= self.matix.len() {
+            return None;
+        }
+        if base_idx + self.splice_junction_count > self.matix.len() {
+            return None;
+        }
+
+        Some(self.matix[base_idx..(base_idx + self.splice_junction_count)].to_vec())
+    }
+
     pub fn estimate_sample_cov_vec(&self) -> (bool, Vec<u32>) {
         let mut is_hit = false;
         let mut sample_cov_vec: Vec<u32> = Vec::new();
         for sample_idx in 0..self.sample_count {
-            let x_cov = Assembler::_estimate_cov(&self.matix[sample_idx], &self.splice_site_count);
-            if x_cov > 0 {
-                is_hit = true;
+            match self.get_sample_vec(sample_idx) {
+                Some(s) => {
+                    let x_cov = Assembler::_estimate_cov(&s);
+                    if x_cov > 0 {
+                        is_hit = true;
+                    }
+                    sample_cov_vec.push(x_cov);
+                }
+                None => {
+                    sample_cov_vec.push(0);
+                }
             }
-            sample_cov_vec.push(x_cov);
         }
         (is_hit, sample_cov_vec)
     }
 
     pub fn print_matrix(&self) {
-        // dbg!(&self.matix);
-
-        // dbg!(self.sample_count);
-        // dbg!(self.splice_site_count);
-
         print!("SJ\t");
         for j in 0..self.sample_count {
             print!("Sample#{}\t", j);
         }
         println!();
 
-        for i in 0..self.splice_site_count {
+        for i in 0..self.splice_junction_count {
             print!("SJ#{}\t", i);
             for j in 0..self.sample_count {
                 print!("{}\t", self.get(j, i));
