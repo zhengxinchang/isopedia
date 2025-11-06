@@ -144,9 +144,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let gtf_vec = gtf.get_all_transcripts_vec();
     info!("Loaded {} transcripts from gtf file", gtf_vec.len());
 
-    let mut fsm_hit_count = 0u32;
-    let mut ism_hit_count = 0u32;
-    let mut miss_count = 0u32;
     info!("Loading sample meta...");
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
@@ -183,18 +180,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         ISOFORM_FORMAT.to_string(),
     );
 
-    // let mut isoform_out = IsoformTableOut::new(
-    //     cli.output.clone().with_extension("old.gz"),
-    //     out_header,
-    //     db_infos,
-    //     meta.clone(),
-    //     ISOFORM_FORMAT.to_string(),
-    // );
-
-    // info!("Warmup index file");
-    // let max_gb = cli.warmup_mem * 1024 * 1024 * 1024;
-    // warmup(&cli.idxdir.clone().join(MERGED_FILE_NAME), max_gb)?;
-
     info!("Loading index file");
 
     let mut archive_cache = ArchiveCache::new(
@@ -206,13 +191,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     info!("Processing transcripts");
     let mut iter_count = 0;
     let mut batch = 0;
-    // let mut acc_pos_count = vec![0u32; dataset_info.get_size()];
-    // let mut acc_sample_evidence_arr = vec![0u32; dataset_info.get_size()];
-    // let mut acc_sample_read_info_arr = vec!["".to_string(); dataset_info.get_size()];
 
-    // let mut total_acc_evidence_flag_vec = vec![0u32; dataset_info.get_size()];
     let mut assembler = Assembler::init(dataset_info.get_size());
-    // let mut assembled: Vec<u32> = Vec::with_capacity(dataset_info.get_size());
 
     let mut runtime = Runtime::init(dataset_info.get_size());
 
@@ -257,10 +237,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             if cli.debug {
                 assembler.print_matrix();
             }
-            // if is_good {
-            //     runtime.add_one_ism_hit();
-            //     runtime.update_ism_record(&assembled)?;
-            // }
             is_hit
         } else {
             false
@@ -284,68 +260,15 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         out_line.update_format_str(ISOFORM_FORMAT);
 
         if target.len() > 0 {
-            // have hits
-            // acc_pos_count.fill(0);
-            // acc_sample_evidence_arr.fill(0);
-            // acc_sample_read_info_arr.fill("NULL".to_string());
-
             for offset in &target {
-                // let record: MergedIsoform =
-                //     read_record_from_mmap(&archive_mmap, offset, &mut archive_buf);
-
                 let record: MergedIsoform = archive_cache.read_bytes(offset);
 
                 runtime.update_fsm_record(&record)?;
 
-                // acc_pos_count
-                //     .iter_mut()
-                //     .zip(record.get_positive_array(&cli.min_read))
-                //     .for_each(|(a, b)| *a += b);
-
-                // let single_sample_evidence_arr = record.get_sample_evidence_arr();
-
-                // acc_sample_evidence_arr
-                //     .iter_mut()
-                //     .zip(single_sample_evidence_arr.iter())
-                //     .for_each(|(a, b)| *a += b);
-
                 if cli.info {
-                    // for (i, ofs) in record.get_sample_offset_arr().iter().enumerate() {
-                    //     let ofs = *ofs as usize;
-                    //     let length = single_sample_evidence_arr[i] as usize;
-                    //     // get readdiffslim
-                    //     if length > 0 {
-                    //         let read_info_str = record.isoform_reads_slim_vec[ofs..ofs + length]
-                    //             .iter()
-                    //             .map(|delta| delta.to_string_no_offsets())
-                    //             .collect::<Vec<String>>()
-                    //             .join(",");
-                    //         if acc_sample_read_info_arr[i] == "NULL" {
-                    //             acc_sample_read_info_arr[i] = read_info_str;
-                    //         } else {
-                    //             acc_sample_read_info_arr[i] =
-                    //                 format!("{},{}", acc_sample_read_info_arr[i], read_info_str);
-                    //         }
-                    //     }
-                    // }
                     runtime.fsm_trigger_add_read_info(&record)?;
                 }
             }
-
-            // acc_sample_evidence_arr
-            //     .iter()
-            //     .enumerate()
-            //     .for_each(|(i, x)| {
-            //         if *x > 0 {
-            //             total_acc_evidence_flag_vec[i] += 1;
-            //         }
-            //     });
-
-            // let confidence = isoform::MergedIsoform::get_confidence_value(
-            //     &acc_sample_evidence_arr,
-            //     dataset_info.get_size(),
-            //     &dataset_info.sample_total_evidence_vec,
-            // );
 
             out_line.add_field(&trans.chrom);
             out_line.add_field(&trans.start.to_string());
@@ -478,32 +401,27 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         (10_000 * batch + iter_count).to_formatted_string(&Locale::en)
     );
     info!("Sample-wide stats: ");
-    info!("> Sample\thit(fsm)\thit(ism)\tmiss\tpct");
+    info!("> Sample\t\ttotal\thit(fsm)\thit(ism)\tmiss\tpct");
     for i in 0..dataset_info.get_size() {
         info!(
-            "> {:}\t{}\t{}\t{}\t{:.2}%",
+            "> {:}\t{}\t{}\t{}\t{}\t{:.2}%",
             dataset_info.get_sample_names()[i],
-            runtime.positive_transcript_count_by_sample_fsm[i],
-            runtime.positive_transcript_count_by_sample_ism[i],
-            total
-                - runtime.positive_transcript_count_by_sample_fsm[i]
-                - runtime.positive_transcript_count_by_sample_ism[i],
-            (runtime.positive_transcript_count_by_sample_fsm[i]
-                + runtime.positive_transcript_count_by_sample_ism[i]) as f64
-                / total as f64
-                * 100f64
+            total,
+            runtime.sample_wide_positive_transcript_fsm[i],
+            runtime.sample_wide_positive_transcript_ism[i],
+            total - runtime.sample_wide_positive_transcript_both[i],
+            (runtime.sample_wide_positive_transcript_both[i]) as f64 / total as f64 * 100f64
         );
     }
     info!(
-        "Index-wide stats: hit(fsm): {}, hit(ism): {}, miss: {}, total: {}, pct: {:.2}%",
+        "Index-wide stats: total: {}, hit(fsm): {}, hit(ism): {}, miss: {},  pct: {:.2}%",
+        (runtime.total).to_formatted_string(&Locale::en),
         runtime.fsm_hit.to_formatted_string(&Locale::en),
         runtime.ism_hit.to_formatted_string(&Locale::en),
         missed.to_formatted_string(&Locale::en),
-        (runtime.total).to_formatted_string(&Locale::en),
         (runtime.fsm_hit + runtime.ism_hit) as f64 / (runtime.total) as f64 * 100f64
     );
-    // info!("Writing output to {}", cli.output.display());
-    // isoform_out.finish()?;
+
     tableout.finish()?;
     info!("Finished");
     Ok(())

@@ -7,8 +7,9 @@ pub struct Runtime {
     pub fsm_hit: u64,
     pub ism_hit: u64,
     pub missed_hit: u64,
-    pub positive_transcript_count_by_sample_fsm: Vec<u64>,
-    pub positive_transcript_count_by_sample_ism: Vec<u64>,
+    pub sample_wide_positive_transcript_fsm: Vec<u64>,
+    pub sample_wide_positive_transcript_ism: Vec<u64>,
+    pub sample_wide_positive_transcript_both: Vec<u64>,
     fsm_acc_positive_sample_vec_by_min_read: Vec<usize>, // positive sample count that defined by min-read, aggregated multiple record
     fsm_acc_sample_read_info_vec: Vec<String>, // per-sample info string, aggregated multiple record
     fsm_acc_sample_evidence_arr: Vec<u32>, // per-sample evidence strings, aggregated multiple recor
@@ -31,8 +32,9 @@ impl Runtime {
             fsm_hit: 0,
             ism_hit: 0,
             missed_hit: 0,
-            positive_transcript_count_by_sample_fsm: vec![0; n_sample],
-            positive_transcript_count_by_sample_ism: vec![0; n_sample],
+            sample_wide_positive_transcript_fsm: vec![0; n_sample],
+            sample_wide_positive_transcript_ism: vec![0; n_sample],
+            sample_wide_positive_transcript_both: vec![0; n_sample],
         }
     }
 
@@ -264,25 +266,27 @@ impl Runtime {
     }
 
     pub fn log_stats(&mut self) {
-        self.fsm_acc_sample_evidence_arr
-            .iter()
-            .enumerate()
-            .for_each(|(i, x)| {
-                if *x > 0 {
-                    self.positive_transcript_count_by_sample_fsm[i] += 1;
-                }
-            });
+        // 这里是检验每个query是否在每个样本中hit了，如果有，则添加到对应的
+        // sample_wide* 中
+        // 因为有的query，既可以是FSM，也可以是ISM，所以 某个样本的 FSM hit + ISM hit
+        // 可能会大于1
+        // 这里需要注意鉴别的是 FSM 和 ISM 是分别统计的
 
-        self.ism_acc_sample_evidence_arr
-            .iter()
-            .enumerate()
-            .for_each(|(i, x)| {
-                if *x > 0 {
-                    self.positive_transcript_count_by_sample_ism[i] += 1;
-                }
-            });
+        for sample_idx in 0..self.n_sample {
+            if self.fsm_acc_sample_evidence_arr[sample_idx] > 0 {
+                self.sample_wide_positive_transcript_fsm[sample_idx] += 1;
+            }
+            if self.ism_acc_sample_evidence_arr[sample_idx] > 0 {
+                self.sample_wide_positive_transcript_ism[sample_idx] += 1;
+            }
+
+            if self.fsm_acc_sample_evidence_arr[sample_idx] > 0
+                || self.ism_acc_sample_evidence_arr[sample_idx] > 0
+            {
+                self.sample_wide_positive_transcript_both[sample_idx] += 1;
+            }
+        }
     }
-
     pub fn reset(&mut self) {
         self.fsm_acc_positive_sample_vec_by_min_read = vec![0; self.n_sample];
         self.ism_acc_positive_sample_vec_by_min_read = vec![0; self.n_sample];

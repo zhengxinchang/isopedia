@@ -147,9 +147,6 @@ impl Assembler {
             }
         }
 
-        // dbg!(count);
-        // dbg!(sample_vec.len());
-
         if count > 0 {
             if count == sample_vec.len() as u32 {
                 total_cov / count
@@ -162,10 +159,6 @@ impl Assembler {
     }
 
     pub fn get_sample_vec(&self, sample_idx: usize) -> Option<Vec<u32>> {
-        // dbg!(&self.matix);
-        // dbg!(self.sample_count);
-        // dbg!(&sample_idx);
-        // dbg!(self.splice_junction_count);
         let base_idx = sample_idx * self.splice_junction_count;
 
         if base_idx >= self.matix.len() {
