@@ -291,7 +291,13 @@ def main():
     # get current path for the script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     if args.template is None:
-        args.template = os.path.join(script_dir, "isopedia-splice-viz-temp.html")
+        template_path = os.path.join(script_dir, "isopedia-splice-viz-temp.html")
+    else:
+        template_path = args.template
+
+    if os.path.exists(template_path) is False:
+        print(f"Error: Template file {template_path} does not exist.", file=sys.stderr)
+        exit(1)
 
     metatable = MetaTable()
     isoform_records = []
@@ -300,10 +306,11 @@ def main():
 
     left_most = sys.maxsize
     right_most = 0
+
     # load template
     template_content = ""
 
-    with open(args.template, 'r') as template_file:
+    with open(template_path, 'r') as template_file:
         template_content = template_file.read()
 
     print(f"Loading input file: {args.input}", file=sys.stderr)

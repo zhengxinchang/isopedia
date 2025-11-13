@@ -159,7 +159,7 @@ impl Runtime {
         let mut cpm_vec = Vec::with_capacity(self.n_sample);
         let mut read_info_vec = Vec::with_capacity(self.n_sample);
 
-        match cli.assemble {
+        match cli.asm {
             true => {
                 let read_info = self.get_fsm_ism_read_info_vec();
 

@@ -82,9 +82,9 @@ t42:build
 
 
 t43:build
-	target/release/isopedia isoform --use-incomplete  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
+	target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g test/simulated_R9_missing.gtf \
-	 -o test/test.assembled2.output.gz
+	 -o test/test.assembled2.output.gz --info
 
 
 tfusion:build
@@ -129,7 +129,7 @@ tfusion6:build
 splice:build
 
 
-	target/release/isopedia splice -i test/HG002_idx/  -s 17:7675236,17:7675993  -o test/splice.output.gz
+	target/release/isopedia splice -i test/HG002_idx/  -s 17:7675236,chr17:7675993  -o test/splice.output.gz
 	python script/isopedia-splice-viz.py  -i test/splice.output.gz -g /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  -t script/temp.html  -o test/isopedia-splice-view
 	zcat test/splice.output.splice.gz  >aa
 	zcat test/splice.output.gz  >bb

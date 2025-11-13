@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use crate::utils::{self};
+use crate::utils::{self, trim_chr_prefix_to_upper};
 #[derive(Debug, Clone)]
 pub struct BreakPointPair {
     pub left_chr: String,
@@ -21,6 +21,8 @@ impl BreakPointPair {
             .next()
             .ok_or_else(|| anyhow!("Missing left_chr"))?
             .to_string();
+        let left_chr = trim_chr_prefix_to_upper(&left_chr);
+
         let left_pos = parts
             .next()
             .ok_or_else(|| anyhow!("Missing left_pos"))?
@@ -29,6 +31,8 @@ impl BreakPointPair {
             .next()
             .ok_or_else(|| anyhow!("Missing right_chr"))?
             .to_string();
+
+        let right_chr = trim_chr_prefix_to_upper(&right_chr);
         let right_pos = parts
             .next()
             .ok_or_else(|| anyhow!("Missing right_pos"))?
@@ -62,18 +66,18 @@ impl BreakPointPair {
         })
     }
 
-    pub fn parse_string_sj(s: &str) -> Result<Self> {
-        let (chr, left_pos, right_pos) = utils::parse_splice_junction_str(s)?;
+    // pub fn parse_string_sj(s: &str) -> Result<Self> {
+    //     let (chr, left_pos, right_pos) = utils::parse_splice_junction_str(s)?;
 
-        Ok(Self {
-            left_chr: chr.clone(),
-            left_pos,
-            right_chr: chr,
-            right_pos,
-            id: "single_query".to_string(),
-            rest_info: "".to_string(),
-        })
-    }
+    //     Ok(Self {
+    //         left_chr: chr.clone(),
+    //         left_pos,
+    //         right_chr: chr,
+    //         right_pos,
+    //         id: "single_query".to_string(),
+    //         rest_info: "".to_string(),
+    //     })
+    // }
 
     pub fn is_same_chr(&self) -> bool {
         self.left_chr == self.right_chr

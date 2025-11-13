@@ -23,6 +23,11 @@ pub struct Transcript {
 
 impl Transcript {
     pub fn process(&mut self) -> &mut Self {
+        // guard for emtpy exon length
+        if self.exons.len() == 0 {
+            panic!("Transcript (id={}) must have at least one exon. Check your if input GTF is sorted...",self.trans_id);
+        }
+
         self.exons.sort_by_key(|k| k.0);
 
         if self.exons.len() >= 2 {
@@ -151,9 +156,10 @@ impl<R: BufRead> TranscriptChunker<R> {
 
     pub fn get_next_transcript(&mut self) -> Option<Transcript> {
         let mut records = self.gtfreader.records();
-
+        let mut record_no = 0;
         loop {
             let record = records.next();
+            record_no += 1;
             // println!("Processing record: {:?}", &record);
             match record {
                 Some(ref rec) => match rec {
@@ -185,7 +191,7 @@ impl<R: BufRead> TranscriptChunker<R> {
                         _ => {}
                     },
                     Err(e) => {
-                        panic!("error in reading gtf/gff: {:?}, record: {:?}\nPlease check your gtf/gff format", e, &record);
+                        panic!("error in reading gtf: {:?}, record (no.{record_no}: {:?}\nPlease check your gtf format. One possible reason is the input file is GFF format.", e, &record);
                     }
                 },
                 None => {

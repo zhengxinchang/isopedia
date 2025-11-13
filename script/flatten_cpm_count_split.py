@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from typing import List, Optional, Tuple, TextIO
+import gzip
 
 def read_header_and_first_data(fp: TextIO) -> Tuple[str, Optional[str]]:
     header_line = None
@@ -56,13 +57,14 @@ def extract_gene_name(attributes: str) -> str:
 def split_cpm_count(cell: str) -> tuple[float, int]:
     if ":" not in cell:
         return 0.0, 0
-    left, _, right = cell.partition(":")
+    left, middle, right = cell.split(":")
+    # print(f"Splitting cell '{cell}' into CPM '{left}' and Count '{middle}'")
     try:
         cpm = float(left)
     except Exception:
         cpm = 0.0
     try:
-        cnt = int(float(right))
+        cnt = int(float(middle))
     except Exception:
         cnt = 0
     return cpm, cnt
@@ -77,7 +79,13 @@ def flatten(in_path: Path, out_path: Optional[Path] = None) -> None:
         out_fp = sys.stdout
         close_out = False
 
-    with in_path.open("r", errors="replace") as f:
+    if in_path.suffix == ".gz":
+        in_path_open = gzip.open
+    else:
+        in_path_open = open
+
+
+    with in_path_open(in_path, "rt", errors="replace") as f:
         header_line, first_data_line = read_header_and_first_data(f)
         header_cols = header_line.lstrip("#").split("\t")
         first_data_cols = first_data_line.split("\t") if first_data_line is not None else None

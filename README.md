@@ -143,6 +143,10 @@ Search transcripts from input gtf file and return how many samples in the index 
 ### Example:
 
 ```bash
+
+# isopeida assumes the GTF file is sorted.
+gffread -T -o- origin.gtf  | sort -k1,1 -k4,4n | gffread - -o query.gtf
+
 isopedia isoform -i index/ -g query.gtf -o out.tsv.gz
 ```
 
@@ -243,8 +247,10 @@ There are a few columns can be used to filter the results.
 $$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} * 1,000,000 $$ 
 
 `INFO` field in each sample column contains additional information depending on the index content, such as read names (if BAM/CRAM files were indexed) or transcript/gene IDs (if GTF files were indexed). This information can be useful for further analysis or validation. It is recommended to include this field when building the index from GTF files.
-**Note that** the `INFO` field only be included when the index was created with `--rname`(BAM/CRAM) or `--tid`/`--gid` option and the `--info` flag is used during the query.
 
+**Note that** 
+
+The `INFO` field only be included when the index was created with `--rname`(BAM/CRAM) or `--tid`/`--gid` option and the `--info` flag is used during the query.
 
 
 <details>

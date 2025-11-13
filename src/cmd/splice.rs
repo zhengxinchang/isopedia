@@ -20,6 +20,10 @@ use std::path::PathBuf;
 ", long_about = None)]
 #[clap(after_long_help = "
 
+The example format of splice_bed 
+
+id\tchr1\tpos1\tchr2\tpos2
+
 Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.
 
 ")]
@@ -105,7 +109,7 @@ impl AnnSpliceCli {
         }
 
         if let Some(splice_str) = &self.splice {
-            if utils::parse_splice_junction_str(&splice_str).is_err() {
+            if utils::parse_breakpoint_str(&splice_str).is_err() {
                 error!("Failed to parse splice junction: {}", splice_str);
                 std::process::exit(1);
             }
@@ -139,15 +143,6 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     info!("loading metadata");
     let meta = meta::Meta::parse(cli.idxdir.join(META_FILE_NAME), None)?;
 
-    // let archive_file_handle = File::open(cli.idxdir.clone().join(MERGED_FILE_NAME))
-    //     .expect("Can not open aggregated records file...");
-
-    // let archive_mmap = unsafe { Mmap::map(&archive_file_handle).expect("Failed to map the file") };
-
-    // archive_mmap
-    //     .advise(memmap2::Advice::Sequential)
-    //     .expect("Failed to set mmap advice");
-
     let mut archive_cache = crate::isoformarchive::ArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // chunk size
@@ -177,7 +172,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         info!("parse breakpoints pair from command line...");
         let splice_str = cli.splice.clone().unwrap();
         let bp =
-            BreakPointPair::parse_string_sj(&splice_str).expect("Can not parse splice junction...");
+            BreakPointPair::parse_string(&splice_str).expect("Can not parse splice junction...");
         vec![bp]
     } else if cli.splice_bed.is_some() {
         let splice_bed_path = cli.splice_bed.clone().unwrap();

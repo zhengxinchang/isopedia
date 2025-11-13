@@ -7,13 +7,13 @@ use crate::{
     dataset_info::DatasetInfo,
     gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
-    isoform::{self, MergedIsoform},
+    isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
     meta::Meta,
     results::TableOutput,
     runtime::Runtime,
     tmpidx::MergedIsoformOffsetPtr,
-    utils::{self, log_mem_stats},
+    utils::log_mem_stats,
 };
 use anyhow::Result;
 use clap::{command, Parser};
@@ -59,7 +59,7 @@ pub struct AnnIsoCli {
 
     /// Include in-complete splice junction matches
     #[arg(long, default_value_t = false)]
-    pub assemble: bool,
+    pub asm: bool,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(long = "cached_nodes", default_value_t = 1000)]
@@ -142,7 +142,10 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut gtf = TranscriptChunker::new(gtfreader);
     let gtf_vec = gtf.get_all_transcripts_vec();
-    info!("Loaded {} transcripts from gtf file", gtf_vec.len());
+    info!(
+        "Loaded {} transcripts from gtf file",
+        gtf_vec.len().to_formatted_string(&Locale::en)
+    );
 
     info!("Loading sample meta...");
 
@@ -229,7 +232,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         let (hits, all_res) = forest.search2_all_match(&queries, cli.flank, cli.lru_size);
 
         // enable the assembler to assemble fragmented reads into isoforms
-        let ism_hit = if cli.assemble {
+        let ism_hit = if cli.asm {
             assembler.reset();
             let is_hit =
                 assembler.assemble(&queries, &all_res, &mut archive_cache, cli, &mut runtime);
@@ -279,7 +282,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             out_line.add_field(&trans.gene_id);
             // out_line.add_field(&trans.get_attributes());
 
-            let confidence = match cli.assemble {
+            let confidence = match cli.asm {
                 true => runtime.get_fsm_ism_confidence(&dataset_info),
                 false => runtime.get_fsm_confidence(&dataset_info),
             };
@@ -288,7 +291,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             out_line.add_field("yes");
             out_line.add_field(&cli.min_read.to_string());
 
-            let positive_count = match cli.assemble {
+            let positive_count = match cli.asm {
                 true => runtime.get_fsm_ism_positive_count_by_min_read(cli),
                 false => runtime.get_fsm_positive_count_by_min_read(&cli),
             };
@@ -303,63 +306,10 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             {
                 let samplechip = SampleChip::new(
                     Some(dataset_info.get_sample_names()[idx].clone()),
-                    vec![format!("{}:{}:{}", data.0, data.1, data.2)],
+                    vec![format!("{}:{}:{}", data.0, data.1, data.2)], // cpm:count:info
                 );
                 out_line.add_sample(samplechip);
             }
-
-            // for (i, acc_readc) in acc_sample_evidence_arr.iter().enumerate() {
-            //     let cpm = utils::calc_cpm(acc_readc, &dataset_info.sample_total_evidence_vec[i]);
-
-            //     let samplechip = if cli.info {
-            //         // only include in-compelte results when FSM mode is off
-            //         if cli.use_incomplete && *acc_readc == 0 {
-            //             let incomp_cpm = utils::calc_cpm(
-            //                 &assembled.1[i],
-            //                 &dataset_info.sample_total_evidence_vec[i],
-            //             );
-
-            //             SampleChip::new(
-            //                 Some(dataset_info.get_sample_names()[i].clone()),
-            //                 vec![format!(
-            //                     "{}:{}:LEVEL=INCOMPLETE;{}",
-            //                     incomp_cpm, assembled.1[i], ""
-            //                 )],
-            //             )
-            //         } else {
-            //             SampleChip::new(
-            //                 Some(dataset_info.get_sample_names()[i].clone()),
-            //                 vec![format!(
-            //                     "{}:{}:LEVEL=COMPLETE;{}",
-            //                     cpm, acc_readc, acc_sample_read_info_arr[i]
-            //                 )],
-            //             )
-            //         }
-            //     } else {
-            //         if cli.use_incomplete && *acc_readc == 0 {
-            //             let incomp_cpm = utils::calc_cpm(
-            //                 &assembled.1[i],
-            //                 &dataset_info.sample_total_evidence_vec[i],
-            //             );
-
-            //             SampleChip::new(
-            //                 Some(dataset_info.get_sample_names()[i].clone()),
-            //                 vec![format!(
-            //                     "{}:{}:LEVEL=INCOMPLETE",
-            //                     incomp_cpm, assembled.1[i]
-            //                 )],
-            //             )
-            //         } else {
-            //             SampleChip::new(
-            //                 Some(dataset_info.get_sample_names()[i].clone()),
-            //                 vec![format!("{}:{}:LEVEL=COMPLETE", cpm, acc_readc)],
-            //             )
-            //         }
-            //     };
-
-            //     out_line.add_sample(samplechip);
-            // }
-            // isoform_out.add_line(&out_line)?;
             tableout.add_line(&out_line)?;
         } else {
             out_line.add_field(&trans.chrom);

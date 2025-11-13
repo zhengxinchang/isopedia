@@ -24,13 +24,13 @@ use serde::Serialize;
 ", long_about = None)]
 #[clap(after_long_help = "
 
-Example: isopedia index -i /path/to/index/dir --meta /path/to/meta.tsv
+Example: isopedia index -i /path/to/index/dir --manifest /path/to/meta.tsv
 
-The meta file is the file that was used in the merge step, columns more than 2 will be treated as metadata columns.
+The manifest file is the file that was used in the merge step, columns more than 2 will be treated as metadata columns.
 
-The format of the meta file is tab-separated with the first line as header.
+The format of the manifest file is tab-separated with the first line as header.
 
-Example of meta file:
+Example of manifest file:
 (required) (required)  (optional)  (optional) ....
 ---------  ----------  ----------  ---------  ----
 name       path           meta1         meta2 ....
@@ -42,12 +42,12 @@ pub struct IndexCli {
     #[arg(
         short,
         long,
-        help = "Index the directory that was generated in the aggr step."
+        help = "Index the directory that was generated in the merge step."
     )]
     pub idxdir: PathBuf,
 
-    #[arg(short, long, help = "Metadata for the samples in the index.")]
-    pub meta: PathBuf,
+    #[arg(short, long, help = "Manifest file for the samples in the index.")]
+    pub manifest: PathBuf,
 
     #[arg(short, long, help = "Number of threads to use.", default_value_t = 4)]
     pub threads: usize,
@@ -74,12 +74,15 @@ impl IndexCli {
         }
 
         // if let Some(meta_path) = &self.meta {
-        if !self.meta.exists() {
-            error!("--meta: meta file {} does not exist", self.meta.display());
+        if !self.manifest.exists() {
+            error!(
+                "--meta: meta file {} does not exist",
+                self.manifest.display()
+            );
             is_ok = false;
         } else {
-            let meta =
-                Meta::from_file(&self.meta, None, None).expect("Cannot parse the manifest file");
+            let meta = Meta::from_file(&self.manifest, None, None)
+                .expect("Cannot parse the manifest file");
             meta.validate_sample_names();
             meta.validate_path_column();
         }
@@ -110,8 +113,8 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
     // if let Some(meta_path) = &cli.meta {
-    info!("Integrating meta data from {}", cli.meta.display());
-    let mut meta = Meta::parse(&cli.meta, None).expect("Failed to parse meta file");
+    info!("Integrating meta data from {}", cli.manifest.display());
+    let mut meta = Meta::parse(&cli.manifest, None).expect("Failed to parse meta file");
     meta.remove_path_column();
     let meta_samples = meta.get_samples();
 

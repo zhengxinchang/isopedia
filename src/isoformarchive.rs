@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     fs::File,
-    hash::Hash,
     io::{BufWriter, Write},
     os::unix::fs::FileExt,
     path::Path,

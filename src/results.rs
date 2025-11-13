@@ -60,8 +60,8 @@ impl TableOutput {
         let meta_t = meta.to_table(Some("##[SAMPLE]"), None);
 
         if let Some(w) = &mut writer {
-            w.write_all_bytes(dbinfo_t.as_bytes()).unwrap();
             w.write_all_bytes(meta_t.as_bytes()).unwrap();
+            w.write_all_bytes(dbinfo_t.as_bytes()).unwrap();
             w.write_all_bytes(header_t.as_bytes()).unwrap();
         }
 
@@ -187,10 +187,11 @@ impl TableOutput {
             if bytes == 0 {
                 break;
             }
-            if line_buf.starts_with("##[DBINFO]") {
-                db_infos_strings.push_str(&line_buf);
-            } else if line_buf.starts_with("##[SAMPLE]") {
+
+            if line_buf.starts_with("##[SAMPLE]") {
                 meta_strings.push_str(&line_buf);
+            } else if line_buf.starts_with("##[DBINFO]") {
+                db_infos_strings.push_str(&line_buf);
             } else if line_buf.starts_with('#') {
                 // must behind all other lines that start with ##
                 // dbg!(&line_buf);
