@@ -112,6 +112,7 @@ impl Tmpindex {
         writer.flush().expect("Can not flush the writer");
         self.chunks += 1;
         self.offsets.clear();
+        self.offsets.shrink_to_fit();
     }
 
     fn _sort_records(&mut self) {
@@ -440,6 +441,9 @@ impl TmpIdxChunker {
 
         self.records_vec.clear();
         self.chr_pos_set.clear();
+
+        self.records_vec.shrink_to_fit();
+        self.chr_pos_set.shrink_to_fit();
         Some(grouped)
     }
 }

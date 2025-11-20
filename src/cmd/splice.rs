@@ -14,7 +14,6 @@ use std::path::PathBuf;
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia splice")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
-#[command(version = "0.1.0")]
 #[command(about = "
 [Query/visualization] Search all isoforms overlapping with the provided splice junction(s) and visualize the results.
 ", long_about = None)]
@@ -123,7 +122,7 @@ impl AnnSpliceCli {
 }
 
 fn greetings(args: &AnnSpliceCli) {
-    eprintln!("\nIsopedia: [Annotate provided gtf file]\n");
+    // eprintln!("\nIsopedia: [Annotate provided gtf file]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),

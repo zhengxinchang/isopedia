@@ -8,7 +8,7 @@ use crate::runtime::Runtime;
 use crate::tmpidx::MergedIsoformOffsetPtr;
 use ahash::HashSet;
 pub struct Assembler {
-    pub matix: Vec<u32>, // flattened matrix
+    pub matrix: Vec<u32>, // flattened matrix
     pub sample_count: usize,
     pub splice_junction_count: usize, // each junciton is a node
     pub record_buf: Vec<u8>,
@@ -23,7 +23,7 @@ impl Assembler {
         let matrix = Vec::new();
 
         Assembler {
-            matix: matrix, // flattened matrix
+            matrix, // flattened matrix
             sample_count: n_sample,
             splice_junction_count: 0,
             record_buf: Vec::new(),
@@ -36,27 +36,28 @@ impl Assembler {
         // self.sample_count = 0;
         self.splice_junction_count = 0;
         // clear the matrix content
-        self.matix.clear();
+        self.matrix.clear();
+        self.matrix.shrink_to_fit();
     }
 
     fn add_at(&mut self, sample_idx: usize, splice_site_idx: usize, val: u32) {
         // expand if necessary
         let required_size = sample_idx * self.splice_junction_count + splice_site_idx;
-        if self.matix.len() <= required_size {
-            self.matix.resize(required_size + 1, 0); // initialize new elements to 0
+        if self.matrix.len() <= required_size {
+            self.matrix.resize(required_size + 1, 0); // initialize new elements to 0
         }
 
-        self.matix[sample_idx * self.splice_junction_count + splice_site_idx] =
-            self.matix[sample_idx * self.splice_junction_count + splice_site_idx] + val;
+        self.matrix[sample_idx * self.splice_junction_count + splice_site_idx] =
+            self.matrix[sample_idx * self.splice_junction_count + splice_site_idx] + val;
     }
 
     fn get(&self, sample_idx: usize, splice_site_idx: usize) -> u32 {
         let base_idx = sample_idx * self.splice_junction_count + splice_site_idx;
-        if base_idx >= self.matix.len() {
+        if base_idx >= self.matrix.len() {
             return 0;
         }
 
-        self.matix[base_idx]
+        self.matrix[base_idx]
     }
 
     pub fn assemble(
@@ -161,14 +162,14 @@ impl Assembler {
     pub fn get_sample_vec(&self, sample_idx: usize) -> Option<Vec<u32>> {
         let base_idx = sample_idx * self.splice_junction_count;
 
-        if base_idx >= self.matix.len() {
+        if base_idx >= self.matrix.len() {
             return None;
         }
-        if base_idx + self.splice_junction_count > self.matix.len() {
+        if base_idx + self.splice_junction_count > self.matrix.len() {
             return None;
         }
 
-        Some(self.matix[base_idx..(base_idx + self.splice_junction_count)].to_vec())
+        Some(self.matrix[base_idx..(base_idx + self.splice_junction_count)].to_vec())
     }
 
     pub fn estimate_sample_cov_vec(&self) -> (bool, Vec<u32>) {

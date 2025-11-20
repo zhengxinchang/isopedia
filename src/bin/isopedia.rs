@@ -79,6 +79,9 @@ fn main() {
 
     let cli = Cli::parse();
 
+    // output the tool version
+    println!("Isopedia version: {}", env!("CARGO_PKG_VERSION"));
+
     match cli.command {
         Commands::Isoform(ref anno_isoform_cli) => {
             if let Err(e) = run_anno_isoform(anno_isoform_cli) {

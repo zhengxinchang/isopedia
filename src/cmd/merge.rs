@@ -21,7 +21,6 @@ use serde::Serialize;
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia merge")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
-#[command(version = "0.1.0")]
 #[command(about = "
 [build index, step2] Aggregate multiple samples(isoform signal file) into one index(folder).
 ", long_about = None)]
@@ -154,7 +153,7 @@ impl MergeCli {
 }
 
 fn greetings(args: &MergeCli) {
-    eprintln!("\nIsopedia: [Aggregate multiple samples]\n");
+    // eprintln!("\nIsopedia: [Aggregate multiple samples]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),
@@ -380,6 +379,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                 merged_offset += bytes_len as u64;
             }
             tmp_vec.clear();
+            tmp_vec.shrink_to_fit();
 
             tmpidx.dump_chunk(chunks);
 

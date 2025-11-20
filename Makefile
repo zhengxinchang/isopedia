@@ -179,3 +179,22 @@ gtf_index:build t1g t2g t3g t4g
 
 missing:
 	cargo build --release && target/release/isopedia isoform -i test/gencode_index --info -f 0 -g test/gencode_missingv47.gtf  -o test/test.output.gz
+
+
+watchmem:
+	@BIN=isopedia; \
+	echo "Waiting for process '$$BIN' ..."; \
+	while true; do \
+		PID=$$(pgrep $$BIN); \
+		if [ ! -z "$$PID" ]; then \
+			break; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "Monitoring PID $$PID ..."; \
+	while true; do \
+		date '+%Y-%m-%d %H:%M:%S'; \
+		ps -p $$PID -o pid,%mem,rss,vsz,comm; \
+		echo "------------------------------"; \
+		sleep 4; \
+	done | tee mem.log

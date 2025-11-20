@@ -10,7 +10,7 @@ use ahash::HashSet;
 use anyhow::Result;
 // use itertools::Itertools;
 use lru::LruCache;
-use memmap2::Mmap;
+// use memmap2::Mmap;
 use rustc_hash::FxHashMap;
 use std;
 use std::fmt::Debug;
@@ -373,7 +373,7 @@ pub struct Cache {
     pub file_path: PathBuf,
     pub payload_file: Option<File>,
     pub payload_file_path: Option<PathBuf>,
-    pub mmap: Option<memmap2::Mmap>,
+    // pub mmap: Option<memmap2::Mmap>,
     pub lru: LruCache<u64, Arc<Node>>,
     // mmap: Option<_>,
 }
@@ -414,8 +414,8 @@ impl Cache {
             file_path: file_path.clone(),
             payload_file: Some(payload_file),
             payload_file_path: Some(payload_file_path),
-            mmap: None,
-            lru: LruCache::new(NonZeroUsize::new(10).unwrap()),
+            // mmap: None,
+            lru: LruCache::new(NonZeroUsize::new(10).unwrap()), // lru size is set to 10 when create the tree. no need to be large.
         }
     }
 
@@ -513,25 +513,25 @@ impl Cache {
             file_path: PathBuf::from(file_path.as_ref()),
             payload_file: None,
             payload_file_path: None,
-            mmap: None,
+            // mmap: None,
             lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
         })
     }
 
-    pub fn from_disk_mmap<P: AsRef<Path>>(idx_path: P, lru_size: usize) -> Result<Cache> {
-        let file = File::options().read(true).write(true).open(&idx_path)?;
-        let mmap = unsafe { Mmap::map(&file)? };
-        let header = CacheHeader::from_bytes(&mmap[0..4096])?;
-        Ok(Cache {
-            header,
-            file,
-            file_path: PathBuf::from(idx_path.as_ref()),
-            payload_file: None,
-            payload_file_path: None,
-            mmap: Some(mmap),
-            lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
-        })
-    }
+    // pub fn from_disk_mmap<P: AsRef<Path>>(idx_path: P, lru_size: usize) -> Result<Cache> {
+    //     let file = File::options().read(true).write(true).open(&idx_path)?;
+    //     let mmap = unsafe { Mmap::map(&file)? };
+    //     let header = CacheHeader::from_bytes(&mmap[0..4096])?;
+    //     Ok(Cache {
+    //         header,
+    //         file,
+    //         file_path: PathBuf::from(idx_path.as_ref()),
+    //         payload_file: None,
+    //         payload_file_path: None,
+    //         mmap: Some(mmap),
+    //         lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
+    //     })
+    // }
 
     pub fn get_node2(&mut self, node_id: u64) -> Option<Arc<Node>> {
         if let Some(n) = self.lru.get(&node_id) {
@@ -569,32 +569,32 @@ impl Cache {
         Some(arc_node)
     }
 
-    pub fn get_node3(&mut self, node_id: u64) -> Option<Arc<Node>> {
-        if let Some(n) = self.lru.get(&node_id) {
-            // 命中缓存，克隆 Arc 返回
-            return Some(Arc::clone(n));
-        }
+    // pub fn get_node3(&mut self, node_id: u64) -> Option<Arc<Node>> {
+    //     if let Some(n) = self.lru.get(&node_id) {
+    //         // 命中缓存，克隆 Arc 返回
+    //         return Some(Arc::clone(n));
+    //     }
 
-        let mmap = self.mmap.as_ref().expect("Cache not mmaped");
-        if node_id == 0 || node_id > self.header.total_nodes {
-            return None;
-        }
+    //     let mmap = self.mmap.as_ref().expect("Cache not mmaped");
+    //     if node_id == 0 || node_id > self.header.total_nodes {
+    //         return None;
+    //     }
 
-        let off = (node_id * 4096) as usize;
-        let hdr_slice = &mmap[off..off + 4096];
-        let mut node = Node::load_header_from_bytes(hdr_slice);
+    //     let off = (node_id * 4096) as usize;
+    //     let hdr_slice = &mmap[off..off + 4096];
+    //     let mut node = Node::load_header_from_bytes(hdr_slice);
 
-        let po = node.header.payload_offset as usize + self.header.payload_start_offset;
-        let ps = node.header.payload_size as usize;
-        let data_slice = &mmap[po..po + ps];
-        node.load_record_pointers_from_bytes(data_slice);
+    //     let po = node.header.payload_offset as usize + self.header.payload_start_offset;
+    //     let ps = node.header.payload_size as usize;
+    //     let data_slice = &mmap[po..po + ps];
+    //     node.load_record_pointers_from_bytes(data_slice);
 
-        // 放入缓存
-        let arc_node = Arc::new(node);
-        self.lru.put(node_id, Arc::clone(&arc_node));
+    //     // 放入缓存
+    //     let arc_node = Arc::new(node);
+    //     self.lru.put(node_id, Arc::clone(&arc_node));
 
-        Some(arc_node)
-    }
+    //     Some(arc_node)
+    // }
 
     pub fn get_root_node(&mut self) -> Arc<Node> {
         self.get_node2(self.header.root_node_id).unwrap()
@@ -707,7 +707,9 @@ impl BPTree {
         let mut level = 1;
         // let num_of_leaf_nodes = node_list.len();
         // start to construct internal nodes
+        let mut iters = 0;
         loop {
+            iters += 1;
             let mut internal_node_list: Vec<(KeyType, NodeIDType)> = node_list[start_idx..]
                 .chunks(ORDER as usize)
                 .map(|group| {
@@ -741,6 +743,10 @@ impl BPTree {
                 break;
             }
             internal_node_list.clear();
+
+            if iters > 1000 {
+                internal_node_list.shrink_to_fit();
+            }
         }
         tree.hight = level as u16;
         tree.size = node_list.len() as u32;
@@ -913,6 +919,7 @@ impl BPForest {
 
         if self.trees_by_chrom.contains_key(&chrom_id) == false {
             self.trees_by_chrom.clear();
+            self.trees_by_chrom.shrink_to_fit();
         }
         let tree: &mut BPTree = self
             .trees_by_chrom
@@ -940,6 +947,7 @@ impl BPForest {
 
         if self.trees_by_chrom.contains_key(&chrom_id) == false {
             self.trees_by_chrom.clear();
+            self.trees_by_chrom.shrink_to_fit();
         }
 
         let tree: &mut BPTree = self

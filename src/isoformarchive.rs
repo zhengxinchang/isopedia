@@ -39,24 +39,24 @@ impl IsoformArchiveWriter {
     }
 }
 
-pub fn read_record_from_mmap(
-    mmap: &[u8],
-    offset: &MergedIsoformOffsetPtr,
-    buf: &mut Vec<u8>,
-) -> MergedIsoform {
-    let start = offset.offset as usize;
-    let end = start + offset.length as usize;
-    buf.clear();
-    buf.extend_from_slice(&mmap[start..end]);
-    match MergedIsoform::gz_decode(buf) {
-        Ok(record) => record,
-        Err(_) => {
-            eprintln!("Failed to decode gzipped record");
-            eprintln!("Offset: {:?}", offset);
-            std::process::exit(1);
-        }
-    }
-}
+// pub fn read_record_from_mmap(
+//     mmap: &[u8],
+//     offset: &MergedIsoformOffsetPtr,
+//     buf: &mut Vec<u8>,
+// ) -> MergedIsoform {
+//     let start = offset.offset as usize;
+//     let end = start + offset.length as usize;
+//     buf.clear();
+//     buf.extend_from_slice(&mmap[start..end]);
+//     match MergedIsoform::gz_decode(buf) {
+//         Ok(record) => record,
+//         Err(_) => {
+//             eprintln!("Failed to decode gzipped record");
+//             eprintln!("Offset: {:?}", offset);
+//             std::process::exit(1);
+//         }
+//     }
+// }
 
 pub struct ArchiveCache {
     file: File,
@@ -113,7 +113,14 @@ impl ArchiveCache {
     }
 
     pub fn read_bytes(&mut self, offset: &MergedIsoformOffsetPtr) -> MergedIsoform {
-        self.buf.clear();
+        if self.buf.len() > 100 * 1024 * 1024 {
+            // if buffer larger than 10MB, reset it
+            self.buf = Vec::with_capacity(1024 * 1024);
+            self.buf.clear();
+        } else {
+            self.buf.clear();
+        }
+
         let chunk = self
             .read_chunk(offset.offset)
             .expect(&format!("can not read record from {:?}", offset));

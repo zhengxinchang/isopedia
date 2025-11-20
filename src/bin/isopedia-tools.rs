@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 // use isopedia::constants::*;
 use anyhow::Result;
 #[allow(dead_code, unused)]
-use isopedia::isoformarchive::read_record_from_mmap;
+// use isopedia::isoformarchive::read_record_from_mmap;
 use isopedia::logger::init_logger;
 use isopedia::tools::output;
 use isopedia::tools::profile::*;

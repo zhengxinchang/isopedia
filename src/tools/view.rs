@@ -1,6 +1,6 @@
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
-use crate::isoformarchive::read_record_from_mmap;
+use crate::isoformarchive::ArchiveCache;
 use crate::tmpidx::Tmpindex;
 use crate::tools::ToolCmdValidate;
 use clap::Parser;
@@ -8,10 +8,8 @@ use clap::Parser;
 use crate::io::MyGzWriter;
 use log::error;
 // #[allow(dead_code, unused)]
-use memmap2::Mmap;
 // use noodles_fasta::fai::read;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -43,6 +41,14 @@ pub struct ViewArgs {
     /// Output file name
     #[arg(short, long)]
     pub output: PathBuf,
+
+    /// Maximum number of cached isoform chunks in memory
+    #[arg(long, default_value_t = 4)]
+    pub cached_chunk_number: usize,
+
+    /// Cached isoform chunk size in Mb
+    #[arg(long, default_value_t = 128)]
+    pub cached_chunk_size_mb: u64,
 }
 
 impl ToolCmdValidate for ViewArgs {
@@ -100,18 +106,24 @@ pub fn view_archive(cli: &ViewArgs) {
     // let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
     let chrom_bytes = std::fs::read(&cli.idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
-    let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-                                                           // let blocks = idx.get_blocks(chrom_id);
+    // let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
+    //                                                        // let blocks = idx.get_blocks(chrom_id);
     let writer = std::fs::File::create(&cli.output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
 
-    let archive_file_handler = File::open(cli.idx.join(MERGED_FILE_NAME))
-        .expect("Can not open aggregated records file...");
-    let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
+    // let archive_file_handler = File::open(cli.idx.join(MERGED_FILE_NAME))
+    //     .expect("Can not open aggregated records file...");
+    // let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
 
-    archive_mmap
-        .advise(memmap2::Advice::Sequential)
-        .expect("Failed to set mmap advice");
+    // archive_mmap
+    //     .advise(memmap2::Advice::Sequential)
+    //     .expect("Failed to set mmap advice");
+
+    let mut archive = ArchiveCache::new(
+        &cli.idx.join(MERGED_FILE_NAME),
+        cli.cached_chunk_size_mb,
+        cli.cached_chunk_number,
+    );
 
     let mut mygzwriter = MyGzWriter::new(&cli.output).expect("Failed to create MyGzWriter");
 
@@ -124,7 +136,9 @@ pub fn view_archive(cli: &ViewArgs) {
 
         for leaf in leafs {
             for ptr in &leaf.data.merge_isoform_offset_vec {
-                let rec = read_record_from_mmap(&archive_mmap, &ptr, &mut archive_buf);
+                // let rec = read_record_from_mmap(&archive_mmap, &ptr, &mut archive_buf);
+
+                let rec = archive.read_bytes(ptr);
                 if processed_signautres.contains(&rec.signature) {
                     continue;
                 }

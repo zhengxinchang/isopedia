@@ -26,7 +26,6 @@ use serde::Serialize;
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia isoform")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
-#[command(version = "0.1.0")]
 #[command(about = "
 [Query] Annotate provided gtf file(transcripts/isoforms) with the index.
 ", long_about = None)]
@@ -62,12 +61,12 @@ pub struct AnnIsoCli {
     pub asm: bool,
 
     /// Maximum number of cached tree nodes in memory
-    #[arg(long = "cached_nodes", default_value_t = 1000)]
+    #[arg(short = 'c', long = "cached-nodes", default_value_t = 1000)]
     pub lru_size: usize,
 
     /// Maximum number of cached isoform chunks in memory
     #[arg(long, default_value_t = 4)]
-    pub cached_chunk_number: usize,
+    pub cached_chunk_num: usize,
 
     /// Cached isoform chunk size in Mb
     #[arg(long, default_value_t = 128)]
@@ -119,7 +118,7 @@ impl AnnIsoCli {
 }
 
 fn greetings(args: &AnnIsoCli) {
-    eprintln!("\nIsopedia: [Annotate provided gtf file]\n");
+    // eprintln!("\nCommand: isoform = \n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),
@@ -188,7 +187,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut archive_cache = ArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
-        cli.cached_chunk_number,                // max 4 chunks in cache ~2GB
+        cli.cached_chunk_num,                   // max 4 chunks in cache ~2GB
     );
 
     info!("Processing transcripts");
@@ -217,7 +216,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 let isoform_out_mem = &tableout.get_mem_size();
                 let tree_mem = forest.get_mem_size();
                 info!(
-                    "Current output in-memory size: {} MB, tree in-memory size: {} MB",
+                    "Querying chromosome: {}, Current output in-memory size: {} MB, tree in-memory size: {} MB",
+                    trans.chrom,
                     isoform_out_mem / (1024 * 1024),
                     tree_mem / (1024 * 1024),
                 );
@@ -238,7 +238,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
                 assembler.assemble(&queries, &all_res, &mut archive_cache, cli, &mut runtime);
 
             if cli.debug {
-                assembler.print_matrix();
+                // assembler.print_matrix();
             }
             is_hit
         } else {
@@ -263,6 +263,16 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         out_line.update_format_str(ISOFORM_FORMAT);
 
         if target.len() > 0 {
+            if cli.debug {
+                info!(
+                    "Transcript {}:{}-{} has {} matched isoforms in the index.",
+                    trans.chrom,
+                    trans.start,
+                    trans.end,
+                    target.len()
+                );
+            }
+
             for offset in &target {
                 let record: MergedIsoform = archive_cache.read_bytes(offset);
 

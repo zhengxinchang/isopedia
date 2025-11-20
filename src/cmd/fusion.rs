@@ -29,7 +29,6 @@ use serde::Serialize;
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia fusion")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
-#[command(version = "0.1.0")]
 #[command(about = "
 [Query/discovery] Annotate provided fusion breakpoints or discover potential gene fusion events(from provided GTF file) with the index.
 ", long_about = None)]
@@ -203,7 +202,7 @@ fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64))>
 }
 
 fn greetings(args: &AnnFusionCli) {
-    eprintln!("\nIsopedia: [Search provided gene fusion]\n");
+    // eprintln!("\nIsopedia: [Search provided gene fusion]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),

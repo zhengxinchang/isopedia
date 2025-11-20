@@ -73,7 +73,6 @@ impl Strand {
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia profile")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
-#[command(version = "0.1.0")]
 #[command(about = "
 [build index, step1] Profile raw isoform signals from each single BAM/CRAM or GTF file.
 ", long_about = None)]
@@ -211,7 +210,7 @@ impl ProfileCli {
 }
 
 fn greetings(args: &ProfileCli) {
-    eprintln!("\nIsopedia: [Profile isoform signals from BAM/CRAM or GTF]\n");
+    // eprintln!("\nIsopedia: [Profile isoform signals from BAM/CRAM or GTF]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),

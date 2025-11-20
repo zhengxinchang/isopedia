@@ -18,7 +18,6 @@ use serde::Serialize;
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia index")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
-#[command(version = "0.1.0")]
 #[command(about = "
 [build index, step3] Build the tree index on the aggregated index folder.
 ", long_about = None)]
@@ -96,7 +95,7 @@ impl IndexCli {
 }
 
 fn greetings(args: &IndexCli) {
-    eprintln!("\nIsopedia: [Indexing merged isoform signals]\n");
+    // eprintln!("\nIsopedia: [Indexing merged isoform signals]\n");
     match serde_json::to_string_pretty(&args) {
         Ok(json) => eprintln!("Parsed arguments:\n{}", json),
         Err(e) => eprintln!("Failed to print arguments: {}", e),

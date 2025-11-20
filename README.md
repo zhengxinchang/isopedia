@@ -51,7 +51,7 @@ isopedia fusion  -i index/ -P fusion_query.bed -o ./out.fusion.tsv.gz
 isopedia fusion  -i index/ -g gene.gtf -o ./out.fusion.discovery.tsv.gz
 
 # query a splice junction from the BID gene
-isopedia splice  -i index/ -s 22:17744013,17750104  -o ./out.splice.tsv.gz
+isopedia splice  -i index/ -s 22:17744013,22:17750104  -o ./out.splice.tsv.gz
 
 # visualize the splice junction
 isopedia-splice-viz.py  -i ./out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf   -o isopedia-splice-view

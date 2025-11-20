@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use log::{error, info, warn};
 #[allow(dead_code, unused)]
-use memmap2::Mmap;
+// use memmap2::Mmap;
 // use noodles_fasta::fai::read;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

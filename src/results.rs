@@ -125,7 +125,7 @@ impl TableOutput {
     pub fn add_line(&mut self, line: &Line) -> Result<()> {
         self.lines.push(line.clone());
 
-        if self.lines.len() > 0 && self.lines.len() % 10_000 == 0 {
+        if self.lines.len() > 0 && self.lines.len() % 1_000 == 0 {
             // info!("Flushing {} lines to file...", self.lines.len());
             if let Some(w) = &mut self.writer {
                 // write lines
@@ -142,6 +142,7 @@ impl TableOutput {
             }
 
             self.lines.clear();
+            self.lines.shrink_to_fit();
         }
 
         Ok(())
