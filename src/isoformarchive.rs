@@ -114,9 +114,9 @@ impl ArchiveCache {
 
     pub fn read_bytes(&mut self, offset: &MergedIsoformOffsetPtr) -> MergedIsoform {
         if self.buf.len() > 100 * 1024 * 1024 {
-            // if buffer larger than 10MB, reset it
-            self.buf = Vec::with_capacity(1024 * 1024);
+            // if buffer larger than 100MB, reset it
             self.buf.clear();
+            self.buf.shrink_to_fit();
         } else {
             self.buf.clear();
         }
