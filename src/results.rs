@@ -163,6 +163,7 @@ impl TableOutput {
         }
 
         self.lines.clear();
+        self.lines.shrink_to_fit();
 
         info!(
             "Saved output to file {:?}",

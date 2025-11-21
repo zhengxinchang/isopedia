@@ -52,7 +52,7 @@ pub struct AnnSpliceCli {
     pub output: PathBuf,
 
     /// Maximum number of cached nodes per tree
-    #[arg(short = 'c', long = "cached_nodes", default_value_t = 100_000)]
+    #[arg(short = 'c', long = "cached_nodes", default_value_t = 1000)]
     pub lru_size: usize,
 
     /// Maximum number of cached isoform chunks in memory

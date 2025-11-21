@@ -110,8 +110,8 @@ HG002_ont_chr22   /path/to/hg002_ont_chr22.isoform.gz   ONT
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
 # profile isoform signals on each bam individually
-isopedia profile -b ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
-isopedia profile -b ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
+isopedia profile -i ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
+isopedia profile -i ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 
 `--tid` include transcript id in the profile file , only work when `-g` (GTF) is passed.
 
@@ -416,8 +416,8 @@ This command is designed for cases where you have a specific splice junction of 
 ### Example:
 
 ```bash
-isopedia splice  -i index/ -p chr22:41100500-41101500  -o splice.out.gz
-python script/isopedia-splice-viz.py  -i splice.out.gz -g gencode.v47.basic.annotation.gtf  -t script/temp.html  -o isopedia-splice-view
+isopedia splice  -i index/ -s chr22:41100500-41101500  -o splice.out.gz
+python script/isopedia-splice-viz.py  -i splice.out.gz -g gencode.v47.basic.annotation.gtf  script/isopedia-splice-viz-temp.html -o isopedia-splice-view
 
 ```
 

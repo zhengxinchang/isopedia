@@ -78,6 +78,7 @@ impl GeneInterval {
         self.start = 0;
         self.end = 0;
         self.splice_sites.clear();
+        self.splice_sites.shrink_to_fit();
     }
 
     pub fn match_splice_sites(&self, splice_sites: &Vec<u64>, flank: u64) -> Vec<u64> {
@@ -119,7 +120,9 @@ impl GeneIntervalTree {
         let mut chrom_set = IndexSet::new();
         let mut current_gene = GeneInterval::default();
 
+        let mut processed_gene_n = 0;
         for record in records {
+            processed_gene_n += 1;
             let record = record?;
             let chrom = trim_chr_prefix_to_upper(record.reference_sequence_name());
             chrom_set.insert(chrom.clone());
@@ -182,14 +185,20 @@ impl GeneIntervalTree {
                             .attributes()
                             .iter()
                             .find(|x| x.key() == "gene_id")
-                            .expect("GTF must have gene_id")
+                            .expect(&format!(
+                                "GTF must have gene_id, affected data line {}: {:?}",
+                                processed_gene_n, record
+                            ))
                             .value()
                             .to_string();
                         current_gene.gene_name = record
                             .attributes()
                             .iter()
                             .find(|x| x.key() == "gene_name")
-                            .expect("GTF must have gene_name")
+                            .expect(&format!(
+                                "GTF must have gene_name, affected data line {}: {:?}",
+                                processed_gene_n, record
+                            ))
                             .value()
                             .to_string();
                         current_gene.gene_type = record

@@ -517,6 +517,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
         "Total records skipped: {}",
         skipped_records.to_formatted_string(&Locale::en)
     );
+    info!("The skipped records are due to unmapped, low mapping quality(--mapq), or secondary alignments(--use-secondary).");
     info!("Finished");
     Ok(())
 }

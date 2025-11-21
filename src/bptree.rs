@@ -746,6 +746,7 @@ impl BPTree {
 
             if iters > 1000 {
                 internal_node_list.shrink_to_fit();
+                iters = 0;
             }
         }
         tree.hight = level as u16;
