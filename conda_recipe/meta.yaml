@@ -23,7 +23,7 @@ build:
 
 requirements:
   run:
-    - python >=3.8 
+    - python >=3.3
 
 test:
   commands:

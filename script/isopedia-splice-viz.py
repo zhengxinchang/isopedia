@@ -65,7 +65,8 @@ class IsoformRecord:
                     "reads": reads_vec
                 }
         except Exception as e:
-            print(f"Error processing data line: {e}", file=sys.stderr)
+            # print("", file=sys.stderr)
+            print("Error processing data line: {}".format(e), file=sys.stderr)
             exit(1)
 
         self.positive_sample_size = len(self.positive_samples)
