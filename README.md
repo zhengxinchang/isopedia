@@ -545,7 +545,7 @@ Isopedia 1.4.0 was tested on 1,007 long-read transcriptome datasets from SRA and
 |----------------------------|------------------------ |---|
 | isopedia merge             | 54.77 Gb                 | 28:26:08 |
 | isopedia index               | 45.85 Gb              | 5:48:55  |
-| isopedia isoform(158K GENCODE V47 basic)      | 45.05 Gb  |   2:57:22|
+| isopedia isoform(280K GENCODE V49 basic)      | 9.19 Gb  |   4:52:18|
 
 
 

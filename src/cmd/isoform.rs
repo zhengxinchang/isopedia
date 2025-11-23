@@ -154,6 +154,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     let mut out_header = Header::new();
 
+    let mut all_returned_results_count = 0;
+
     out_header.add_column("chrom")?;
     out_header.add_column("start")?;
     out_header.add_column("end")?;
@@ -230,6 +232,10 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         queries.sort_by_key(|x| x.1);
 
         let (hits, all_res) = forest.search2_all_match(&queries, cli.flank, cli.lru_size);
+
+        if cli.debug {
+            all_returned_results_count += all_res.iter().map(|x| x.len()).sum::<usize>();
+        }
 
         // enable the assembler to assemble fragmented reads into isoforms
         let ism_hit = if cli.asm {
@@ -353,6 +359,13 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     }
 
     // log_mem_stats();
+
+    if cli.debug {
+        info!(
+            "Total returned results count from index search: {}",
+            all_returned_results_count.to_formatted_string(&Locale::en)
+        );
+    }
 
     let total = runtime.total;
     let missed = total - runtime.fsm_hit - runtime.ism_hit;
