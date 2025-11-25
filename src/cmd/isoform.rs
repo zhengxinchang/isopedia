@@ -236,15 +236,21 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         group_id -> set[tx_id,]
     }
 
-    for item 3 , 4, and 5:
-    OffsetCache {
-        offset -> MisoformOffsetRecord {
-            length: u32,
-            group_id_set: set[group_id,],
-        }
-    }
+    // for item 3 , 4, and 5:
+    // OffsetCache {
+    //     offset -> MisoformOffsetRecord {
+    //         length: u32,
+    //         group_id_set: set[group_id,],
+    //     }
+    // }
 
 
+
+    multi-threading consideration:
+
+    1. per-chromsome processing, each thread process one chromsome at a time， send a grouptx to  a thread pool.
+    2. the thread pool process each group tx independently with EM and send back to main thread for output
+    3. the main thread collect results and output
 
     ========
        splice junction --> inital transcript groups
