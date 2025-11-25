@@ -20,7 +20,7 @@
   - [Query(search) fusion genes](#annotate-search-fusion-genes)
   - [Find potential fusion genes](#find-potential-fusion-genes)
   - [Query(search)/visualization of splice junction](#query-splice-junctions-and-visualize-isoforms)
-- [Installation](#installation)
+- [How to install Isopedia](#how-to-install-isopedia)
 - [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate)
 <!-- - [Quick Q&A](#quick-qa) -->
 
@@ -556,7 +556,7 @@ Isopedia 1.4.0 was tested on 1,007 long-read transcriptome datasets from SRA and
 
 
 
-# Installation
+# How to install Isopedia
 
 ## Install from conda
 
