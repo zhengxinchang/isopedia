@@ -15,7 +15,7 @@
 - [How it works](#how-it-works)
 - [Download pre-built index](#download-pre-built-index)
 - [Build your own index](#build-your-own-index)
-- [Usage](#usage)
+- [How to use Isopedia](#how-to-use-isopedia)
   - [Query(quantification) transcripts](#annotate-search-isoformstranscripts)
   - [Query(search) fusion genes](#annotate-search-fusion-genes)
   - [Find potential fusion genes](#find-potential-fusion-genes)
@@ -139,7 +139,7 @@ isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
 
 ```
 
-# Usage
+# How to use Isopedia
 
 ## Query(quantification) transcripts
 
