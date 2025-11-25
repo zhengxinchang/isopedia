@@ -59,12 +59,12 @@ impl Meta {
     pub fn parse<P: AsRef<Path>>(path: P, prefix: Option<&str>) -> Result<Meta> {
         info!("If tab is detected in the line, it will be used as the field separator,otherwise, space will be used as the field separator.");
         let meta = Meta::from_file(&path, prefix, None)?;
+        info!("Parsed meta file: {} ", path.as_ref().display(),);
+        info!("Index Stats: Sample count, {}", meta.samples.len(),);
         info!(
-            "Parsed meta file: {} with {} samples and {} attributes: {:?}",
-            path.as_ref().display(),
-            meta.samples.len(),
+            "Index Stats: Meta attributes, {}: {:?}",
             meta.header.len(),
-            meta.header
+            meta.header,
         );
         Ok(meta)
     }

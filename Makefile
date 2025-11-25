@@ -70,8 +70,10 @@ t3:build
 	target/release/isopedia index  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
 t4:build
-	target/release/isopedia isoform -i test/HG002_idx/ \
-	-f 10 -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz --assemble
+	/usr/bin/time -v target/release/isopedia isoform -i test/HG002_idx/ -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz --asm
+
+t40:build
+	/usr/bin/time -v target/release/isopedia isoform -i test/HG002_idx/ -g test/gencode.v47.basic.annotation.mini.gtf  -o test/test.output.mini.gz --asm
 
 t41:build
 	target/release/isopedia isoform -i test/HG002_idx/ -g test/isoseq_transcripts.sorted.filtered_lite.gff -o test/test.output2.gz
@@ -89,6 +91,10 @@ t43:build
 	 -g test/simulated_R9_missing.gtf \
 	 -o test/test.assembled2.output.gz --info
 
+t44:build
+	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index \
+	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
+	 -o test/test.em.output.gz --info
 
 tfusion:build
 	target/release/isopedia fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz

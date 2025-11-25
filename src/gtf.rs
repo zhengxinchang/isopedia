@@ -15,6 +15,7 @@ pub struct Transcript {
     pub end: u64,
     pub splice_junc: Vec<(u64, u64)>,
     pub exons: Vec<(u64, u64)>,
+    pub is_mono_exonic: bool,
     pub gene_id: String,
     pub trans_id: String,
     pub records: Vec<GTF::Record>,
@@ -35,6 +36,7 @@ impl Transcript {
         } else {
             self.splice_junc = vec![(self.exons[0].0, self.exons[0].1)];
         }
+        self.is_mono_exonic = self.exons.len() == 1;
         self
     }
 
@@ -45,6 +47,7 @@ impl Transcript {
             start: 0,
             end: 0,
             exons: Vec::new(),
+            is_mono_exonic: false,
             gene_id: String::new(),
             trans_id: String::new(),
             records: Vec::new(),
@@ -130,6 +133,10 @@ impl Transcript {
         sr.process();
 
         sr
+    }
+
+    pub fn get_splice_junction_pairs(&self) -> Vec<(u64, u64)> {
+        self.splice_junc.clone()
     }
 }
 

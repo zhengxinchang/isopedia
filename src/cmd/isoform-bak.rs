@@ -1,11 +1,10 @@
-use std::{hash::Hash, path::PathBuf, vec};
+use std::{path::PathBuf, vec};
 
 use crate::{
     assemble::Assembler,
     bptree::BPForest,
     constants::*,
     dataset_info::DatasetInfo,
-    em::{TxAbundance, MSJC},
     gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
     isoform::MergedIsoform,
@@ -16,7 +15,6 @@ use crate::{
     tmpidx::MergedIsoformOffsetPtr,
     utils::log_mem_stats,
 };
-use ahash::HashSet;
 use anyhow::Result;
 use clap::{command, Parser};
 use log::{error, info};
@@ -198,61 +196,15 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut iter_count = 0;
     let mut batch = 0;
 
-    // let mut assembler = Assembler::init(dataset_info.get_size());
+    let mut assembler = Assembler::init(dataset_info.get_size());
 
-    // let mut runtime = Runtime::init(dataset_info.get_size());
-
-    let mut TxAbundance_vec: Vec<TxAbundance> = Vec::new();
-    let mut curr_tx_id: usize = 0;
-    let mut MSJC_vec: Vec<MSJC> = Vec::new();
-    let mut curr_msjc_id: usize = 0;
-
-    /*
-       splice junction --> inital transcript groups
-
-
-       init projection TxComponent  按照chrosome 分组，每次处理一个chromsome的内容
-       tx --> group_id
-       group_id --> tx_ids // used for update gruop id later
-
-       init projection OffsetComponent
-       offset --> set[group_id,]
-
-       我既然获得了所有的sj，我其实可以顺序查询，而不是每次都是一个transcript查询了
-
-       一个group的tx 一次查询，返回所有的misoformoffset
-
-
-       Vec（
-           （position，vec（misoform——offset））
-       )
-
-       每个transcript，查看这些position，然后找到对应的FSM对应的FSM transcript
-
-       剩下的就是用于创建MSJC的misofromoffset, 这些可以dump到一个临时文件OffsetCache中。
-       Txabundance应该包含对MSJC的misoformoffset的index引用，这样做EM的时候可以直接load进来？
-
-       OffsetCache {
-           group_id --> offset，length记录
-       }
-
-
-       如果一个offset 出现在多个gorup中，那么需要合并gruop，
-       实际的合并发生在对TxGruop的操作,也发生在对OffsetCache的操作
-
-       到这里，就可以获得所有的 MSJC的offset了， 这里可能会存在重复的offset，就是不同的group包含了同一个offset，这种情况会
-       多产生几次isoformarchive的IO不影响结果
-
-       此时所有的Txabundance 已经创建好，并且有了
-
-
-    */
+    let mut runtime = Runtime::init(dataset_info.get_size());
 
     for trans in gtf_vec {
         iter_count += 1;
 
-        // runtime.add_one_total();
-        // runtime.reset();
+        runtime.add_one_total();
+        runtime.reset();
 
         if iter_count == 10_000 {
             batch += 1;
@@ -276,96 +228,174 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             }
         }
 
-        let mut tx_abundance = TxAbundance::new(curr_tx_id, dataset_info.get_size(), &trans);
-        curr_tx_id += 1;
-
         let mut queries: Vec<(String, u64)> = trans.get_quieries();
         queries.sort_by_key(|x| x.1);
 
-        let (exact_matches, position_based_matches) =
-            forest.search2_all_match(&queries, cli.flank, cli.lru_size);
+        let (hits, all_res) = forest.search2_all_match(&queries, cli.flank, cli.lru_size);
 
-        // load fsm in to tx_abundance
-        for ext_match in &exact_matches {
-            if ext_match.n_splice_sites as usize != queries.len() {
-                continue;
-            }
-
-            let record: MergedIsoform = archive_cache.read_bytes(ext_match);
-
-            tx_abundance.add_fsm_misoform(&record);
+        if cli.debug {
+            all_returned_results_count += all_res.iter().map(|x| x.len()).sum::<usize>();
         }
 
-        let exact_matches_set = exact_matches
-            .iter()
-            .collect::<std::collections::HashSet<_>>();
+        // enable the assembler to assemble fragmented reads into isoforms
+        let ism_hit = if cli.asm {
+            assembler.reset();
+            let is_hit =
+                assembler.assemble(&queries, &all_res, &mut archive_cache, cli, &mut runtime);
 
-        let mut candidates_offsets_set = HashSet::default();
+            if cli.debug {
+                // assembler.print_matrix();
+            }
+            is_hit
+        } else {
+            false
+        };
 
-        // only keep the misoform that no more than splice junctions as the query
-        for offsets in position_based_matches.iter() {
-            for offset in offsets {
-                if exact_matches_set.contains(offset) {
-                    continue;
-                };
+        // make sure the returned isoform has exactly the same number of splice sites as the query
+        let target: Vec<MergedIsoformOffsetPtr> = hits
+            .into_iter()
+            .filter(|x| x.n_splice_sites == queries.len() as u32)
+            .collect();
 
-                if offset.n_splice_sites >= 2 && offset.n_splice_sites < queries.len() as u32 {
-                    candidates_offsets_set.insert(offset);
+        if target.len() > 0 {
+            runtime.add_one_fsm_hit();
+        } else {
+            if ism_hit {
+                runtime.add_one_ism_hit();
+            }
+        }
+
+        let mut out_line = Line::new();
+        out_line.update_format_str(ISOFORM_FORMAT);
+
+        if target.len() > 0 {
+            if cli.debug {
+                info!(
+                    "Transcript {}:{}-{} has {} matched isoforms in the index.",
+                    trans.chrom,
+                    trans.start,
+                    trans.end,
+                    target.len()
+                );
+            }
+
+            for offset in &target {
+                let record: MergedIsoform = archive_cache.read_bytes(offset);
+
+                runtime.update_fsm_record(&record)?;
+
+                if cli.info {
+                    runtime.fsm_trigger_add_read_info(&record)?;
                 }
             }
-        }
 
-        let sj_pairs = trans.get_splice_junction_pairs();
+            out_line.add_field(&trans.chrom);
+            out_line.add_field(&trans.start.to_string());
+            out_line.add_field(&trans.end.to_string());
+            out_line.add_field(&trans.get_transcript_length().to_string());
+            out_line.add_field(&trans.get_exon_count().to_string());
+            out_line.add_field(&trans.trans_id);
+            out_line.add_field(&trans.gene_id);
+            // out_line.add_field(&trans.get_attributes());
 
-        for cand_offset in candidates_offsets_set.iter() {
-            // load the isoform from archive
-            let record = archive_cache.read_bytes(cand_offset);
+            let confidence = match cli.asm {
+                true => runtime.get_fsm_ism_confidence(&dataset_info),
+                false => runtime.get_fsm_confidence(&dataset_info),
+            };
+            out_line.add_field(&confidence.to_string());
 
-            let (is_all_matched, first_match, matched_count) =
-                record.match_splice_junctions(&sj_pairs, cli.flank);
+            out_line.add_field("yes");
+            out_line.add_field(&cli.min_read.to_string());
 
-            if is_all_matched {
-                let mut msjc = MSJC::new(curr_msjc_id, dataset_info.get_size(), &record);
-                curr_msjc_id += 1;
+            let positive_count = match cli.asm {
+                true => runtime.get_fsm_ism_positive_count_by_min_read(cli),
+                false => runtime.get_fsm_positive_count_by_min_read(&cli),
+            };
+            out_line.add_field(&format!("{}/{}", positive_count, dataset_info.get_size()));
 
-                tx_abundance.add_msjc(&mut msjc);
-                // MSJC_vec.push(msjc);
+            out_line.add_field(&trans.get_attributes());
+
+            for (idx, data) in runtime
+                .get_sample_chip_data(&dataset_info, cli)
+                .iter()
+                .enumerate()
+            {
+                let samplechip = SampleChip::new(
+                    Some(dataset_info.get_sample_names()[idx].clone()),
+                    vec![format!("{}:{}:{}", data.0, data.1, data.2)], // cpm:count:info
+                );
+                out_line.add_sample(samplechip);
             }
+            tableout.add_line(&out_line)?;
+        } else {
+            out_line.add_field(&trans.chrom);
+            out_line.add_field(&trans.start.to_string());
+            out_line.add_field(&trans.end.to_string());
+            out_line.add_field(&trans.get_transcript_length().to_string());
+            out_line.add_field(&trans.get_exon_count().to_string());
+            out_line.add_field(&trans.trans_id);
+            out_line.add_field(&trans.gene_id);
+            // out_line.add_field(&trans.get_attributes());
+            out_line.add_field("0");
+            out_line.add_field("no");
+            out_line.add_field(&cli.min_read.to_string());
+            out_line.add_field(&format!("0/{}", dataset_info.get_size()));
+            out_line.add_field(&trans.get_attributes());
+            // for _ in 0..dataset_info.get_size() {
+
+            let sample_count = dataset_info.get_sample_names().len();
+            for i in 0..sample_count {
+                let samplechip = SampleChip::new(
+                    Some(dataset_info.get_sample_names()[i].clone()),
+                    vec!["0:0:NULL".to_string()],
+                );
+                out_line.add_sample(samplechip);
+            }
+            // isoform_out.add_line(&out_line)?;
+            tableout.add_line(&out_line)?;
         }
 
-        TxAbundance_vec.push(tx_abundance);
+        runtime.log_stats();
     }
 
-    // info out how many tx_abundance and msjc created
+    // log_mem_stats();
+
+    if cli.debug {
+        info!(
+            "Total returned results count from index search: {}",
+            all_returned_results_count.to_formatted_string(&Locale::en)
+        );
+    }
+
+    let total = runtime.total;
+    let missed = total - runtime.fsm_hit - runtime.ism_hit;
     info!(
-        "Created {} TxAbundance and {} MSJC records",
-        curr_tx_id.to_formatted_string(&Locale::en),
-        curr_msjc_id.to_formatted_string(&Locale::en)
+        "Processed {} transcripts",
+        (10_000 * batch + iter_count).to_formatted_string(&Locale::en)
+    );
+    info!("Sample-wide stats: ");
+    info!("> Sample\t\ttotal\thit(fsm)\thit(ism)\tmiss\tpct");
+    for i in 0..dataset_info.get_size() {
+        info!(
+            "> {:}\t{}\t{}\t{}\t{}\t{:.2}%",
+            dataset_info.get_sample_names()[i],
+            total,
+            runtime.sample_wide_positive_transcript_fsm[i],
+            runtime.sample_wide_positive_transcript_ism[i],
+            total - runtime.sample_wide_positive_transcript_both[i],
+            (runtime.sample_wide_positive_transcript_both[i]) as f64 / total as f64 * 100f64
+        );
+    }
+    info!(
+        "Index-wide stats: total: {}, hit(fsm): {}, hit(ism): {}, miss: {},  pct: {:.2}%",
+        (runtime.total).to_formatted_string(&Locale::en),
+        runtime.fsm_hit.to_formatted_string(&Locale::en),
+        runtime.ism_hit.to_formatted_string(&Locale::en),
+        missed.to_formatted_string(&Locale::en),
+        (runtime.fsm_hit + runtime.ism_hit) as f64 / (runtime.total) as f64 * 100f64
     );
 
-    info!("Start EM optimization");
-
-    for msjc in MSJC_vec.iter_mut() {
-        msjc.prepare_em();
-    }
-
-    info!("Finish preparing MSJC records");
-
-    let em_iter = 50; // temporary set the end point...
-
-    for iter in 0..em_iter {
-        info!("EM iteration {}", iter + 1);
-
-        for msjc in MSJC_vec.iter_mut() {
-            msjc.e_step(&TxAbundance_vec);
-        }
-
-        for tx_abundance in TxAbundance_vec.iter_mut() {
-            tx_abundance.m_step(&MSJC_vec);
-        }
-
-        // print the frist 5 tx_abundance for debug
-    }
-
+    tableout.finish()?;
+    info!("Finished");
     Ok(())
 }

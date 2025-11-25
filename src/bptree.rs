@@ -1018,7 +1018,7 @@ impl BPForest {
         lru_size: usize,
     ) -> (
         Vec<MergedIsoformOffsetPtr>,      // common results
-        Vec<Vec<MergedIsoformOffsetPtr>>, // all results, the length equals to positions.len()
+        Vec<Vec<MergedIsoformOffsetPtr>>, // positional matched results, each position one vec
     ) {
         if flank == 0 {
             let res = self.search1_multi_exact(positions, lru_size);
