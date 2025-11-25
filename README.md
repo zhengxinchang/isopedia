@@ -67,15 +67,22 @@ For indexing GTF files, please refer to [Indexing GTF Files](doc/indexing_gtf.md
 
 The workflow of Isopedia involves several key steps, including isoform profiling, merging, indexing, and quering. Users can start by profiling isoform signals from individual BAM files, then merge the results to build a comprehensive index. Once the index is ready, it can be used to qeury isoforms, fusion genes, and explore splice junctions across multiple samples. Users can also visualize specific splicing events using the provided visualization tools. 
 
-Isopedia comes with pre-built indexes from hundreds of publicly available long-read RNA-seq datasets, which can be used directly for isoform and fusion gene annotation.
 
+<details>
+<summary> 
+<strong>How Isopedia determines a positive hit for a query transcript?</strong>
+</summary>
 
-![how-it-works2](./img/how-it-works2.png)
+<img src="./img/how-it-works2.png" align="center" alt=""  />
 
-This figure dipicts how Isopedia determines a positive hit for a query in different sinarios. 
+</details>
+
 
 
 # Download pre-built index
+
+Isopedia comes with pre-built indexes from hundreds of publicly available long-read RNA-seq datasets, which can be used directly for isoform and fusion gene annotation.
+
 
 [place holder for index download link]
 
