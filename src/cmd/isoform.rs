@@ -32,6 +32,10 @@ use serde::Serialize;
 [Query] Annotate provided gtf file(transcripts/isoforms) with the index.
 ", long_about = None)]
 #[clap(after_long_help = "
+
+# Isopedia isoform needs the input gtf file to be sorted. use the following command to sort the gtf file:
+gffread -T -o- input.gtf  | sort -k1,1 -k4,4n | gffread - -o sorted.gtf
+
 ")]
 pub struct AnnIsoCli {
     /// Path to the index directory
@@ -208,8 +212,42 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut curr_msjc_id: usize = 0;
 
     /*
-       splice junction --> inital transcript groups
+    For each chromsome:
+    1. obtain all the splice junctions from the transcripts
+    2. group all transcripts by their splice junctions into tx_groups
+    3. for each tx_group, obtain all the misoform offsets from the index. dedup and dump the offsets into OffsetCache but keep the group_id reference. maintain a mapping from offset --> set[group_id,]
+    4. merge tx_groups that share same misoform offsets, update the OffsetCache accordingly.
+        dont udpate it, keep it simple, but give the API to improve, global storage of msiformoffset, even by chrom, would take a huge mount of memory
+        make an API for further disk-persistent optimization,but make group seperated for now.
+    5. for each tx_group, create TxAbundance records, load the misoform from OffsetCache.
+        if a misoform matches all the splice junctions of the group,
+            load into TxAbundance as FSM
+        else
+            create MSJC records for those misoforms that partially match the splice junctions, and load into TxAbundance
+    6. after all TxAbundance and MSJC are created, run EM algorithm to estimate the abundances
+    7. output the TxAbundance results
 
+    key data structures:
+
+    for iterm 1 and 2:
+    TxGroupManager {
+        sj -> set[tx_id,]
+        tx_id -> group_id
+        group_id -> set[tx_id,]
+    }
+
+    for item 3 , 4, and 5:
+    OffsetCache {
+        offset -> MisoformOffsetRecord {
+            length: u32,
+            group_id_set: set[group_id,],
+        }
+    }
+
+
+
+    ========
+       splice junction --> inital transcript groups
 
        init projection TxComponent  按照chrosome 分组，每次处理一个chromsome的内容
        tx --> group_id
@@ -247,7 +285,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
 
     */
-
+    let mut tmp_offset_set = HashSet::default();
     for trans in gtf_vec {
         iter_count += 1;
 
@@ -319,18 +357,18 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
         for cand_offset in candidates_offsets_set.iter() {
             // load the isoform from archive
-            let record = archive_cache.read_bytes(cand_offset);
+            // let record = archive_cache.read_bytes(cand_offset);
 
-            let (is_all_matched, first_match, matched_count) =
-                record.match_splice_junctions(&sj_pairs, cli.flank);
+            // let (is_all_matched, first_match, matched_count) =
+            //     record.match_splice_junctions(&sj_pairs, cli.flank);
 
-            if is_all_matched {
-                let mut msjc = MSJC::new(curr_msjc_id, dataset_info.get_size(), &record);
-                curr_msjc_id += 1;
+            // if is_all_matched {
+            //     let mut msjc = MSJC::new(curr_msjc_id, dataset_info.get_size(), &record);
+            //     curr_msjc_id += 1;
 
-                tx_abundance.add_msjc(&mut msjc);
-                // MSJC_vec.push(msjc);
-            }
+            //     tx_abundance.add_msjc(&mut msjc);
+            //     // MSJC_vec.push(msjc);
+            // }
         }
 
         TxAbundance_vec.push(tx_abundance);
