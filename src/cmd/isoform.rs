@@ -11,6 +11,7 @@ use crate::{
     isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
     meta::Meta,
+    query::ChromGroupedTxManager,
     results::TableOutput,
     runtime::Runtime,
     tmpidx::MergedIsoformOffsetPtr,
@@ -146,49 +147,63 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let gtfreader = open_gtf_reader(cli.gtf.to_str().unwrap())?;
 
     let mut gtf = TranscriptChunker::new(gtfreader);
-    let gtf_vec = gtf.get_all_transcripts_vec();
+    // let gtf_vec = gtf.get_all_transcripts_vec();
+
+    let gtf_by_chrom = gtf.get_all_transcripts_by_chrom();
+
     info!(
         "Loaded {} transcripts from gtf file",
-        gtf_vec.len().to_formatted_string(&Locale::en)
+        gtf.trans_count.to_formatted_string(&Locale::en)
     );
 
-    info!("Loading sample meta...");
+    let chrom_grouped_tx_managers: Vec<ChromGroupedTxManager> = gtf_by_chrom
+        .iter()
+        .map(|(chrom, tx_vec)| {
+            let mut manager = ChromGroupedTxManager::new(chrom);
+            for tx in tx_vec.iter() {
+                manager.add_transcript(tx);
+            }
+            manager
+        })
+        .collect();
 
-    let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
+    // info!("Loading sample meta...");
 
-    const ISOFORM_FORMAT: &str = "CPM:COUNT:INFO";
+    // let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
-    let mut out_header = Header::new();
+    // const ISOFORM_FORMAT: &str = "CPM:COUNT:INFO";
 
-    let mut all_returned_results_count = 0;
+    // let mut out_header = Header::new();
 
-    out_header.add_column("chrom")?;
-    out_header.add_column("start")?;
-    out_header.add_column("end")?;
-    out_header.add_column("length")?;
-    out_header.add_column("exon_count")?;
-    out_header.add_column("trans_id")?;
-    out_header.add_column("gene_id")?;
-    out_header.add_column("confidence")?;
-    out_header.add_column("detected")?;
-    out_header.add_column("min_read")?;
-    out_header.add_column("positive_count/sample_size")?;
-    out_header.add_column("attributes")?;
+    // let mut all_returned_results_count = 0;
 
-    let mut db_infos = DBInfos::new();
+    // out_header.add_column("chrom")?;
+    // out_header.add_column("start")?;
+    // out_header.add_column("end")?;
+    // out_header.add_column("length")?;
+    // out_header.add_column("exon_count")?;
+    // out_header.add_column("trans_id")?;
+    // out_header.add_column("gene_id")?;
+    // out_header.add_column("confidence")?;
+    // out_header.add_column("detected")?;
+    // out_header.add_column("min_read")?;
+    // out_header.add_column("positive_count/sample_size")?;
+    // out_header.add_column("attributes")?;
 
-    for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
-        db_infos.add_sample_evidence(&name, evidence);
-        out_header.add_sample_name(&name)?;
-    }
+    // let mut db_infos = DBInfos::new();
 
-    let mut tableout = TableOutput::new(
-        cli.output.clone(),
-        out_header.clone(),
-        db_infos.clone(),
-        meta.clone(),
-        ISOFORM_FORMAT.to_string(),
-    );
+    // for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
+    //     db_infos.add_sample_evidence(&name, evidence);
+    //     out_header.add_sample_name(&name)?;
+    // }
+
+    // let mut tableout = TableOutput::new(
+    //     cli.output.clone(),
+    //     out_header.clone(),
+    //     db_infos.clone(),
+    //     meta.clone(),
+    //     ISOFORM_FORMAT.to_string(),
+    // );
 
     info!("Loading index file");
 
@@ -199,17 +214,17 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     );
 
     info!("Processing transcripts");
-    let mut iter_count = 0;
-    let mut batch = 0;
+    // let mut iter_count = 0;
+    // let mut batch = 0;
 
-    // let mut assembler = Assembler::init(dataset_info.get_size());
+    // // let mut assembler = Assembler::init(dataset_info.get_size());
 
-    // let mut runtime = Runtime::init(dataset_info.get_size());
+    // // let mut runtime = Runtime::init(dataset_info.get_size());
 
-    let mut TxAbundance_vec: Vec<TxAbundance> = Vec::new();
-    let mut curr_tx_id: usize = 0;
-    let mut MSJC_vec: Vec<MSJC> = Vec::new();
-    let mut curr_msjc_id: usize = 0;
+    // let mut TxAbundance_vec: Vec<TxAbundance> = Vec::new();
+    // let mut curr_tx_id: usize = 0;
+    // let mut MSJC_vec: Vec<MSJC> = Vec::new();
+    // let mut curr_msjc_id: usize = 0;
 
     /*
     For each chromsome:
@@ -291,125 +306,125 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
 
     */
-    let mut tmp_offset_set = HashSet::default();
-    for trans in gtf_vec {
-        iter_count += 1;
+    // let mut tmp_offset_set = HashSet::default();
+    // for trans in gtf_vec {
+    //     iter_count += 1;
 
-        // runtime.add_one_total();
-        // runtime.reset();
+    //     // runtime.add_one_total();
+    //     // runtime.reset();
 
-        if iter_count == 10_000 {
-            batch += 1;
-            info!(
-                "Processed {} transcripts",
-                (batch * 10_000).to_formatted_string(&Locale::en)
-            );
-            iter_count = 0;
+    //     if iter_count == 10_000 {
+    //         batch += 1;
+    //         info!(
+    //             "Processed {} transcripts",
+    //             (batch * 10_000).to_formatted_string(&Locale::en)
+    //         );
+    //         iter_count = 0;
 
-            if cli.debug {
-                let isoform_out_mem = &tableout.get_mem_size();
-                let tree_mem = forest.get_mem_size();
-                info!(
-                    "Querying chromosome: {}, Current output in-memory size: {} MB, tree in-memory size: {} MB",
-                    trans.chrom,
-                    isoform_out_mem / (1024 * 1024),
-                    tree_mem / (1024 * 1024),
-                );
+    //         if cli.debug {
+    //             let isoform_out_mem = &tableout.get_mem_size();
+    //             let tree_mem = forest.get_mem_size();
+    //             info!(
+    //                 "Querying chromosome: {}, Current output in-memory size: {} MB, tree in-memory size: {} MB",
+    //                 trans.chrom,
+    //                 isoform_out_mem / (1024 * 1024),
+    //                 tree_mem / (1024 * 1024),
+    //             );
 
-                log_mem_stats();
-            }
-        }
+    //             log_mem_stats();
+    //         }
+    //     }
 
-        let mut tx_abundance = TxAbundance::new(curr_tx_id, dataset_info.get_size(), &trans);
-        curr_tx_id += 1;
+    //     let mut tx_abundance = TxAbundance::new(curr_tx_id, dataset_info.get_size(), &trans);
+    //     curr_tx_id += 1;
 
-        let mut queries: Vec<(String, u64)> = trans.get_quieries();
-        queries.sort_by_key(|x| x.1);
+    //     let mut queries: Vec<(String, u64)> = trans.get_quieries();
+    //     queries.sort_by_key(|x| x.1);
 
-        let (exact_matches, position_based_matches) =
-            forest.search2_all_match(&queries, cli.flank, cli.lru_size);
+    //     let (exact_matches, position_based_matches) =
+    //         forest.search2_all_match(&queries, cli.flank, cli.lru_size);
 
-        // load fsm in to tx_abundance
-        for ext_match in &exact_matches {
-            if ext_match.n_splice_sites as usize != queries.len() {
-                continue;
-            }
+    //     // load fsm in to tx_abundance
+    //     for ext_match in &exact_matches {
+    //         if ext_match.n_splice_sites as usize != queries.len() {
+    //             continue;
+    //         }
 
-            let record: MergedIsoform = archive_cache.read_bytes(ext_match);
+    //         let record: MergedIsoform = archive_cache.read_bytes(ext_match);
 
-            tx_abundance.add_fsm_misoform(&record);
-        }
+    //         tx_abundance.add_fsm_misoform(&record);
+    //     }
 
-        let exact_matches_set = exact_matches
-            .iter()
-            .collect::<std::collections::HashSet<_>>();
+    //     let exact_matches_set = exact_matches
+    //         .iter()
+    //         .collect::<std::collections::HashSet<_>>();
 
-        let mut candidates_offsets_set = HashSet::default();
+    //     let mut candidates_offsets_set = HashSet::default();
 
-        // only keep the misoform that no more than splice junctions as the query
-        for offsets in position_based_matches.iter() {
-            for offset in offsets {
-                if exact_matches_set.contains(offset) {
-                    continue;
-                };
+    //     // only keep the misoform that no more than splice junctions as the query
+    //     for offsets in position_based_matches.iter() {
+    //         for offset in offsets {
+    //             if exact_matches_set.contains(offset) {
+    //                 continue;
+    //             };
 
-                if offset.n_splice_sites >= 2 && offset.n_splice_sites < queries.len() as u32 {
-                    candidates_offsets_set.insert(offset);
-                }
-            }
-        }
+    //             if offset.n_splice_sites >= 2 && offset.n_splice_sites < queries.len() as u32 {
+    //                 candidates_offsets_set.insert(offset);
+    //             }
+    //         }
+    //     }
 
-        let sj_pairs = trans.get_splice_junction_pairs();
+    //     let sj_pairs = trans.get_splice_junction_pairs();
 
-        for cand_offset in candidates_offsets_set.iter() {
-            // load the isoform from archive
-            // let record = archive_cache.read_bytes(cand_offset);
+    //     for cand_offset in candidates_offsets_set.iter() {
+    //         // load the isoform from archive
+    //         // let record = archive_cache.read_bytes(cand_offset);
 
-            // let (is_all_matched, first_match, matched_count) =
-            //     record.match_splice_junctions(&sj_pairs, cli.flank);
+    //         // let (is_all_matched, first_match, matched_count) =
+    //         //     record.match_splice_junctions(&sj_pairs, cli.flank);
 
-            // if is_all_matched {
-            //     let mut msjc = MSJC::new(curr_msjc_id, dataset_info.get_size(), &record);
-            //     curr_msjc_id += 1;
+    //         // if is_all_matched {
+    //         //     let mut msjc = MSJC::new(curr_msjc_id, dataset_info.get_size(), &record);
+    //         //     curr_msjc_id += 1;
 
-            //     tx_abundance.add_msjc(&mut msjc);
-            //     // MSJC_vec.push(msjc);
-            // }
-        }
+    //         //     tx_abundance.add_msjc(&mut msjc);
+    //         //     // MSJC_vec.push(msjc);
+    //         // }
+    //     }
 
-        TxAbundance_vec.push(tx_abundance);
-    }
+    //     TxAbundance_vec.push(tx_abundance);
+    // }
 
-    // info out how many tx_abundance and msjc created
-    info!(
-        "Created {} TxAbundance and {} MSJC records",
-        curr_tx_id.to_formatted_string(&Locale::en),
-        curr_msjc_id.to_formatted_string(&Locale::en)
-    );
+    // // info out how many tx_abundance and msjc created
+    // info!(
+    //     "Created {} TxAbundance and {} MSJC records",
+    //     curr_tx_id.to_formatted_string(&Locale::en),
+    //     curr_msjc_id.to_formatted_string(&Locale::en)
+    // );
 
-    info!("Start EM optimization");
+    // info!("Start EM optimization");
 
-    for msjc in MSJC_vec.iter_mut() {
-        msjc.prepare_em();
-    }
+    // for msjc in MSJC_vec.iter_mut() {
+    //     msjc.prepare_em();
+    // }
 
-    info!("Finish preparing MSJC records");
+    // info!("Finish preparing MSJC records");
 
-    let em_iter = 50; // temporary set the end point...
+    // let em_iter = 50; // temporary set the end point...
 
-    for iter in 0..em_iter {
-        info!("EM iteration {}", iter + 1);
+    // for iter in 0..em_iter {
+    //     info!("EM iteration {}", iter + 1);
 
-        for msjc in MSJC_vec.iter_mut() {
-            msjc.e_step(&TxAbundance_vec);
-        }
+    //     for msjc in MSJC_vec.iter_mut() {
+    //         msjc.e_step(&TxAbundance_vec);
+    //     }
 
-        for tx_abundance in TxAbundance_vec.iter_mut() {
-            tx_abundance.m_step(&MSJC_vec);
-        }
+    //     for tx_abundance in TxAbundance_vec.iter_mut() {
+    //         tx_abundance.m_step(&MSJC_vec);
+    //     }
 
-        // print the frist 5 tx_abundance for debug
-    }
+    //     // print the frist 5 tx_abundance for debug
+    // }
 
     Ok(())
 }

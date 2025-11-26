@@ -218,10 +218,11 @@ impl<R: BufRead> TranscriptChunker<R> {
 
     pub fn get_next_transcript(&mut self) -> Option<Transcript> {
         let mut records = self.gtfreader.records();
-        let mut record_no = 0;
+        // let mut record_no = 0;
         loop {
             let record = records.next();
-            record_no += 1;
+            // record_no += 1;
+            self.trans_count += 1;
             // println!("Processing record: {:?}", &record);
             match record {
                 Some(ref rec) => match rec {
@@ -253,7 +254,7 @@ impl<R: BufRead> TranscriptChunker<R> {
                         _ => {}
                     },
                     Err(e) => {
-                        panic!("error in reading gtf: {:?}, record (no.{record_no}: {:?}\nPlease check your gtf format. One possible reason is the input file is GFF format.", e, &record);
+                        panic!("error in reading gtf: {:?}, record (no.{}: {:?}\nPlease check your gtf format. One possible reason is the input file is GFF format.", e, self.trans_count, &record);
                     }
                 },
                 None => {
@@ -282,6 +283,27 @@ impl<R: BufRead> TranscriptChunker<R> {
                 .then(a.end.cmp(&b.end))
         });
         transcripts
+    }
+
+    pub fn get_all_transcripts_by_chrom(&mut self) -> Vec<(String, Vec<Transcript>)> {
+        let mut transcripts_by_chrom: std::collections::HashMap<String, Vec<Transcript>> =
+            std::collections::HashMap::new();
+        while let Some(trans) = self.get_next_transcript() {
+            transcripts_by_chrom
+                .entry(trans.chrom.clone())
+                .or_insert_with(Vec::new)
+                .push(trans);
+        }
+        let mut transcripts_by_chrom_vec: Vec<(String, Vec<Transcript>)> =
+            transcripts_by_chrom.into_iter().collect();
+        transcripts_by_chrom_vec.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // sort transcripts in each chrom by start position
+        for (_chrom, txs) in transcripts_by_chrom_vec.iter_mut() {
+            txs.sort_by(|a, b| a.start.cmp(&b.start));
+        }
+
+        transcripts_by_chrom_vec
     }
 }
 

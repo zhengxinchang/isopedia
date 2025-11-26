@@ -1,42 +1,41 @@
 use crate::{
     bptree::BPForest,
     em::{TxAbundance, MSJC},
-    gtf::TranscriptMini,
+    gtf::{Transcript, TranscriptMini},
     tmpidx::MergedIsoformOffsetPtr,
 };
 
 // gruop tx into classes based on shared splice juncitons
 // input, list of Transcript struct
 // function, iter_groups() -> QueriesManager
-pub struct GroupedTxManager {
+pub struct ChromGroupedTxManager {
     chrom: String,
     group_queries: Vec<GroupedTx>,
-    init_group_len: usize,
-    merged_group_len: usize,
+    // init_group_len: usize,
+    // merged_group_len: usize,
     _position_to_group_idx: std::collections::HashMap<u64, usize>,
-    offset_to_group_idx: std::collections::HashMap<usize, usize>, // merge gruop if two groups have same offset.
+    // offset_to_group_idx: std::collections::HashMap<usize, usize>, // merge gruop if two groups have same offset.
 }
 
-impl GroupedTxManager {
+impl ChromGroupedTxManager {
     pub fn new(chrom: &str) -> Self {
-        GroupedTxManager {
+        ChromGroupedTxManager {
             chrom: chrom.to_string(),
             group_queries: Vec::new(),
             _position_to_group_idx: std::collections::HashMap::new(),
-
-            offset_to_group_idx: std::collections::HashMap::new(),
-            init_group_len: 0,
-            merged_group_len: 0,
+            // offset_to_group_idx: std::collections::HashMap::new(),
+            // init_group_len: 0,
+            // merged_group_len: 0,
         }
     }
 
-    pub fn add_transcript(&mut self, tx: &crate::gtf::Transcript) {
-        todo!()
+    pub fn add_transcript(&mut self, tx: &Transcript) {
+
         // add transcript to existing group or create a new group. if a transcript shares splice juncitons with existing group, add to that group, else create a new group
     }
 
     pub fn query_groups(&self, bpforest: &BPForest) {
-        todo!()
+
         // query each group against the bpforest
 
         // add resuts back to each group, if multiple groups have same offset, merge them
