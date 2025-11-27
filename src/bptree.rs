@@ -164,6 +164,17 @@ impl Node {
         }
     }
 
+    pub fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+
+        total += std::mem::size_of::<Node>();
+
+        total += self.data.merge_isoform_offset_vec.capacity()
+            * std::mem::size_of::<MergedIsoformOffsetPtr>();
+
+        total
+    }
+
     pub fn is_full(&self) -> bool {
         self.header.is_full()
     }
@@ -380,17 +391,30 @@ pub struct Cache {
 
 impl Cache {
     pub fn get_mem_size(&self) -> usize {
-        let mut total = std::mem::size_of_val(self);
-        for (_key, node_arc) in self.lru.iter() {
-            let node = node_arc.as_ref();
-            total += std::mem::size_of_val(node);
-            total += std::mem::size_of_val(&node.header); // 4096 bytes fixed
-                                                          // Vec pointer
-            total += std::mem::size_of_val(&node.data.merge_isoform_offset_vec);
-            // Vec capacity (heap)
-            total += node.data.merge_isoform_offset_vec.capacity()
-                * std::mem::size_of::<MergedIsoformOffsetPtr>();
+        let mut total = 0usize;
+
+        // 1) Cache 自身在栈上的大小（包含 header/file/path/lru 字段）
+        total += std::mem::size_of::<Cache>();
+
+        // 2) file_path / payload_file_path 的堆字符串长度
+        total += self.file_path.as_os_str().len();
+        if let Some(p) = &self.payload_file_path {
+            total += p.as_os_str().len();
         }
+
+        // 3) LRU 中的所有 Node
+        for (k, node_arc) in self.lru.iter() {
+            // HashMap 的 key（按值存的 u64）
+            total += std::mem::size_of_val(k);
+
+            // Arc<Node> 本身（指针 + 引用计数，不含 Node 内部）
+            total += std::mem::size_of::<std::sync::Arc<Node>>();
+
+            // 让 Node 自己算它占多少
+            let node = node_arc.as_ref();
+            total += node.get_mem_size();
+        }
+
         total
     }
 
@@ -632,6 +656,19 @@ pub struct BPTree {
 }
 
 impl BPTree {
+    pub fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+        let bptree_stack_without_cache =
+            std::mem::size_of::<BPTree>() - std::mem::size_of::<Option<Cache>>();
+        total += bptree_stack_without_cache;
+        total += self.idxdir.as_os_str().len();
+        if let Some(cache) = &self.cache {
+            total += cache.get_mem_size();
+        }
+
+        total
+    }
+
     pub fn init(idx_path: &PathBuf, chrom_id: u16) -> BPTree {
         // let file: File = File::open(file_path).expect("can not open file");
         BPTree {
@@ -1027,6 +1064,23 @@ impl BPForest {
         } else {
             let res = self.search1_multi_range(positions, flank, lru_size);
             (find_common(res.clone()), res)
+        }
+    }
+
+    pub fn search2_all_match_nofsm(
+        &mut self,
+        positions: &Vec<(String, u64)>,
+        flank: u64,
+        lru_size: usize,
+    ) -> Vec<Vec<MergedIsoformOffsetPtr>> // positional matched results, each position one vec
+    {
+        if flank == 0 {
+            let res = self.search1_multi_exact(positions, lru_size);
+
+            res
+        } else {
+            let res = self.search1_multi_range(positions, flank, lru_size);
+            res
         }
     }
 

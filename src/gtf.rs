@@ -8,55 +8,56 @@ use std::{
     io::{BufRead, BufReader, Read, Seek},
 };
 
-// need pack into a u64
-pub struct TranscriptMini {
-    // pub idx: u32, // 27bit range: 0 ~ 134,217,727
-    // pub is_mono_exonic: bool, // 1bit range 0 ~ 1
-    // pub n_sj: u32, //10bit range 0 ~ 1023
-    // pub seq_len: u32, // 26bit range 0 ~ 67,108,863
-    pub bits: u64,
-    // pub sj_pairs: Vec<(u64,u64)>,
-}
+// // need pack into a u64
+// pub struct TranscriptMini {
+//     // pub idx: u32, // 27bit range: 0 ~ 134,217,727
+//     // pub is_mono_exonic: bool, // 1bit range 0 ~ 1
+//     // pub n_sj: u32, //10bit range 0 ~ 1023
+//     // pub seq_len: u32, // 26bit range 0 ~ 67,108,863
+//     pub bits: u64,
+//     // pub sj_pairs: Vec<(u64,u64)>,
+// }
 
-impl TranscriptMini {
-    pub fn from_transcript(tx: &Transcript, tx_idx: usize) -> Self {
-        let mut bits: u64 = 0;
-        bits |= (tx_idx as u64) & 0x07FF_FFFF; // 27 bits for idx
-        bits <<= 1;
-        bits |= if tx.is_mono_exonic { 1 } else { 0 }; // 1 bit for is_mono_exonic
-        bits <<= 10;
-        bits |= (tx.splice_junc.len() as u64) & 0x03FF; // 10 bits for n_sj
-        bits <<= 26;
-        bits |= (tx.get_transcript_seq_length() as u64) & 0x03FF_FFFF; // 26 bits for seq_len
+// impl TranscriptMini {
+//     pub fn from_transcript(tx: &Transcript, tx_idx: usize) -> Self {
+//         let mut bits: u64 = 0;
+//         bits |= (tx_idx as u64) & 0x07FF_FFFF; // 27 bits for idx
+//         bits <<= 1;
+//         bits |= if tx.is_mono_exonic { 1 } else { 0 }; // 1 bit for is_mono_exonic
+//         bits <<= 10;
+//         bits |= (tx.splice_junc.len() as u64) & 0x03FF; // 10 bits for n_sj
+//         bits <<= 26;
+//         bits |= (tx.get_transcript_seq_length() as u64) & 0x03FF_FFFF; // 26 bits for seq_len
 
-        TranscriptMini {
-            // idx: tx_idx as u32,
-            // is_mono_exonic: tx.is_mono_exonic,
-            // n_sj: tx.splice_junc.len() as u32,
-            // seq_len: tx.get_transcript_seq_length() as u32,
-            bits,
-        }
-    }
+//         TranscriptMini {
+//             // idx: tx_idx as u32,
+//             // is_mono_exonic: tx.is_mono_exonic,
+//             // n_sj: tx.splice_junc.len() as u32,
+//             // seq_len: tx.get_transcript_seq_length() as u32,
+//             bits,
+//         }
+//     }
 
-    pub fn get_transcript_idx(&self) -> u32 {
-        ((self.bits >> 37) & 0x07FF_FFFF) as u32
-    }
+//     pub fn get_transcript_idx(&self) -> u32 {
+//         ((self.bits >> 37) & 0x07FF_FFFF) as u32
+//     }
 
-    pub fn get_is_mono_exonic(&self) -> bool {
-        ((self.bits >> 36) & 0x01) != 0
-    }
+//     pub fn get_is_mono_exonic(&self) -> bool {
+//         ((self.bits >> 36) & 0x01) != 0
+//     }
 
-    pub fn get_n_sj(&self) -> u32 {
-        ((self.bits >> 26) & 0x03FF) as u32
-    }
+//     pub fn get_n_sj(&self) -> u32 {
+//         ((self.bits >> 26) & 0x03FF) as u32
+//     }
 
-    pub fn get_seq_len(&self) -> u32 {
-        (self.bits & 0x03FF_FFFF) as u32
-    }
-}
+//     pub fn get_seq_len(&self) -> u32 {
+//         (self.bits & 0x03FF_FFFF) as u32
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct Transcript {
+    pub origin_idx: u32,
     pub chrom: String,
     pub start: u64,
     pub end: u64,
@@ -87,8 +88,9 @@ impl Transcript {
         self
     }
 
-    pub fn from_gtf_record(record: &GTF::Record) -> Self {
+    pub fn from_gtf_record(record: &GTF::Record, origin_idx: u32) -> Self {
         let mut trans = Transcript {
+            origin_idx,
             chrom: String::new(),
             splice_junc: Vec::new(),
             start: 0,
@@ -200,7 +202,7 @@ pub struct TranscriptChunker<R: BufRead> {
     pub cur_chrom: String,
     pub cur_pos: u64,
     pub is_end: bool,
-    pub trans_count: u64,
+    pub trans_count: u32,
     pub hold_transcript: Option<Transcript>,
 }
 
@@ -222,22 +224,26 @@ impl<R: BufRead> TranscriptChunker<R> {
         loop {
             let record = records.next();
             // record_no += 1;
-            self.trans_count += 1;
+
             // println!("Processing record: {:?}", &record);
             match record {
                 Some(ref rec) => match rec {
                     Ok(rec) => match rec.ty() {
                         "transcript" => match self.hold_transcript {
                             Some(_) => {
+                                self.trans_count += 1;
                                 let mut trans = self.hold_transcript.clone();
 
-                                let new_trans = Transcript::from_gtf_record(&rec);
+                                let new_trans =
+                                    Transcript::from_gtf_record(&rec, self.trans_count as u32);
                                 self.hold_transcript = Some(new_trans);
                                 trans.as_mut().unwrap().process();
                                 return trans;
                             }
                             None => {
-                                let transcript = Transcript::from_gtf_record(&rec);
+                                self.trans_count += 1;
+                                let transcript =
+                                    Transcript::from_gtf_record(&rec, self.trans_count as u32);
                                 self.hold_transcript = Some(transcript);
                             }
                         },

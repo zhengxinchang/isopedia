@@ -90,9 +90,9 @@ pub struct AnnFusionCli {
     #[arg(long, default_value_t = 128)]
     pub cached_chunk_size_mb: u64,
 
-    /// debug mode
+    /// Verbose mode
     #[arg(long, default_value_t = false)]
-    pub debug: bool,
+    pub verbose: bool,
 }
 
 impl AnnFusionCli {
@@ -230,7 +230,7 @@ fn anno_single_fusion(
         forest.search0_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
 
     if left_target.is_empty() || right_target.is_empty() {
-        if cli.debug {
+        if cli.verbose {
             error!(
                 "No candidates found for breakpoints: {}:{}-{}:{}",
                 breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
@@ -239,7 +239,7 @@ fn anno_single_fusion(
         return Ok(());
     }
 
-    if cli.debug {
+    if cli.verbose {
         info!(
             "Found {} candidates",
             left_target.len() + right_target.len()

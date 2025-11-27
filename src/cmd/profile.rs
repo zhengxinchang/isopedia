@@ -120,9 +120,9 @@ pub struct ProfileCli {
     #[arg(long = "gid", default_value_t = false)]
     pub gid: bool,
 
-    /// Debug mode
-    #[arg(long)]
-    pub debug: bool,
+    /// Verbose mode
+    #[arg(long, default_value_t = false)]
+    pub verbose: bool,
 }
 
 impl ProfileCli {
@@ -190,22 +190,6 @@ impl ProfileCli {
         if is_ok != true {
             panic!("Invalid arguments, please check the error messages above.");
         }
-
-        // if self.rname {
-        //     if self.bam.is_none() {
-        //         warn!("--rname can only be used with BAM/CRAM input.");
-        //     } else {
-        //         info!("--rname option is set, read names will be included in the output.");
-        //     }
-        // }
-
-        // if self.tid || self.gid {
-        //     if self.gtf.is_none() {
-        //         warn!("--tid and --gid can only be used with GTF input.");
-        //     } else {
-        //         info!("--tid and/or --gid options are set, transcript IDs and gene IDs will be included in the output.");
-        //     }
-        // }
     }
 }
 
@@ -488,7 +472,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
         .write_all_bytes(&chrom_str)
         .expect("can not write headers..");
 
-    if cli.debug {
+    if cli.verbose {
         // aggr isoform size
         info!("Number of aggr isoforms: {}", agg_isoform_map.len());
     }

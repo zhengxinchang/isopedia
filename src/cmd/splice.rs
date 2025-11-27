@@ -63,9 +63,9 @@ pub struct AnnSpliceCli {
     #[arg(long, default_value_t = 128)]
     pub cached_chunk_size_mb: u64,
 
-    /// Debug mode
-    #[arg(short, long, default_value_t = false, help = "Enable debug mode")]
-    pub debug: bool,
+    /// Verbose mode
+    #[arg(long, default_value_t = false)]
+    pub verbose: bool,
 }
 
 impl AnnSpliceCli {
@@ -248,7 +248,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
 
                 let record: MergedIsoform = archive_cache.read_bytes(&offset);
                 // read_record_from_mmap(&archive_mmap, &offset, &mut archive_buf);
-                if cli.debug {
+                if cli.verbose {
                     dbg!(&record);
                 }
                 match record.get_splice_report(query, cli.flank, &dataset_info) {

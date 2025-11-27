@@ -70,67 +70,6 @@ impl MergeCli {
             );
             is_ok = false;
         } else {
-            // check the format of the input file
-            // let content = std::fs::read_to_string(&self.input).unwrap();
-            // let header = content.lines().next().unwrap();
-            // let header = utils::line2fields(header);
-            // let field_size: usize = header.len();
-            // let mut uniq_path = HashSet::new();
-            // let mut uniq_name = HashSet::new();
-            // for (idx, line) in content.lines().enumerate() {
-            //     let fields = line2fields(line);
-            //     if fields.is_empty() {
-            //         warn!("Skipping empty line {} in input file", idx + 1);
-            //         continue;
-            //     }
-
-            //     if fields.len() < 2 {
-            //         error!("--input: line {}: at least 2 columns required.", idx + 1);
-            //         is_ok = false;
-            //     }
-
-            //     if fields.len() != field_size {
-            //         error!(
-            //             "--input: line {}: field size does not match header.",
-            //             idx + 1
-            //         );
-            //         is_ok = false;
-            //     }
-
-            //     if idx > 0 {
-            //         if !PathBuf::from(&fields[1]).exists() {
-            //             error!(
-            //                 "--input: line {}: file {} does not exist, use absolute path",
-            //                 idx + 1,
-            //                 fields[1]
-            //             );
-            //             is_ok = false;
-            //         }
-
-            //         if uniq_name.contains(&fields[0]) {
-            //             error!(
-            //                 "--input: line {}: sample name {} is duplicated.",
-            //                 idx + 1,
-            //                 fields[0]
-            //             );
-            //             is_ok = false;
-            //         } else {
-            //             uniq_name.insert(fields[0].clone());
-            //         }
-
-            //         if uniq_path.contains(&fields[1]) {
-            //             error!(
-            //                 "--input: line {}: sample path {} is duplicated.",
-            //                 idx + 1,
-            //                 fields[1]
-            //             );
-            //             is_ok = false;
-            //         } else {
-            //             uniq_path.insert(fields[1].clone());
-            //         }
-            //     }
-            // }
-
             let meta =
                 Meta::from_file(&self.input, None, None).expect("Cannot parse the manifest file");
             meta.validate_sample_names();

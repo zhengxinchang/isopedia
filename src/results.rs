@@ -21,17 +21,14 @@ impl TableOutput {
     pub fn get_mem_size(&self) -> usize {
         let mut total = 0usize;
 
-        // header/db_infos/meta 不太大，可以略过
         for line in &self.lines {
             total += std::mem::size_of_val(line);
 
-            // field_vec: Vec<String>
             total += line.field_vec.capacity() * std::mem::size_of::<String>();
             for s in &line.field_vec {
                 total += s.capacity();
             }
 
-            // sample_vec: Vec<SampleChip>
             total += line.sample_vec.capacity() * std::mem::size_of::<crate::io::SampleChip>();
             for sample in &line.sample_vec {
                 total += sample.fields.capacity() * std::mem::size_of::<String>();
