@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::Result;
+use log::info;
 
 use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffsetPtr};
 
@@ -113,6 +114,7 @@ impl ArchiveCache {
     }
 
     pub fn read_bytes(&mut self, offset: &MergedIsoformOffsetPtr) -> MergedIsoform {
+        // info!("Reading record at offset: {:?}", offset);
         if self.buf.len() > 100 * 1024 * 1024 {
             // if buffer larger than 100MB, reset it
             self.buf.clear();

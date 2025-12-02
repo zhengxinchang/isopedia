@@ -308,7 +308,7 @@ fn anno_single_fusion(
         out_line.add_sample(samplechip);
     }
 
-    fusionbrkpt_out.add_line(&out_line)?;
+    fusionbrkpt_out.add_line(&mut out_line)?;
 
     Ok(())
 }

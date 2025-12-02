@@ -1,19 +1,18 @@
 use std::{hash::Hash, path::PathBuf, vec};
 
 use crate::{
-    assemble::Assembler,
+    // assemble::Assembler,
     bptree::BPForest,
     constants::*,
     dataset_info::DatasetInfo,
-    em::{TxAbundance, MSJC},
+    global_stats::GlobalStats,
+    grouped_tx::{ChromGroupedTxManager, TxAbundance, MSJC},
     gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
     isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
     meta::Meta,
-    query::ChromGroupedTxManager,
     results::TableOutput,
-    runtime::Runtime,
     tmpidx::MergedIsoformOffsetPtr,
     utils::log_mem_stats,
 };
@@ -26,7 +25,23 @@ use serde::Serialize;
 // use nix::sys::mman::{posix_madvise, PosixMadvise};
 // Removed incorrect import of mmap::{PosixMadvise,posix_madvise}
 
-#[derive(Parser, Debug, Serialize)]
+use once_cell::sync::OnceCell;
+use rayon::prelude::*; // 如果需要
+
+pub static GLOBAL_POOL: OnceCell<rayon::ThreadPool> = OnceCell::new();
+
+pub fn init_thread_pool(n_threads: usize) {
+    GLOBAL_POOL
+        .set(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(n_threads)
+                .build()
+                .unwrap(),
+        )
+        .ok();
+}
+
+#[derive(Parser, Debug, Serialize, Clone)]
 #[command(name = "isopedia isoform")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(about = "
@@ -68,12 +83,16 @@ pub struct AnnIsoCli {
     pub asm: bool,
 
     /// Max EM iterations
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 50)]
     pub em_iter: usize,
 
+    // EM convergence threshold
+    #[arg(long, default_value_t = 0.01)]
+    pub em_converge: f32,
+
     /// Maximum number of cached tree nodes in memory
-    #[arg(short = 'c', long = "cached-nodes", default_value_t = 1000)]
-    pub lru_size: usize,
+    #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]
+    pub cached_nodes: usize,
 
     /// Maximum number of cached isoform chunks in memory
     #[arg(long, default_value_t = 4)]
@@ -148,6 +167,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     info!("Loading GTF file...");
 
+    init_thread_pool(4);
+
     let gtfreader = open_gtf_reader(cli.gtf.to_str().unwrap())?;
 
     let mut gtf = TranscriptChunker::new(gtfreader);
@@ -168,6 +189,38 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         cli.cached_chunk_num,                   // max 4 chunks in cache ~2GB
     );
 
+    let mut global_stats = GlobalStats::new(dataset_info.get_size());
+
+    let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
+    let mut out_header = Header::new();
+    out_header.add_column("chrom")?;
+    out_header.add_column("start")?;
+    out_header.add_column("end")?;
+    out_header.add_column("length")?;
+    out_header.add_column("exon_count")?;
+    out_header.add_column("trans_id")?;
+    out_header.add_column("gene_id")?;
+    out_header.add_column("confidence")?;
+    out_header.add_column("detected")?;
+    out_header.add_column("min_read")?;
+    out_header.add_column("positive_count/sample_size")?;
+    out_header.add_column("attributes")?;
+    let mut db_infos = DBInfos::new();
+    for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
+        db_infos.add_sample_evidence(&name, evidence);
+        out_header.add_sample_name(&name)?;
+    }
+
+    let mut tableout = TableOutput::new(
+        cli.output.clone(),
+        out_header.clone(),
+        db_infos.clone(),
+        meta.clone(),
+        "CPM:COUNT:FSM_CPM:FSM_COUNT:EM_CPM:EM_COUNT:INFO".to_string(),
+    );
+
+    info!("Initializing transcript groups");
+
     let mut chrom_grouped_tx_managers: Vec<ChromGroupedTxManager> = gtf_by_chrom
         .into_iter()
         .map(|(chrom, tx_vec)| {
@@ -177,11 +230,17 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         })
         .collect();
 
-    for chrom_manager in chrom_grouped_tx_managers.iter_mut() {
-        chrom_manager.query_groups(&mut forest, cli, &mut archive_cache);
-    }
-
     info!("Processing transcripts");
+    for chrom_manager in chrom_grouped_tx_managers.iter_mut() {
+        chrom_manager.process_tx_groups(
+            &mut forest,
+            cli,
+            &mut archive_cache,
+            &dataset_info,
+            &mut tableout,
+            &mut global_stats,
+        );
+    }
 
     /*
     For each chromsome:

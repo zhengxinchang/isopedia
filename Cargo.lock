@@ -855,6 +855,7 @@ dependencies = [
  "noodles-fasta",
  "noodles-gtf",
  "num-format",
+ "once_cell",
  "rand",
  "rayon",
  "rust-htslib",

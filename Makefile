@@ -5,6 +5,8 @@ VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.package
 
 
 build:
+	RUSTLOG=debug
+	RUSTFLAGS="-C debuginfo=1"
 	cargo build --release
 	cargo build --release --target x86_64-unknown-linux-musl
 
@@ -92,14 +94,28 @@ t43:build
 	 -o test/test.assembled2.output.gz --info
 
 t44:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index \
+	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
-	 -o test/test.em.output2.gz --info
+	 -o test/test.em.output2.gz 
 
 t45:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i test/HG002_idx/ \
-	 -g test/gencode49_and_chess313_classcodeU.sorted.gtf \
-	 -o test/test.em.output2.gz --info
+	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF  \
+	 -o test/test.em.output2.gz 
+
+
+
+tchrm:build
+	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
+	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF \
+	 -o test/test.em.output2.gz --verbose
+
+
+t46:build
+	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
+	 -g test/lrgasp_sim_ont.SAMD11.gtf  \
+	 -o test/test.em.output2.gz --verbose
+
 
 
 tfusion:build
@@ -113,7 +129,7 @@ tfusion3:build
 	target/release/isopedia fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.gtf  -o test/fusion_discovery.output.gz
 
 tfusion4:build
-	target/release/isopedia-anno-fusion --debug -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
+	target/release/isopedia-anno-fusion --verbose -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
 	-G test/gencode.v47.basic.annotation.RUNX1RUNX1T1.gtf  \
 	-o test/fusion_discovery_cancer.output.gz &> aa.log
 

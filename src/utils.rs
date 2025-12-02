@@ -354,3 +354,21 @@ pub fn log_mem_stats() {
         }
     }
 }
+
+pub fn intersect_sorted<T: Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
+    let mut i = 0;
+    let mut j = 0;
+    let mut result = Vec::new();
+    while i < a.len() && j < b.len() {
+        match a[i].cmp(&b[j]) {
+            std::cmp::Ordering::Less => i += 1,
+            std::cmp::Ordering::Greater => j += 1,
+            std::cmp::Ordering::Equal => {
+                result.push(a[i].clone());
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+    result
+}

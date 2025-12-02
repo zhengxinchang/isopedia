@@ -438,7 +438,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
             let mut isoform = rec.to_single_read();
 
             if cli.tid {
-                isoform.add_info("TID".to_string(), rec.trans_id.clone());
+                isoform.add_info("TID".to_string(), rec.tx_id.clone());
             }
             if cli.gid {
                 isoform.add_info("GID".to_string(), rec.gene_id.clone());

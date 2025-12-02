@@ -15,7 +15,7 @@ use anyhow::Result;
 use clap::Parser;
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
@@ -285,35 +285,69 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             for (_, _, signature) in tmp_vec.iter() {
                 let merged_isoform_rec = merged_map.get(signature).unwrap();
                 let bytes_len = isoform_archive_writer.dump_to_disk(&merged_isoform_rec);
-                let sjs = merged_isoform_rec.get_common_splice_sites();
-                sjs.iter().for_each(|sj| {
-                    let interim_record = MergedIsoformOffsetPlusGenomeLoc {
-                        chrom_id: merged_isoform_rec.chrom_id,
-                        pos: *sj,
-                        record_ptr: MergedIsoformOffsetPtr {
-                            offset: merged_offset,
-                            length: bytes_len,
-                            n_splice_sites: sjs.len() as u32,
-                        },
-                    };
-                    tmpidx.add_one(interim_record);
-                });
+                // let sjs = merged_isoform_rec.get_common_splice_sites();
+                // sjs.iter().for_each(|sj| {
+                //     let interim_record = MergedIsoformOffsetPlusGenomeLoc {
+                //         chrom_id: merged_isoform_rec.chrom_id,
+                //         pos: *sj,
+                //         record_ptr: MergedIsoformOffsetPtr {
+                //             offset: merged_offset,
+                //             length: bytes_len,
+                //             n_splice_sites: sjs.len() as u32,
+                //         },
+                //     };
+                //     tmpidx.add_one(interim_record);
+                // });
 
-                // add the left and right position of a single read, this ensure the detection of fusion gene.
-                let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
-                read_ref_spans.iter().for_each(|position| {
-                    let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
-                        MergedIsoformOffsetPlusGenomeLoc {
+                let sjs = merged_isoform_rec.get_common_splice_sites();
+                let mut seen_sj = FxHashSet::default();
+                for sj in sjs.iter() {
+                    if seen_sj.insert(sj) {
+                        let interim_record = MergedIsoformOffsetPlusGenomeLoc {
                             chrom_id: merged_isoform_rec.chrom_id,
-                            pos: *position,
+                            pos: *sj,
                             record_ptr: MergedIsoformOffsetPtr {
                                 offset: merged_offset,
                                 length: bytes_len,
-                                n_splice_sites: 0, // for fusion gene detection
+                                n_splice_sites: sjs.len() as u32,
                             },
                         };
-                    tmpidx.add_one(offset_plus_genomeloc);
-                });
+                        tmpidx.add_one(interim_record);
+                    }
+                }
+
+                // add the left and right position of a single read, this ensure the detection of fusion gene.
+                // let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+                // read_ref_spans.iter().for_each(|position| {
+                //     let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
+                //         MergedIsoformOffsetPlusGenomeLoc {
+                //             chrom_id: merged_isoform_rec.chrom_id,
+                //             pos: *position,
+                //             record_ptr: MergedIsoformOffsetPtr {
+                //                 offset: merged_offset,
+                //                 length: bytes_len,
+                //                 n_splice_sites: 0, // for fusion gene detection
+                //             },
+                //         };
+                //     tmpidx.add_one(offset_plus_genomeloc);
+                // });
+
+                let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+                let mut seen_span = FxHashSet::default();
+                for position in read_ref_spans {
+                    if seen_span.insert(position) {
+                        let offset_plus_genomeloc = MergedIsoformOffsetPlusGenomeLoc {
+                            chrom_id: merged_isoform_rec.chrom_id,
+                            pos: position,
+                            record_ptr: MergedIsoformOffsetPtr {
+                                offset: merged_offset,
+                                length: bytes_len,
+                                n_splice_sites: 0,
+                            },
+                        };
+                        tmpidx.add_one(offset_plus_genomeloc);
+                    }
+                }
 
                 merged_offset += bytes_len as u64;
             }

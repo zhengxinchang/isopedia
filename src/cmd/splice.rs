@@ -260,7 +260,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
                         for samplec in &sample_vec {
                             out_line.add_sample(samplec.clone());
                         }
-                        tableout.add_line(&out_line)?;
+                        tableout.add_line(&mut out_line)?;
                     }
                     None => {}
                 }

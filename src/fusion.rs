@@ -546,7 +546,7 @@ impl FusionCluster {
             self.chr1, self.order_b_supp_left_mean as u32, self.order_b_supp_right_mean as u32
         ));
 
-        fusiondiscovery_out.add_line(&out_line)?;
+        fusiondiscovery_out.add_line(&mut out_line)?;
 
         Ok(())
     }

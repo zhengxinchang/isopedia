@@ -65,7 +65,7 @@ pub struct Transcript {
     pub exons: Vec<(u64, u64)>,
     pub is_mono_exonic: bool,
     pub gene_id: String,
-    pub trans_id: String,
+    pub tx_id: String,
     pub records: Vec<GTF::Record>,
     pub strand: Strand,
 }
@@ -74,7 +74,7 @@ impl Transcript {
     pub fn process(&mut self) -> &mut Self {
         // guard for emtpy exon length
         if self.exons.len() == 0 {
-            panic!("Transcript (id={}) must have at least one exon. Check your if input GTF is sorted...",self.trans_id);
+            panic!("Transcript (id={}) must have at least one exon. Check your if input GTF is sorted...",self.tx_id);
         }
 
         self.exons.sort_by_key(|k| k.0);
@@ -98,7 +98,7 @@ impl Transcript {
             exons: Vec::new(),
             is_mono_exonic: false,
             gene_id: String::new(),
-            trans_id: String::new(),
+            tx_id: String::new(),
             records: Vec::new(),
             strand: record.strand().unwrap_or_else(||{
                 panic!("GTF must have strand information for transcript/exon records, however this record is missing.\nRecord: {record:?}")
@@ -113,7 +113,7 @@ impl Transcript {
             .unwrap_or_else(|| panic!("GTF must have gene id"))
             .value()
             .to_string();
-        trans.trans_id = record
+        trans.tx_id = record
             .attributes()
             .iter()
             .find(|x| x.key() == "transcript_id")

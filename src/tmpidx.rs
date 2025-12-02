@@ -574,7 +574,7 @@ impl MergedIsoformOffsetGroup {
 pub struct MergedIsoformOffsetPtr {
     pub offset: u64,
     pub length: u32,
-    pub n_splice_sites: u32,
+    pub n_splice_sites: u32, // 0 means the offset is for read terminal positions, otherwise its for splice junction positions
 }
 impl MergedIsoformOffsetPtr {
     pub fn new(offset: u64, length: u32, n_splice_sites: u32) -> Self {
@@ -652,6 +652,9 @@ impl Ord for MergedIsoformOffsetPtr {
 
 impl Hash for MergedIsoformOffsetPtr {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // self.offset.hash(state);
         self.offset.hash(state);
+        self.length.hash(state);
+        self.n_splice_sites.hash(state);
     }
 }

@@ -119,7 +119,12 @@ impl TableOutput {
         Ok(())
     }
 
-    pub fn add_line(&mut self, line: &Line) -> Result<()> {
+    pub fn add_line(&mut self, line: &mut Line) -> Result<()> {
+        // if format string is not set, set it
+        if line.format_str.is_none() {
+            line.update_format_str(&self.format_str);
+        }
+
         self.lines.push(line.clone());
 
         if self.lines.len() > 0 && self.lines.len() % 1_000 == 0 {

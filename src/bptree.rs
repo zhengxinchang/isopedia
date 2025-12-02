@@ -6,12 +6,14 @@ use crate::tmpidx::MergedIsoformOffsetGroup;
 use crate::tmpidx::MergedIsoformOffsetPtr;
 use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::Tmpindex;
+use crate::utils::intersect_sorted;
 use ahash::HashSet;
 use anyhow::Result;
 // use itertools::Itertools;
 use lru::LruCache;
 // use memmap2::Mmap;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
@@ -1003,7 +1005,7 @@ impl BPForest {
         // min_match: usize,
         lru_size: usize,
     ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
-        let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
+        let mut res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
                 self.search0_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
@@ -1016,6 +1018,8 @@ impl BPForest {
         //     return find_partial_common(&res_vec, min_match);
         // }
 
+        dedup_vec_vec(&mut res_vec);
+
         res_vec
     }
 
@@ -1027,7 +1031,7 @@ impl BPForest {
         // min_matched_splice_site: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
     ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
-        let res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
+        let mut res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
                 self.search0_one_range(
@@ -1039,13 +1043,9 @@ impl BPForest {
             })
             .collect();
 
+        dedup_vec_vec(&mut res_vec);
+
         res_vec
-        // if min_matched_splice_site == 0 || min_matched_splice_site >= positions.len() {
-        //     // all splice sites must match
-        //     find_common(res_vec)
-        // } else {
-        //     find_partial_common(&res_vec, min_matched_splice_site)
-        // }
     }
 
     pub fn search2_all_match(
@@ -1067,7 +1067,7 @@ impl BPForest {
         }
     }
 
-    pub fn search2_all_match_nofsm(
+    pub fn search2_all_match_only(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -1076,7 +1076,6 @@ impl BPForest {
     {
         if flank == 0 {
             let res = self.search1_multi_exact(positions, lru_size);
-
             res
         } else {
             let res = self.search1_multi_range(positions, flank, lru_size);
@@ -1171,20 +1170,10 @@ pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsof
     result
 }
 
-fn intersect_sorted<T: Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
-    let mut i = 0;
-    let mut j = 0;
-    let mut result = Vec::new();
-    while i < a.len() && j < b.len() {
-        match a[i].cmp(&b[j]) {
-            std::cmp::Ordering::Less => i += 1,
-            std::cmp::Ordering::Greater => j += 1,
-            std::cmp::Ordering::Equal => {
-                result.push(a[i].clone());
-                i += 1;
-                j += 1;
-            }
-        }
+pub fn dedup_vec_vec(vecs: &mut Vec<Vec<MergedIsoformOffsetPtr>>) {
+    // remove the duplicate MergedIsoformOffsetPtr in each vec
+    for vec in vecs.iter_mut() {
+        vec.sort();
+        vec.dedup();
     }
-    result
 }

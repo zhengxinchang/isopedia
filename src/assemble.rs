@@ -4,7 +4,6 @@
 
 use crate::cmd::isoform::AnnIsoCli;
 use crate::isoformarchive::ArchiveCache;
-use crate::runtime::Runtime;
 use crate::tmpidx::MergedIsoformOffsetPtr;
 use ahash::HashSet;
 pub struct Assembler {
