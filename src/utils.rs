@@ -68,6 +68,14 @@ pub fn calc_cpm(val_u32: &u32, total_u32: &u32) -> f64 {
     (*val_u32 as f64 / *total_u32 as f64) * 1_000_000.0
 }
 
+pub fn calc_cpm_f32(val_f32: &f32, total_f32: &f32) -> f64 {
+    if *val_f32 == 0.0 || *total_f32 == 0.0 {
+        return 0.0;
+    }
+
+    (*val_f32 as f64 / *total_f32 as f64) * 1_000_000.0
+}
+
 /// Warming up the archive file by reading a portion of the file.
 /// Current function only read the first max_bytes, but can be improved by
 /// reading the file with imputation strategies
@@ -273,6 +281,59 @@ pub fn calc_confidence(
     let mut tmp = 0;
     for (i, &e) in sorted_evidence.iter().enumerate() {
         tmp += (i + 1) as u32 * e;
+    }
+
+    let a = 2.0f64 * (tmp as f64) / (total_size as f64 * total as f64);
+    let b = ((total_size + 1) as f64) / total_size as f64;
+
+    let gini = a - b;
+
+    if positive_samples == 0.0 {
+        return 0.0;
+    } else {
+        return (positive_samples / total_size as f64)
+            * (evidence_frac_vec.iter().sum::<f64>() / evidence_frac_vec.len() as f64).exp()
+            * (1.0 - gini);
+    }
+}
+
+pub fn calc_confidence_f32(
+    evidence_arr: &Vec<f32>,
+    total_size: usize,
+    sample_total_evidence_vec: &Vec<f32>,
+) -> f64 {
+    let mut total = 0.0;
+    let mut sorted_evidence = Vec::new();
+    let mut evidence_frac_vec = Vec::new();
+    let mut max_reads = 0.0;
+    let mut positive_samples: f64 = 0.0;
+    for idx in 0..total_size {
+        if evidence_arr[idx] > max_reads {
+            max_reads = evidence_arr[idx];
+        }
+
+        if evidence_arr[idx] > 0.0 {
+            positive_samples += 1.0;
+        }
+
+        sorted_evidence.push(evidence_arr[idx]);
+        total += evidence_arr[idx];
+
+        // calculate CPM fraction
+        if evidence_arr[idx] > 0.0 {
+            let frac = evidence_arr[idx] as f64 / sample_total_evidence_vec[idx] as f64 * 1000000.0;
+            evidence_frac_vec.push(frac.ln());
+        }
+    }
+
+    // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
+
+    sorted_evidence.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)); // sort in descending order
+                                                                                                    // dbg!(&sorted_evidence);
+
+    let mut tmp = 0.0;
+    for (i, &e) in sorted_evidence.iter().enumerate() {
+        tmp += (i + 1) as f32 * e;
     }
 
     // dbg!(n, tmp);

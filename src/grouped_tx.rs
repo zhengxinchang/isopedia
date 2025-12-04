@@ -1,15 +1,26 @@
-use std::{hash::Hash, os::unix::process, panic::panic_any};
-
-use crate::cmd::isoform::GLOBAL_POOL;
 use crate::{
-    bptree::BPForest, cmd::isoform::AnnIsoCli, dataset_info::DatasetInfo,
-    global_stats::GlobalStats, gtf::Transcript, isoform::MergedIsoform,
-    isoformarchive::ArchiveCache, results::TableOutput, tmpidx::MergedIsoformOffsetPtr,
-    utils::intersect_sorted,
+    bptree::BPForest,
+    cmd::isoform::AnnIsoCli,
+    dataset_info::DatasetInfo,
+    global_stats::GlobalStats,
+    gtf::Transcript,
+    io::{Line, SampleChip},
+    isoform::MergedIsoform,
+    isoformarchive::ArchiveCache,
+    results::TableOutput,
+    tmpidx::MergedIsoformOffsetPtr,
+    utils::{self, intersect_sorted},
 };
 use ahash::HashMap;
 use log::{debug, info};
 use rayon::prelude::*;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
+use std::{
+    io::{Read, Seek, Write},
+    path::PathBuf,
+    sync::Mutex,
+};
 
 pub struct ChromGroupedTxManager {
     chrom: String,
@@ -77,69 +88,67 @@ impl ChromGroupedTxManager {
         cli: &AnnIsoCli,
         archive_cache: &mut ArchiveCache,
         dbinfo: &DatasetInfo,
-        tableout: &mut TableOutput,
+        tmp_tx_manager: &mut Mutex<TmpOutputManager>,
         global_stats: &mut GlobalStats,
     ) {
-        // query and get results for each group
-        let mut processed_cnt = 0usize;
         let total_groups = self.group_queries.len();
-        let mut mem_acc = 0usize;
+        let processed_cnt = Mutex::new(0usize);
+        let global_stats_mutex = Mutex::new(global_stats);
 
-        // change to parallel processing with rayon
+        // Make archive_cache and bpforest thread-safe
+        let archive_cache_mutex = Mutex::new(archive_cache);
+        let bpforest_mutex = Mutex::new(bpforest);
 
-        for grouped_tx in self.group_queries.iter_mut() {
-            processed_cnt += 1;
-            if processed_cnt % 10 == 0 || processed_cnt == total_groups {
-                info!(
-                    "Chromosome {}: processing {}/{} groups",
-                    self.chrom, processed_cnt, total_groups
-                );
-                if cli.verbose {
-                    info!(
-                        "Current grouped tx memory usage: {:.2} MB",
-                        grouped_tx.get_mem_size() as f64 / 1024.0 / 1024.0
-                    );
-                }
-            }
-
+        self.group_queries.par_iter_mut().for_each(|grouped_tx| {
             let queries = grouped_tx.get_quieries(&self.chrom);
-            // query bpforest
-            let mut all_res =
-                bpforest.search2_all_match_only(&queries, cli.flank, cli.cached_nodes);
 
-            // sort the inner vecs by offset to make sure the same offset are together
+            // Lock resources when needed
+            let mut all_res = {
+                let mut bp = bpforest_mutex.lock().unwrap();
+                bp.search2_all_match_only(&queries, cli.flank, cli.cached_nodes)
+            };
+
             for res_vec in all_res.iter_mut() {
                 res_vec.sort_by_key(|x| x.offset);
             }
 
-            // debug!("got {} results", all_res.iter().map(|v| v.len()).sum::<usize>());
-            grouped_tx.update_results(&all_res, archive_cache, dbinfo, cli);
+            {
+                let mut cache = archive_cache_mutex.lock().unwrap();
+                grouped_tx.update_results(&all_res, &mut *cache, dbinfo, cli);
+            }
 
             grouped_tx.prepare_em();
-
             grouped_tx.em(cli);
-
             grouped_tx.post_cleanup(&cli);
 
-            // dbg!(&grouped_tx.tx_abundances);
-
-            mem_acc += grouped_tx.get_mem_size();
-
-            if cli.verbose {
-                info!(
-                    "After processing, grouped tx memory usage: {:.2} MB, accumulated memory usage: {:.2} MB",
-                    grouped_tx.get_mem_size() as f64 / 1024.0 / 1024.0,
-                    mem_acc as f64 / 1024.0 / 1024.0
-                );
+            // Update global stats,
+            {
+                let mut stats = global_stats_mutex.lock().unwrap();
+                for txbd in grouped_tx.tx_abundances.iter() {
+                    stats.update_fsm_total(&txbd.fsm_abundance);
+                    stats.update_em_total(&txbd.abundance_cur);
+                }
             }
 
-            for txbd in grouped_tx.tx_abundances.iter() {
-                global_stats.update_fsm_total(&txbd.fsm_abundance);
-                global_stats.update_ism_total(&txbd.abundance_cur);
+            // Update counter and log
+            {
+                let mut cnt = processed_cnt.lock().unwrap();
+                *cnt += 1;
+                if *cnt % 10 == 0 || *cnt == total_groups {
+                    info!(
+                        "Chromosome {}: processing {}/{} groups",
+                        self.chrom, *cnt, total_groups
+                    );
+                }
             }
 
-            // output results
-        }
+            // write to table output
+
+            {
+                let mut tmp_manager = tmp_tx_manager.lock().unwrap();
+                tmp_manager.dump_grouped_tx(grouped_tx);
+            }
+        });
     }
 }
 
@@ -389,22 +398,6 @@ impl GroupedTx {
 
         // dbg!(&self.tx_abundances);
     }
-
-    // pub fn em2(&mut self, cli: &AnnIsoCli) {
-    //     let em_iter = cli.em_iter;
-
-    //     for _ in 0..em_iter {
-    //         // E-step: 并行跑每个 MSJC
-    //         self.msjcs
-    //             .par_iter_mut()
-    //             .for_each(|msjc| msjc.e_step(&self.tx_abundances));
-
-    //         // M-step: 并行跑每个 TxAbundance
-    //         self.tx_abundances
-    //             .par_iter_mut()
-    //             .for_each(|tx_abd| tx_abd.m_step(&self.msjcs));
-    //     }
-    // }
 }
 
 pub fn quick_find_partial_msjc_exclude_terminals<'a>(
@@ -466,10 +459,18 @@ pub fn find_fsm(vecs: Vec<&Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOff
     result
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TxAbundance {
-    pub id: usize,
-    pub tx_id: Option<String>,
+    pub id: usize, // idx in the grouped_tx
+    pub orig_idx: u32,
+    pub orig_tx_id: String,
+    pub orig_gene_id: String,
+    pub orig_tx_len: u32,
+    pub orig_n_exon: u32,
+    pub orig_chrom: String,
+    pub orig_start: u64,
+    pub orig_end: u64,
+    pub orig_attrs: String,
     pub sj_pairs: Vec<(u64, u64)>, // splice junction positions
     pub fsm_abundance: Vec<f32>,
     pub abundance_cur: Vec<f32>, // sample size length
@@ -486,7 +487,15 @@ impl TxAbundance {
         let nsj = tx.splice_junc.len() + 10; // J + 1
         TxAbundance {
             id: txid,
-            tx_id: Some(tx.tx_id.clone()),
+            orig_idx: tx.origin_idx,
+            orig_tx_id: tx.tx_id.clone(),
+            orig_gene_id: tx.gene_id.clone(),
+            orig_tx_len: tx.get_transcript_seq_length() as u32,
+            orig_n_exon: tx.get_exon_count() as u32,
+            orig_chrom: tx.chrom.clone(),
+            orig_start: tx.start,
+            orig_end: tx.end,
+            orig_attrs: tx.get_attributes(),
             sj_pairs: tx.get_splice_junction_pairs(),
             fsm_abundance: vec![0.0; sample_size],
             abundance_cur: vec![1.0; sample_size],
@@ -516,47 +525,12 @@ impl TxAbundance {
         size
     }
 
-    pub fn m_step2(&mut self, msjc_vec: &HashMap<u64, MSJC>, cli: &AnnIsoCli) {
-        if cli.verbose {
-            info!(
-                "Updating TxAbundance id {},tx_id {:?},msjc length: {}",
-                self.id,
-                self.tx_id,
-                self.msjc_ids.len()
-            );
-        }
-
-        for sid in 0..self.abundance_cur.len() {
-            let mut total_abd = 0.0f32;
-            for (msjc_id, tx_local_id) in self.msjc_ids.iter() {
-                let msjc = &msjc_vec[msjc_id];
-                let idx = *tx_local_id * self.sample_size + sid;
-                total_abd += msjc.cov_vec[sid] * msjc.gamma_vec[idx];
-            }
-
-            self.abundance_prev[sid] = self.abundance_cur[sid];
-            self.abundance_cur[sid] = total_abd;
-
-            if cli.verbose {
-                info!(
-                    "TxAbundance id {}, tx_id {:?}, sample {} prev {:.6} cur {:.6} fsm {:.6}",
-                    self.id,
-                    self.tx_id,
-                    sid,
-                    self.abundance_prev[sid],
-                    self.abundance_cur[sid],
-                    self.fsm_abundance[sid]
-                );
-            }
-        }
-    }
-
     pub fn m_step(&mut self, msjc_vec: &HashMap<u64, MSJC>, cli: &AnnIsoCli) {
         if cli.verbose {
             info!(
                 "Updating TxAbundance id {},tx_id {:?},msjc length: {}",
                 self.id,
-                self.tx_id,
+                self.orig_tx_id,
                 self.msjc_ids.len()
             );
         }
@@ -599,7 +573,7 @@ impl TxAbundance {
 
                     info!(
                         "TxAbundance id {}, tx_id {:?}, sample {} prev {:.6} cur {:.6} fsm {:.6}",
-                        self.id, self.tx_id, sid, prev, cur, fsm
+                        self.id, self.orig_tx_id, sid, prev, cur, fsm
                     );
                 }
             }
@@ -619,7 +593,7 @@ impl TxAbundance {
             if cli.verbose {
                 info!(
                     "TxAbundance id {}, tx_id {:?}, sample {} prev {:.6} cur {:.6},diff {:.6} rel_diff {:.6}",
-                    self.id, self.tx_id, sid, prev, cur, diff, rel_diff
+                    self.id, self.orig_tx_id, sid, prev, cur, diff, rel_diff
                 );
             }
 
@@ -628,6 +602,92 @@ impl TxAbundance {
             }
         }
         is_converged
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("Can not serialize the grouped_tx")
+    }
+
+    pub fn decode(data: &[u8]) -> Self {
+        bincode::deserialize(data).expect("Can not deserialize the grouped_tx")
+    }
+
+    pub fn get_positive_samples(&self, min_read: f32) -> usize {
+        let mut count = 0;
+        for (abd1, abd2) in self.abundance_cur.iter().zip(&self.fsm_abundance) {
+            let total = abd1 + abd2;
+            if total >= min_read {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    pub fn to_output_line(
+        &self,
+        global_stats: &GlobalStats,
+        dbinfo: &DatasetInfo,
+        cli: &AnnIsoCli,
+    ) -> Line {
+        let mut out_line = Line::new();
+
+        out_line.add_field(&self.orig_chrom);
+        out_line.add_field(&self.orig_start.to_string());
+        out_line.add_field(&self.orig_end.to_string());
+        out_line.add_field(&self.orig_tx_len.to_string());
+        out_line.add_field(&self.orig_n_exon.to_string());
+        out_line.add_field(&self.orig_tx_id.to_string());
+        out_line.add_field(&self.orig_gene_id.to_string());
+
+        // confidence scores
+
+        let u32_arr = self
+            .fsm_abundance
+            .iter()
+            .zip(&self.abundance_cur)
+            .map(|(&fsm, em)| fsm + em)
+            .collect::<Vec<f32>>();
+
+        let confscore =
+            utils::calc_confidence_f32(&u32_arr, dbinfo.get_size(), &global_stats.fsm_em_total);
+
+        out_line.add_field(&confscore.to_string());
+
+        let positive_samples = self.get_positive_samples(cli.min_read as f32);
+
+        if positive_samples != 0 {
+            out_line.add_field("yes");
+        } else {
+            out_line.add_field("no");
+        }
+
+        out_line.add_field(&format!("{}/{}", positive_samples, dbinfo.get_size()));
+
+        out_line.add_field(&self.orig_attrs);
+
+        // process each sample
+
+        for sid in 0..dbinfo.get_size() {
+            let fsm = self.fsm_abundance[sid];
+            let em = self.abundance_cur[sid];
+            let total = fsm + em;
+            let total_cov = global_stats.fsm_em_total[sid];
+
+            let fsm_cpm = utils::calc_cpm_f32(&fsm, &total_cov);
+            let em_cpm = utils::calc_cpm_f32(&em, &total_cov);
+            let total_cpm = utils::calc_cpm_f32(&total, &total_cov);
+
+            let sample = SampleChip::new(
+                Some(dbinfo.get_sample_names()[sid].clone()),
+                vec![format!(
+                    "{}:{}:{}:{}:{}:{}",
+                    total_cpm, total, fsm_cpm, fsm, em_cpm, em
+                )],
+            );
+            out_line.add_sample(sample);
+        }
+
+        out_line
     }
 }
 
@@ -676,31 +736,6 @@ impl MSJC {
     }
 
     pub fn e_step2(&mut self, txabds: &Vec<TxAbundance>) {
-        // // let mut total = vec![0.0f32; self.sample_size];
-
-        // // pass 1: compute total[s]
-        // for (tid, &txid) in self.txids.iter().enumerate() {
-        //     // let txabd = &txabds[txid];
-        //     // let inv_pt = 1.0 / txabd.pt;
-        //     // for sid in 0..self.sample_size {
-        //     //     total[sid] += txabd.abundance_cur[sid] * txabd.inv_pt;
-        //     // }
-
-        //     let txabd = &txabds[txid];
-        //     // let inv_pt = 1.0 / txabd.pt;
-        //     let base = tid * self.sample_size;
-        //     for sid in 0..self.sample_size {
-        //         let denom = txabd.abundance_cur[sid] * txabd.inv_pt;
-        //         let idx = base + sid;
-        //         if denom > 0.0 {
-        //             let numer = txabd.abundance_cur[sid] * txabd.inv_pt;
-        //             self.gamma_vec[idx] = numer / denom;
-        //         } else {
-        //             self.gamma_vec[idx] = 0.0;
-        //         }
-        //     }
-        // }
-
         let mut total = vec![0.0f32; self.sample_size];
 
         // pass 1: total[s]
@@ -710,14 +745,6 @@ impl MSJC {
                 total[sid] += txabd.abundance_cur[sid] * txabd.inv_pt;
             }
         }
-        // dbg!("Total in E step: {:?}", &total);
-
-        // pass 2: gamma
-        // info!("Total in E step: {:?}", total);
-
-        // info!("current gamma_vec before E step: {:?}", self.gamma_vec);
-        // info!("txids in MSJC {}: {:?}", self.id, self.txids.len());
-        // info!("cov_vec in MSJC {}: {:?}", self.id, self.cov_vec);
 
         for (tid, &txid) in self.txids.iter().enumerate() {
             // dbg!("inv_pt of txid {}: {}", txid, txabds[txid].inv_pt);
@@ -780,5 +807,108 @@ impl MSJC {
                 }
             }
         }
+    }
+}
+
+type orig_idx = u32;
+type offset = u64;
+type length = u64;
+
+/// A temporary output manager to dump grouped_tx results before collect all informations
+pub struct TmpOutputManager {
+    pub curr_offset: u64,
+    pub curr_processed_idx: usize,
+    pub offsets: Vec<(orig_idx, offset, length)>, // (orig_tx_idx, offset, length)
+    pub file_path: PathBuf,
+    pub file_handle: std::fs::File,
+}
+
+impl TmpOutputManager {
+    pub fn new(file_path: &PathBuf) -> Self {
+        let file_handle = std::fs::File::create(file_path).unwrap_or_else(|_| {
+            panic!(
+                "Could not create temporary output file {}",
+                file_path.display()
+            )
+        });
+        TmpOutputManager {
+            curr_offset: 0,
+            curr_processed_idx: 0,
+            offsets: Vec::new(),
+            file_path: file_path.clone(),
+            file_handle,
+        }
+    }
+
+    pub fn dump_grouped_tx(&mut self, grouped_tx: &GroupedTx) {
+        for tx_abd in grouped_tx.tx_abundances.iter() {
+            let bytes = tx_abd.encode();
+            let length = bytes.len() as u64;
+            self.file_handle.write_all(&bytes).unwrap_or_else(|_| {
+                panic!(
+                    "Could not write to temporary output file {}",
+                    self.file_path.display()
+                )
+            });
+            self.offsets
+                .push((tx_abd.orig_idx, self.curr_offset, length));
+            self.curr_offset += length;
+        }
+    }
+
+    pub fn finish(&mut self) {
+        self.offsets.sort_by_key(|x| x.0);
+        self.file_handle.sync_all().unwrap_or_else(|_| {
+            panic!(
+                "Could not sync temporary output file {}",
+                self.file_path.display()
+            )
+        });
+        self.file_handle = std::fs::File::open(&self.file_path).unwrap_or_else(|_| {
+            panic!(
+                "Could not open temporary output file {}",
+                self.file_path.display()
+            )
+        });
+        self.curr_processed_idx = 0;
+    }
+
+    pub fn get_next_txabundance(&mut self) -> Option<TxAbundance> {
+        if self.curr_processed_idx >= self.offsets.len() {
+            return None;
+        }
+
+        let (_orig_idx, offset, length) = self.offsets[self.curr_processed_idx];
+        self.file_handle
+            .seek(std::io::SeekFrom::Start(offset))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Could not seek in temporary output file {}",
+                    self.file_path.display()
+                )
+            });
+        let mut buffer = vec![0u8; length as usize];
+        self.file_handle
+            .read_exact(&mut buffer)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Could not read from temporary output file {}, with offset {}, length {}: {}",
+                    self.file_path.display(),
+                    offset,
+                    length,
+                    e
+                )
+            });
+        let tx_abd = TxAbundance::decode(&buffer);
+        self.curr_processed_idx += 1;
+        Some(tx_abd)
+    }
+}
+
+impl Iterator for TmpOutputManager {
+    type Item = TxAbundance;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.get_next_txabundance()
     }
 }

@@ -327,18 +327,3 @@ impl TableOutput {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    pub fn test_isoform_table_load() {
-        let path = "/ssd1/stix-iso-devspace/isopedia-dev/test/test.output.isoform.gz";
-        let isoform_table = TableOutput::load(path).unwrap();
-        dbg!("header: {:?}", isoform_table.header);
-        dbg!("db_infos: {:?}", isoform_table.db_infos);
-        dbg!("meta: {:?}", isoform_table.meta);
-        dbg!("lines: {:?}", isoform_table.lines.len());
-    }
-}

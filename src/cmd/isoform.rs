@@ -1,4 +1,4 @@
-use std::{hash::Hash, path::PathBuf, vec};
+use std::{hash::Hash, path::PathBuf, sync::Mutex, vec};
 
 use crate::{
     // assemble::Assembler,
@@ -6,7 +6,7 @@ use crate::{
     constants::*,
     dataset_info::DatasetInfo,
     global_stats::GlobalStats,
-    grouped_tx::{ChromGroupedTxManager, TxAbundance, MSJC},
+    grouped_tx::{ChromGroupedTxManager, TmpOutputManager, TxAbundance, MSJC},
     gtf::{open_gtf_reader, TranscriptChunker},
     io::{DBInfos, Header, Line, SampleChip},
     isoform::MergedIsoform,
@@ -22,24 +22,8 @@ use clap::{command, Parser};
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
-// use nix::sys::mman::{posix_madvise, PosixMadvise};
-// Removed incorrect import of mmap::{PosixMadvise,posix_madvise}
 
-use once_cell::sync::OnceCell;
-use rayon::prelude::*; // 如果需要
-
-pub static GLOBAL_POOL: OnceCell<rayon::ThreadPool> = OnceCell::new();
-
-pub fn init_thread_pool(n_threads: usize) {
-    GLOBAL_POOL
-        .set(
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(n_threads)
-                .build()
-                .unwrap(),
-        )
-        .ok();
-}
+use rayon::ThreadPoolBuilder;
 
 #[derive(Parser, Debug, Serialize, Clone)]
 #[command(name = "isopedia isoform")]
@@ -81,6 +65,10 @@ pub struct AnnIsoCli {
     /// Include in-complete splice junction matches
     #[arg(long, default_value_t = false)]
     pub asm: bool,
+
+    /// Number of threads to use
+    #[arg(short, long, default_value_t = 4)]
+    pub num_threads: usize,
 
     /// Max EM iterations
     #[arg(long, default_value_t = 50)]
@@ -162,12 +150,15 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     greetings(&cli);
     cli.validate();
 
+    ThreadPoolBuilder::new()
+        .num_threads(cli.num_threads)
+        .build_global()
+        .expect("Can not allocate thread pool");
+
     let mut forest = BPForest::init(&cli.idxdir);
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
     info!("Loading GTF file...");
-
-    init_thread_pool(4);
 
     let gtfreader = open_gtf_reader(cli.gtf.to_str().unwrap())?;
 
@@ -230,6 +221,8 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         })
         .collect();
 
+    let mut tmp_tx_manger = Mutex::new(TmpOutputManager::new(&cli.output.with_extension(&"tmp")));
+
     info!("Processing transcripts");
     for chrom_manager in chrom_grouped_tx_managers.iter_mut() {
         chrom_manager.process_tx_groups(
@@ -237,75 +230,30 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             cli,
             &mut archive_cache,
             &dataset_info,
-            &mut tableout,
+            &mut tmp_tx_manger,
             &mut global_stats,
         );
     }
 
-    /*
-    For each chromsome:
-    1. obtain all the splice junctions from the transcripts
-    2. group all transcripts by their splice junctions into tx_groups
+    info!("Finalizing temporary output");
 
-    no need to do this per sj, just find all tx that overlap with each other is fine to group them.
+    {
+        let mut tmp_manager = tmp_tx_manger
+            .lock()
+            .expect("Can not unlock the tmp tx manager");
+        tmp_manager.finish();
+        while let Some(tx_abd) = tmp_manager.next() {
+            let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
 
-    3. for each tx_group, obtain all the misoform offsets from the index. dedup and dump the offsets into OffsetCache but keep the group_id reference. maintain a mapping from offset --> set[group_id,]
-    4. merge tx_groups that share same misoform offsets, update the OffsetCache accordingly.
-        dont udpate it, keep it simple, but give the API to improve, global storage of msiformoffset, even by chrom, would take a huge mount of memory
-        make an API for further disk-persistent optimization,but make group seperated for now.
-    5. for each tx_group, create TxAbundance records, load the misoform from OffsetCache.
-        if a misoform matches all the splice junctions of the group,
-            load into TxAbundance as FSM
-        else
-            create MSJC records for those misoforms that partially match the splice junctions, and load into TxAbundance
-    6. after all TxAbundance and MSJC are created, run EM algorithm to estimate the abundances
-    7. output the TxAbundance results
+            tableout.add_line(&mut line)?;
+        }
+    }
 
+    tableout.finish()?;
 
-    multi-threading consideration:
+    // remove the tmp out file
+    std::fs::remove_file(&cli.output.with_extension(&"tmp"))?;
 
-    1. per-chromsome processing, each thread process one chromsome at a time， send a grouptx to  a thread pool.
-    2. the thread pool process each group tx independently with EM and send back to main thread for output
-    3. the main thread collect results and output
-
-    ========
-       splice junction --> inital transcript groups
-
-       init projection TxComponent  按照chrosome 分组，每次处理一个chromsome的内容
-       tx --> group_id
-       group_id --> tx_ids // used for update gruop id later
-
-       init projection OffsetComponent
-       offset --> set[group_id,]
-
-       我既然获得了所有的sj，我其实可以顺序查询，而不是每次都是一个transcript查询了
-
-       一个group的tx 一次查询，返回所有的misoformoffset
-
-
-       Vec（
-           （position，vec（misoform——offset））
-       )
-
-       每个transcript，查看这些position，然后找到对应的FSM对应的FSM transcript
-
-       剩下的就是用于创建MSJC的misofromoffset, 这些可以dump到一个临时文件OffsetCache中。
-       Txabundance应该包含对MSJC的misoformoffset的index引用，这样做EM的时候可以直接load进来？
-
-       OffsetCache {
-           group_id --> offset，length记录
-       }
-
-
-       如果一个offset 出现在多个gorup中，那么需要合并gruop，
-       实际的合并发生在对TxGruop的操作,也发生在对OffsetCache的操作
-
-       到这里，就可以获得所有的 MSJC的offset了， 这里可能会存在重复的offset，就是不同的group包含了同一个offset，这种情况会
-       多产生几次isoformarchive的IO不影响结果
-
-       此时所有的Txabundance 已经创建好，并且有了
-
-
-    */
+    info!("Finished!");
     Ok(())
 }

@@ -93,8 +93,8 @@ t43:build
 	 -g test/simulated_R9_missing.gtf \
 	 -o test/test.assembled2.output.gz --info
 
-t44:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
+tlarge:build
+	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
 	 -o test/test.em.output2.gz 
 
@@ -104,6 +104,10 @@ t45:build
 	 -o test/test.em.output2.gz 
 
 
+tbench:build
+	/usr/bin/time -v  target/release/isopedia isoform -n 16  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
+	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
+	 -o test/test.em.output2.gz 
 
 tchrm:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
