@@ -4,10 +4,13 @@ SHELL := /bin/bash
 VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
 
 
+
+
 build:
-	RUSTLOG=debug
-	RUSTFLAGS="-C debuginfo=1"
 	cargo build --release
+	
+
+build-musl:
 	cargo build --release --target x86_64-unknown-linux-musl
 
 build-docker:
@@ -17,7 +20,7 @@ build-conda: build-targz
 	export version=$(VERSION) && \
 	conda build conda_recipe/
 
-build-targz: build-docker build
+build-targz: build-docker build build-musl
 	tar -zcvf ver_release/isopedia-$(VERSION).musl.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py isopedia-splice-viz-temp.html
 	tar -zcvf ver_release/isopedia-$(VERSION).linux.tar.gz -C linux_build/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py isopedia-splice-viz-temp.html
 
@@ -25,6 +28,11 @@ merge2main:
 	git checkout main && git merge dev && git tag $(VERSION) && git push && git checkout dev
 
 pack: build build-docker build-conda 
+
+debug:
+	export RUST_LOG="debug"
+nodebug:
+	export RUST_LOG="info"
 
 
 CMT ?= WIP
@@ -97,6 +105,12 @@ tlarge:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
 	 -o test/test.em.output2.gz 
+tlarge12:build
+	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
+	 -g test/hs_chr12.gtf \
+	 -o test/test.em.output2.gz 
+
+	 
 
 t45:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i test/HG002_idx/ \
@@ -107,18 +121,18 @@ t45:build
 tbench:build
 	/usr/bin/time -v  target/release/isopedia isoform -n 16  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
-	 -o test/test.em.output2.gz 
+	 -o test/test.em.output.gz 
 
 tchrm:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
 	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF \
-	 -o test/test.em.output2.gz --verbose
+	 -o test/test.em.output2.gz
 
 
 t46:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g test/lrgasp_sim_ont.SAMD11.gtf  \
-	 -o test/test.em.output2.gz --verbose
+	 -o test/test.em.output3.gz --verbose
 
 
 
@@ -233,3 +247,7 @@ watchmem:
 		echo "------------------------------"; \
 		sleep 4; \
 	done | tee mem.log
+
+
+concat:
+	cat src/cmd/isoform.rs  src/grouped_tx.rs src/isoformarchive.rs  src/bptree.rs  > aa.rs

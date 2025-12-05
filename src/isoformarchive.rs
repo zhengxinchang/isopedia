@@ -1,14 +1,14 @@
 use std::{
-    collections::HashMap,
     fs::File,
     io::{BufWriter, Write},
+    num::NonZeroUsize,
     os::unix::fs::FileExt,
     path::Path,
     sync::Arc,
 };
 
 use anyhow::Result;
-use log::info;
+use lru::LruCache;
 
 use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffsetPtr};
 
@@ -63,8 +63,7 @@ pub struct ArchiveCache {
     file: File,
     chunk_size: u64,
     lru_order: Vec<u64>,
-    cache: HashMap<u64, Arc<Vec<u8>>>,
-    max_chunks: usize,
+    cache: LruCache<u64, Arc<Vec<u8>>>,
     buf: Vec<u8>,
 }
 
@@ -78,8 +77,7 @@ impl ArchiveCache {
             file: f,
             chunk_size,
             lru_order: Vec::new(),
-            cache: HashMap::new(),
-            max_chunks,
+            cache: LruCache::new(NonZeroUsize::new(max_chunks).unwrap()),
             buf: Vec::new(),
         }
     }
@@ -91,10 +89,13 @@ impl ArchiveCache {
     pub fn read_chunk(&mut self, offset: u64) -> Result<Arc<Vec<u8>>> {
         let aligned = self.align_offset(offset);
 
+        // if let Some(buf) = self.cache.get(&aligned) {
+        //     return Ok(Arc::clone(buf));
+        // }
+
         if let Some(buf) = self.cache.get(&aligned) {
             return Ok(Arc::clone(buf));
         }
-
         // dbg!(aligned);
 
         let mut buf = vec![0u8; self.chunk_size as usize];
@@ -102,13 +103,8 @@ impl ArchiveCache {
         buf.truncate(bytes_read);
 
         let arc_buf = Arc::new(buf);
-        self.cache.insert(aligned, Arc::clone(&arc_buf));
-        self.lru_order.push(aligned);
 
-        if self.lru_order.len() > self.max_chunks {
-            let old = self.lru_order.remove(0);
-            self.cache.remove(&old);
-        }
+        self.cache.put(aligned, Arc::clone(&arc_buf));
 
         Ok(arc_buf)
     }
@@ -157,8 +153,6 @@ impl ArchiveCache {
             self.buf.extend_from_slice(&chunk[local_start..local_end]);
         }
 
-        // dbg!(self.buf.len());
-
         match MergedIsoform::gz_decode(&self.buf) {
             Ok(record) => record,
             Err(_) => {
@@ -166,6 +160,22 @@ impl ArchiveCache {
                 eprintln!("Offset: {:?}", offset);
                 std::process::exit(1);
             }
+        }
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
+        self.lru_order.clear();
+        self.buf.clear();
+
+        self.lru_order.shrink_to_fit();
+        self.buf.shrink_to_fit();
+    }
+
+    pub fn clear_buffer(&mut self) {
+        self.buf.clear();
+        if self.buf.capacity() > 10 * 1024 * 1024 {
+            self.buf.shrink_to_fit();
         }
     }
 }

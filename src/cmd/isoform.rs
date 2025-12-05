@@ -1,4 +1,4 @@
-use std::{hash::Hash, path::PathBuf, sync::Mutex, vec};
+use std::path::PathBuf;
 
 use crate::{
     // assemble::Assembler,
@@ -6,17 +6,13 @@ use crate::{
     constants::*,
     dataset_info::DatasetInfo,
     global_stats::GlobalStats,
-    grouped_tx::{ChromGroupedTxManager, TmpOutputManager, TxAbundance, MSJC},
+    grouped_tx::{ChromGroupedTxManager, TmpOutputManager},
     gtf::{open_gtf_reader, TranscriptChunker},
-    io::{DBInfos, Header, Line, SampleChip},
-    isoform::MergedIsoform,
+    io::{DBInfos, Header},
     isoformarchive::ArchiveCache,
     meta::Meta,
     results::TableOutput,
-    tmpidx::MergedIsoformOffsetPtr,
-    utils::log_mem_stats,
 };
-use ahash::HashSet;
 use anyhow::Result;
 use clap::{command, Parser};
 use log::{error, info};
@@ -24,6 +20,7 @@ use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 
 use rayon::ThreadPoolBuilder;
+use sysinfo::{Pid, ProcessRefreshKind, System};
 
 #[derive(Parser, Debug, Serialize, Clone)]
 #[command(name = "isopedia isoform")]
@@ -221,10 +218,22 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         })
         .collect();
 
-    let mut tmp_tx_manger = Mutex::new(TmpOutputManager::new(&cli.output.with_extension(&"tmp")));
+    let mut tmp_tx_manger = TmpOutputManager::new(&cli.output.with_extension(&"tmp"));
+
+    let mut sys = System::new_all();
+
+    let pid = Pid::from_u32(std::process::id());
 
     info!("Processing transcripts");
     for chrom_manager in chrom_grouped_tx_managers.iter_mut() {
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::everything(),
+        );
+        let process = sys.process(pid).unwrap();
+        let mem_before = process.memory() / 1024 / 1024; // MB
+
         chrom_manager.process_tx_groups(
             &mut forest,
             cli,
@@ -233,16 +242,36 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             &mut tmp_tx_manger,
             &mut global_stats,
         );
+
+        forest.clear_all_caches();
+
+        archive_cache.clear_cache();
+
+        chrom_manager.clear();
+
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::everything(),
+        );
+        let process = sys.process(pid).unwrap();
+        let mem_after = process.memory() / 1024 / 1024; // MB
+
+        info!(
+            "Chromosome {}: memory {}MB -> {}MB (delta: {:+}MB)",
+            chrom_manager.chrom,
+            mem_before,
+            mem_after,
+            mem_after as i64 - mem_before as i64
+        );
     }
 
     info!("Finalizing temporary output");
 
     {
-        let mut tmp_manager = tmp_tx_manger
-            .lock()
-            .expect("Can not unlock the tmp tx manager");
-        tmp_manager.finish();
-        while let Some(tx_abd) = tmp_manager.next() {
+        // let mut tmp_manager = &mut tmp_tx_manger;
+        tmp_tx_manger.finish();
+        while let Some(tx_abd) = tmp_tx_manger.next() {
             let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
 
             tableout.add_line(&mut line)?;

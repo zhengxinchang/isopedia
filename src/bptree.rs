@@ -13,7 +13,6 @@ use anyhow::Result;
 use lru::LruCache;
 // use memmap2::Mmap;
 use rustc_hash::FxHashMap;
-use rustc_hash::FxHashSet;
 use std;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
@@ -544,6 +543,10 @@ impl Cache {
         })
     }
 
+    pub fn clear_cache(&mut self) {
+        self.lru.clear();
+    }
+
     // pub fn from_disk_mmap<P: AsRef<Path>>(idx_path: P, lru_size: usize) -> Result<Cache> {
     //     let file = File::options().read(true).write(true).open(&idx_path)?;
     //     let mmap = unsafe { Mmap::map(&file)? };
@@ -800,6 +803,12 @@ impl BPTree {
         Ok(())
     }
 
+    pub fn clear_cache(&mut self) {
+        if let Some(cache) = &mut self.cache {
+            cache.clear_cache();
+        }
+    }
+
     /// search the key in the B+ tree
     /// return the record pointer list
     /// if the key is not found, return None
@@ -941,6 +950,16 @@ impl BPForest {
         }
         println!("Build {} trees", count);
         Ok(())
+    }
+
+    pub fn clear_all_caches(&mut self) {
+        for (_chrom_id, tree) in self.trees_by_chrom.iter_mut() {
+            tree.clear_cache();
+        }
+    }
+
+    pub fn unload_chromosome(&mut self, chrom_id: u16) {
+        self.trees_by_chrom.remove(&chrom_id);
     }
 
     // basic search functions
