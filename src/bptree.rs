@@ -7,6 +7,7 @@ use crate::tmpidx::MergedIsoformOffsetPtr;
 use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::Tmpindex;
 use crate::utils::intersect_sorted;
+use crate::utils::GetMemSize;
 use ahash::HashSet;
 use anyhow::Result;
 // use itertools::Itertools;
@@ -163,17 +164,6 @@ impl Node {
             header: NodeHeader::init(id, is_leaf, level),
             data: NodeData::new(),
         }
-    }
-
-    pub fn get_mem_size(&self) -> usize {
-        let mut total = 0usize;
-
-        total += std::mem::size_of::<Node>();
-
-        total += self.data.merge_isoform_offset_vec.capacity()
-            * std::mem::size_of::<MergedIsoformOffsetPtr>();
-
-        total
     }
 
     pub fn is_full(&self) -> bool {
@@ -391,34 +381,6 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn get_mem_size(&self) -> usize {
-        let mut total = 0usize;
-
-        // 1) Cache 自身在栈上的大小（包含 header/file/path/lru 字段）
-        total += std::mem::size_of::<Cache>();
-
-        // 2) file_path / payload_file_path 的堆字符串长度
-        total += self.file_path.as_os_str().len();
-        if let Some(p) = &self.payload_file_path {
-            total += p.as_os_str().len();
-        }
-
-        // 3) LRU 中的所有 Node
-        for (k, node_arc) in self.lru.iter() {
-            // HashMap 的 key（按值存的 u64）
-            total += std::mem::size_of_val(k);
-
-            // Arc<Node> 本身（指针 + 引用计数，不含 Node 内部）
-            total += std::mem::size_of::<std::sync::Arc<Node>>();
-
-            // 让 Node 自己算它占多少
-            let node = node_arc.as_ref();
-            total += node.get_mem_size();
-        }
-
-        total
-    }
-
     pub fn create(file_path: &PathBuf) -> Self {
         let header = CacheHeader::new();
         let file = File::create(file_path).unwrap();
@@ -547,21 +509,6 @@ impl Cache {
         self.lru.clear();
     }
 
-    // pub fn from_disk_mmap<P: AsRef<Path>>(idx_path: P, lru_size: usize) -> Result<Cache> {
-    //     let file = File::options().read(true).write(true).open(&idx_path)?;
-    //     let mmap = unsafe { Mmap::map(&file)? };
-    //     let header = CacheHeader::from_bytes(&mmap[0..4096])?;
-    //     Ok(Cache {
-    //         header,
-    //         file,
-    //         file_path: PathBuf::from(idx_path.as_ref()),
-    //         payload_file: None,
-    //         payload_file_path: None,
-    //         mmap: Some(mmap),
-    //         lru: LruCache::new(NonZeroUsize::new(lru_size).unwrap()),
-    //     })
-    // }
-
     pub fn get_node2(&mut self, node_id: u64) -> Option<Arc<Node>> {
         if let Some(n) = self.lru.get(&node_id) {
             return Some(Arc::clone(n));
@@ -597,33 +544,6 @@ impl Cache {
 
         Some(arc_node)
     }
-
-    // pub fn get_node3(&mut self, node_id: u64) -> Option<Arc<Node>> {
-    //     if let Some(n) = self.lru.get(&node_id) {
-    //         // 命中缓存，克隆 Arc 返回
-    //         return Some(Arc::clone(n));
-    //     }
-
-    //     let mmap = self.mmap.as_ref().expect("Cache not mmaped");
-    //     if node_id == 0 || node_id > self.header.total_nodes {
-    //         return None;
-    //     }
-
-    //     let off = (node_id * 4096) as usize;
-    //     let hdr_slice = &mmap[off..off + 4096];
-    //     let mut node = Node::load_header_from_bytes(hdr_slice);
-
-    //     let po = node.header.payload_offset as usize + self.header.payload_start_offset;
-    //     let ps = node.header.payload_size as usize;
-    //     let data_slice = &mmap[po..po + ps];
-    //     node.load_record_pointers_from_bytes(data_slice);
-
-    //     // 放入缓存
-    //     let arc_node = Arc::new(node);
-    //     self.lru.put(node_id, Arc::clone(&arc_node));
-
-    //     Some(arc_node)
-    // }
 
     pub fn get_root_node(&mut self) -> Arc<Node> {
         self.get_node2(self.header.root_node_id).unwrap()
@@ -661,19 +581,6 @@ pub struct BPTree {
 }
 
 impl BPTree {
-    pub fn get_mem_size(&self) -> usize {
-        let mut total = 0usize;
-        let bptree_stack_without_cache =
-            std::mem::size_of::<BPTree>() - std::mem::size_of::<Option<Cache>>();
-        total += bptree_stack_without_cache;
-        total += self.idxdir.as_os_str().len();
-        if let Some(cache) = &self.cache {
-            total += cache.get_mem_size();
-        }
-
-        total
-    }
-
     pub fn init(idx_path: &PathBuf, chrom_id: u16) -> BPTree {
         // let file: File = File::open(file_path).expect("can not open file");
         BPTree {
@@ -903,10 +810,7 @@ impl BPTree {
             node = cache
                 .get_node2(next_node_id)
                 .expect("Can not get next leaf node");
-            // println!("next node id: {}", node.header.node_id);
         }
-        // dbg!("total results:", results.len());
-        // dbg!("results: {:?}", &results);
         results
     }
 }
@@ -1130,16 +1034,6 @@ impl BPForest {
             }
         }
     }
-
-    pub fn get_mem_size(&self) -> usize {
-        let mut total = 0usize;
-        for (_chrom_id, tree) in &self.trees_by_chrom {
-            if let Some(cache) = &tree.cache {
-                total += cache.get_mem_size();
-            }
-        }
-        total
-    }
 }
 
 /// find the common elements in the vecs, if one element
@@ -1194,5 +1088,68 @@ pub fn dedup_vec_vec(vecs: &mut Vec<Vec<MergedIsoformOffsetPtr>>) {
     for vec in vecs.iter_mut() {
         vec.sort();
         vec.dedup();
+    }
+}
+
+impl GetMemSize for Node {
+    fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+
+        total += std::mem::size_of::<Node>();
+
+        total += self.data.merge_isoform_offset_vec.capacity()
+            * std::mem::size_of::<MergedIsoformOffsetPtr>();
+        total
+    }
+}
+
+impl GetMemSize for Cache {
+    fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+
+        total += std::mem::size_of::<Cache>();
+
+        total += self.file_path.as_os_str().len();
+        if let Some(p) = &self.payload_file_path {
+            total += p.as_os_str().len();
+        }
+
+        for (k, node_arc) in self.lru.iter() {
+            total += std::mem::size_of_val(k);
+
+            total += std::mem::size_of::<std::sync::Arc<Node>>();
+
+            let node = node_arc.as_ref();
+            total += node.get_mem_size();
+        }
+
+        total
+    }
+}
+
+impl GetMemSize for BPTree {
+    fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+        let bptree_stack_without_cache =
+            std::mem::size_of::<BPTree>() - std::mem::size_of::<Option<Cache>>();
+        total += bptree_stack_without_cache;
+        total += self.idxdir.as_os_str().len();
+        if let Some(cache) = &self.cache {
+            total += cache.get_mem_size();
+        }
+        total
+    }
+}
+
+impl GetMemSize for BPForest {
+    fn get_mem_size(&self) -> usize {
+        let mut total = 0usize;
+        total += std::mem::size_of::<BPForest>();
+        total += self.index_dir.as_os_str().len();
+        for (chrom_id, tree) in self.trees_by_chrom.iter() {
+            total += std::mem::size_of_val(chrom_id);
+            total += tree.get_mem_size();
+        }
+        total
     }
 }

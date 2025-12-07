@@ -69,11 +69,19 @@ pub struct AnnIsoCli {
 
     /// Max EM iterations
     #[arg(long, default_value_t = 50)]
-    pub em_iter: usize,
+    pub em_max_iter: usize,
 
     // EM convergence threshold
     #[arg(long, default_value_t = 0.01)]
     pub em_converge: f32,
+
+    // EM chunk size, reduce it if you have low memory
+    #[arg(long, default_value_t = 4)]
+    pub em_chunk_size: usize,
+
+    // EM effective length coefficient
+    #[arg(long, default_value_t = 10)]
+    pub em_effective_len_coef: usize,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]
@@ -90,6 +98,10 @@ pub struct AnnIsoCli {
     /// Verbose mode
     #[arg(long, default_value_t = false)]
     pub verbose: bool,
+
+    /// Output temporary shard record size
+    #[arg(long, default_value_t = 10_000)]
+    pub output_tmp_shard_counts: usize,
 }
 
 impl AnnIsoCli {
@@ -213,12 +225,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         .into_iter()
         .map(|(chrom, tx_vec)| {
             let mut manager = ChromGroupedTxManager::new(&chrom, dataset_info.get_size());
-            manager.add_transcript_by_chrom(&tx_vec);
+            manager.add_transcript_by_chrom(&tx_vec, cli);
             manager
         })
         .collect();
 
-    let mut tmp_tx_manger = TmpOutputManager::new(&cli.output.with_extension(&"tmp"));
+    let mut tmp_tx_manger = TmpOutputManager::new(&cli.output.with_extension(&"tmp"), cli);
 
     let mut sys = System::new_all();
 
@@ -269,7 +281,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     info!("Finalizing temporary output");
 
     {
-        // let mut tmp_manager = &mut tmp_tx_manger;
         tmp_tx_manger.finish();
         while let Some(tx_abd) = tmp_tx_manger.next() {
             let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
@@ -280,8 +291,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     tableout.finish()?;
 
-    // remove the tmp out file
-    std::fs::remove_file(&cli.output.with_extension(&"tmp"))?;
+    tmp_tx_manger.clean_up()?;
 
     info!("Finished!");
     Ok(())

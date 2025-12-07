@@ -8,14 +8,19 @@ use crate::{
     isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
     tmpidx::MergedIsoformOffsetPtr,
-    utils::{self, intersect_sorted},
+    utils::{self, intersect_sorted, GetMemSize},
 };
 use ahash::HashMap;
-use log::{debug, info};
+use anyhow::Result;
+use log::{debug, info, warn};
+use memmap2::Mmap;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
-    io::{Read, Seek, Write},
+    cmp::Reverse,
+    collections::BinaryHeap,
+    fs::File,
+    io::{BufWriter, Write},
     path::PathBuf,
 };
 pub struct ChromGroupedTxManager {
@@ -38,13 +43,7 @@ impl ChromGroupedTxManager {
         self.group_queries.shrink_to_fit();
     }
 
-    pub fn get_mem_size(&self) -> usize {
-        let size = std::mem::size_of_val(&self.chrom) + std::mem::size_of_val(&self.group_queries);
-        // + std::mem::size_of_val(&self._position_to_group_idx);
-        size
-    }
-
-    pub fn add_transcript_by_chrom(&mut self, tx_v: &Vec<Transcript>) {
+    pub fn add_transcript_by_chrom(&mut self, tx_v: &Vec<Transcript>, cli: &AnnIsoCli) {
         let mut merged_intervals: Vec<(u64, u64, Vec<&Transcript>)> = Vec::new();
 
         let curr_tx = tx_v
@@ -78,7 +77,8 @@ impl ChromGroupedTxManager {
         // convert each merged group into GroupedTx
 
         for (idx, (_start, _end, txs)) in merged_intervals.iter().enumerate() {
-            let mut grouped_tx = GroupedTx::from_grouped_txs(self.sample_size, txs, idx as u32);
+            let mut grouped_tx =
+                GroupedTx::from_grouped_txs(self.sample_size, txs, idx as u32, cli);
             grouped_tx.id = idx as u32;
             self.group_queries.push(grouped_tx);
         }
@@ -95,77 +95,74 @@ impl ChromGroupedTxManager {
     ) {
         let total_groups = self.group_queries.len();
         let mut processed_cnt = 0;
-        for grouped_tx in self.group_queries.iter_mut() {
-            {
+
+        let cli_arc = std::sync::Arc::new(cli.clone());
+
+        for (chunk_idx, chunk) in self.group_queries.chunks_mut(cli.em_chunk_size).enumerate() {
+            let start = std::time::Instant::now();
+
+            for grouped_tx in chunk.iter_mut() {
                 processed_cnt += 1;
-                if processed_cnt % 10 == 0 || processed_cnt == total_groups {
+                if processed_cnt % 100 == 0 || processed_cnt == total_groups {
                     info!(
                         "Chromosome {}: processing {}/{} groups",
                         self.chrom, processed_cnt, total_groups
                     );
                 }
+
+                let queries = grouped_tx.get_quieries(&self.chrom);
+
+                let mut all_res =
+                    bpforest.search2_all_match_only(&queries, cli.flank, cli.cached_nodes);
+
+                for res_vec in all_res.iter_mut() {
+                    res_vec.sort_by_key(|x| x.offset);
+                }
+
+                grouped_tx.update_results(&all_res, archive_cache, dbinfo, cli);
+                drop(all_res);
+
+                grouped_tx.prepare_em();
             }
 
-            let queries = grouped_tx.get_quieries(&self.chrom);
+            chunk.par_iter_mut().for_each(|grouped_tx| {
+                grouped_tx.em(cli_arc.as_ref());
 
-            // Lock resources when needed
-            let start = std::time::Instant::now();
-            let mut all_res =
-                { bpforest.search2_all_match_only(&queries, cli.flank, cli.cached_nodes) };
+                debug!(
+                    "EM grouped tx id {} , txabundance size: {}, msjc size: {} ",
+                    grouped_tx.id,
+                    grouped_tx.tx_abundances.len(),
+                    grouped_tx.msjcs.len()
+                );
+                grouped_tx.post_cleanup(cli);
+            });
 
-            let duration = start.elapsed();
-            debug!(
-                "Search grouped tx id {} in {:?}, query size: {}",
-                grouped_tx.id,
-                duration,
-                queries.len()
-            );
-
-            for res_vec in all_res.iter_mut() {
-                res_vec.sort_by_key(|x| x.offset);
-            }
-
-            {
-                grouped_tx.update_results(&all_res, &mut *archive_cache, dbinfo, cli);
-            }
-
-            drop(all_res); // Release memory early
-
-            let start = std::time::Instant::now();
-
-            grouped_tx.prepare_em();
-            grouped_tx.em(cli);
-
-            let duration = start.elapsed();
-
-            debug!(
-                "EM grouped tx id {} in {:?}, txabundance size: {}, msjc size: {} ",
-                grouped_tx.id,
-                duration,
-                grouped_tx.tx_abundances.len(),
-                grouped_tx.msjcs.len()
-            );
-
-            grouped_tx.post_cleanup(&cli);
-
-            // Update global stats,
-            {
+            for grouped_tx in chunk.iter() {
                 for txbd in grouped_tx.tx_abundances.iter() {
                     global_stats.update_fsm_total(&txbd.fsm_abundance);
                     global_stats.update_em_total(&txbd.abundance_cur);
                 }
+                tmp_tx_manager.dump_grouped_tx(grouped_tx);
             }
 
-            {
-                tmp_tx_manager.dump_grouped_tx(&grouped_tx);
+            for grouped_tx in chunk.iter_mut() {
+                grouped_tx.tx_abundances.clear();
+                grouped_tx.tx_abundances.shrink_to_fit();
             }
 
-            grouped_tx.tx_abundances.clear();
-            grouped_tx.tx_abundances.shrink_to_fit();
+            let duration = start.elapsed();
+
+            debug!(
+                "EM for chunk {} of size {} took {:?}",
+                chunk_idx,
+                chunk.len(),
+                duration
+            );
         }
     }
 }
 
+#[derive(Clone)]
 pub struct GroupedTx {
     pub id: u32,
     pub positions: Vec<u64>, // deduped positions sort by genomic coordinate
@@ -174,7 +171,12 @@ pub struct GroupedTx {
     pub msjcs: Vec<MSJC>,
 }
 impl GroupedTx {
-    pub fn from_grouped_txs(sample_size: usize, txs: &Vec<&Transcript>, id: u32) -> Self {
+    pub fn from_grouped_txs(
+        sample_size: usize,
+        txs: &Vec<&Transcript>,
+        id: u32,
+        cli: &AnnIsoCli,
+    ) -> Self {
         let mut pos_set = std::collections::BTreeSet::new();
 
         let mut tx_abundances = Vec::new();
@@ -183,7 +185,7 @@ impl GroupedTx {
                 pos_set.insert(sj.0);
                 pos_set.insert(sj.1);
             }
-            let tx_abd = TxAbundance::new(i, sample_size, tx);
+            let tx_abd = TxAbundance::new(i, sample_size, tx, cli);
             tx_abundances.push(tx_abd);
         }
 
@@ -236,20 +238,6 @@ impl GroupedTx {
             tx_abd.abundance_prev.clear();
             tx_abd.abundance_prev.shrink_to_fit();
         }
-    }
-
-    pub fn get_mem_size(&self) -> usize {
-        let mut size = std::mem::size_of_val(&self.positions);
-
-        for tx_ab in self.tx_abundances.iter() {
-            size += tx_ab.get_mem_size();
-        }
-
-        for msjc in self.msjcs.iter() {
-            size += msjc.get_mem_size();
-        }
-
-        size
     }
 
     pub fn get_quieries(&self, chrom: &str) -> Vec<(String, u64)> {
@@ -390,7 +378,7 @@ impl GroupedTx {
 
         let start_time = std::time::Instant::now();
 
-        for i in 0..cli.em_iter {
+        for i in 0..cli.em_max_iter {
             if cli.verbose {
                 info!("====== Starting EM iteration {} ======", i + 1);
             }
@@ -404,11 +392,14 @@ impl GroupedTx {
 
             // M step
 
-            self.tx_abundances.par_iter_mut().for_each(|tx_abd| {
-                tx_abd.m_step(&self.msjcs, cli);
+            self.tx_abundances
+                .par_iter_mut()
+                .with_min_len(100)
+                .for_each(|tx_abd| {
+                    tx_abd.m_step(&self.msjcs, cli);
 
-                // dbg!(&tx_abd);
-            });
+                    // dbg!(&tx_abd);
+                });
 
             let all_converged = self
                 .tx_abundances
@@ -477,10 +468,6 @@ pub fn find_fsm(vecs: Vec<&Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOff
     let n_splice_sites = vecs.len(); // each splice junction has two positions
     let mut result = vecs[0].clone();
 
-    // dbg!(n_splice_sites);
-    // dbg!(&result);
-    // result.dedup();
-
     for v in vecs.iter().skip(1) {
         result = intersect_sorted(&result, v);
 
@@ -497,7 +484,7 @@ pub fn find_fsm(vecs: Vec<&Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOff
     result
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TxAbundance {
     pub id: usize, // idx in the grouped_tx
     pub orig_idx: u32,
@@ -522,9 +509,9 @@ pub struct TxAbundance {
 }
 
 impl TxAbundance {
-    pub fn new(txid: usize, sample_size: usize, tx: &Transcript) -> TxAbundance {
+    pub fn new(txid: usize, sample_size: usize, tx: &Transcript, cli: &AnnIsoCli) -> TxAbundance {
         // calclulate pt
-        let nsj = tx.splice_junc.len() + 10; // J + 1
+        let nsj = tx.splice_junc.len() + cli.em_effective_len_coef; // J + 1
         TxAbundance {
             id: txid,
             orig_idx: tx.origin_idx,
@@ -553,18 +540,6 @@ impl TxAbundance {
         for sid in 0..self.sample_size {
             self.fsm_abundance[sid] += misoform.sample_evidence_arr[sid] as f32;
         }
-    }
-
-    pub fn get_mem_size(&self) -> usize {
-        let size = std::mem::size_of_val(&self.id)
-            + std::mem::size_of_val(&0f32) * self.fsm_abundance.len()
-            + std::mem::size_of_val(&0f32) * self.abundance_cur.len()
-            + std::mem::size_of_val(&0f32) * self.abundance_prev.len()
-            + std::mem::size_of_val(&self.sample_size)
-            + std::mem::size_of_val(&self.inv_pt)
-            // + std::mem::size_of_val(&self.is_ok)
-            + std::mem::size_of_val(&self.msjc_ids);
-        size
     }
 
     pub fn prepare_em(&mut self, msjc_vec: &Vec<MSJC>) {
@@ -749,6 +724,8 @@ impl TxAbundance {
             out_line.add_field("no");
         }
 
+        out_line.add_field(&cli.min_read.to_string());
+
         out_line.add_field(&format!("{}/{}", positive_samples, dbinfo.get_size()));
 
         out_line.add_field(&self.orig_attrs);
@@ -779,6 +756,7 @@ impl TxAbundance {
     }
 }
 
+#[derive(Clone)]
 pub struct MSJC {
     #[allow(unused)]
     id: u64,
@@ -832,32 +810,6 @@ impl MSJC {
         self.gamma_data = vec![0.0; k * tx_count];
         self.totals_buffer = vec![0.0; k];
     }
-
-    pub fn get_mem_size(&self) -> usize {
-        std::mem::size_of::<u64>()
-            + std::mem::size_of::<usize>()
-            + self.nonzero_sample_indices.len() * std::mem::size_of::<usize>()
-            + self.cov_vec.len() * std::mem::size_of::<f32>()
-            + self.txids.len() * std::mem::size_of::<usize>()
-            + self.gamma_data.len() * std::mem::size_of::<f32>()
-            + self.totals_buffer.len() * std::mem::size_of::<f32>()
-    }
-
-    // #[inline(always)]
-    // fn get_gamma(&self, tx_local_id: usize, nonzero_idx: usize) -> f32 {
-    //     let k = self.nonzero_sample_indices.len();
-    //     unsafe { *self.gamma_data.get_unchecked(tx_local_id * k + nonzero_idx) }
-    // }
-
-    // #[inline(always)]
-    // fn set_gamma(&mut self, tx_local_id: usize, nonzero_idx: usize, value: f32) {
-    //     let k = self.nonzero_sample_indices.len();
-    //     unsafe {
-    //         *self
-    //             .gamma_data
-    //             .get_unchecked_mut(tx_local_id * k + nonzero_idx) = value;
-    //     }
-    // }
 
     #[inline(always)]
     pub fn nonzero_count(&self) -> usize {
@@ -960,94 +912,221 @@ type OrigIdx = u32;
 type Offset = u64;
 type Length = u64;
 
-/// A temporary output manager to dump grouped_tx results before collect all informations
+/// write to temporary output manager with sharding,
+/// two files will be generated, one is the data file, another is the index file
 pub struct TmpOutputManager {
     pub curr_offset: u64,
     pub curr_processed_idx: usize,
-    pub offsets: Vec<(OrigIdx, Offset, Length)>, // (orig_tx_idx, offset, length)
-    pub file_path: PathBuf,
-    pub file_handle: std::fs::File,
+    pub shards_offsets_vec: Vec<Vec<(OrigIdx, Offset, Length)>>, // (orig_tx_idx, offset, length)
+    pub records: Vec<TxAbundance>,
+    pub file_base_path: PathBuf,
+    pub curr_shard_idx: usize,
+    pub shard_capacity: usize,
+    pub heap: BinaryHeap<Reverse<HeapEntry>>, // (orig_idx, shard_idx, offset, length)
+    pub data_readers: Vec<memmap2::Mmap>,
+    pub shard_read_indices: Vec<usize>,
 }
 
 impl TmpOutputManager {
-    pub fn new(file_path: &PathBuf) -> Self {
-        let file_handle = std::fs::File::create(file_path).unwrap_or_else(|_| {
-            panic!(
-                "Could not create temporary output file {}",
-                file_path.display()
-            )
-        });
+    pub fn new(file_path: &PathBuf, cli: &AnnIsoCli) -> Self {
         TmpOutputManager {
             curr_offset: 0,
             curr_processed_idx: 0,
-            offsets: Vec::new(),
-            file_path: file_path.clone(),
-            file_handle,
+            shards_offsets_vec: Vec::new(),
+            records: Vec::new(),
+            file_base_path: file_path.clone(),
+            curr_shard_idx: 0,
+            shard_capacity: cli.output_tmp_shard_counts,
+            heap: BinaryHeap::new(),
+            data_readers: Vec::new(),
+            shard_read_indices: Vec::new(),
         }
     }
 
     pub fn dump_grouped_tx(&mut self, grouped_tx: &GroupedTx) {
         for tx_abd in grouped_tx.tx_abundances.iter() {
-            let bytes = tx_abd.encode();
-            let length = bytes.len() as u64;
-            self.file_handle.write_all(&bytes).unwrap_or_else(|_| {
+            self.records.push(tx_abd.clone());
+        }
+
+        if self.records.len() >= self.shard_capacity {
+            self.curr_offset = 0;
+            // sort the records by orig_idx
+            self.records.sort_by_key(|tx_abd| tx_abd.orig_idx);
+            // write to file
+            let shard_file_path = self
+                .file_base_path
+                .with_extension(format!("tmp.{}", self.curr_shard_idx));
+
+            // create a buffer writer
+            let mut file_h = std::fs::File::create(&shard_file_path).unwrap_or_else(|_| {
                 panic!(
-                    "Could not write to temporary output file {}",
-                    self.file_path.display()
+                    "Could not create temporary output file {}",
+                    shard_file_path.display()
                 )
             });
-            self.offsets
-                .push((tx_abd.orig_idx, self.curr_offset, length));
-            self.curr_offset += length;
+            let mut bufwriter = BufWriter::new(&mut file_h);
+
+            let mut curr_shard_offsets = Vec::new();
+
+            for tx_abd in self.records.iter() {
+                let bytes = tx_abd.encode();
+                let length = bytes.len() as u64;
+                bufwriter.write_all(&bytes).unwrap_or_else(|_| {
+                    panic!(
+                        "Could not write to temporary output file {}",
+                        shard_file_path.display()
+                    )
+                });
+                curr_shard_offsets.push((tx_abd.orig_idx, self.curr_offset, length));
+                self.curr_offset += length;
+            }
+
+            self.shards_offsets_vec.push(curr_shard_offsets);
+            bufwriter.flush().unwrap_or_else(|_| {
+                panic!(
+                    "Could not flush to temporary output file {}",
+                    shard_file_path.display()
+                )
+            });
+            self.curr_shard_idx += 1;
+            self.records.clear();
+            info!(
+                "Wrote shard {} with {} records to {}",
+                self.curr_shard_idx,
+                self.records.len(),
+                shard_file_path.display()
+            );
         }
     }
 
     pub fn finish(&mut self) {
-        self.offsets.sort_by_key(|x| x.0);
-        self.file_handle.sync_all().unwrap_or_else(|_| {
-            panic!(
-                "Could not sync temporary output file {}",
-                self.file_path.display()
-            )
-        });
-        self.file_handle = std::fs::File::open(&self.file_path).unwrap_or_else(|_| {
-            panic!(
-                "Could not open temporary output file {}",
-                self.file_path.display()
-            )
-        });
-        self.curr_processed_idx = 0;
-    }
+        // write remaining records
 
-    pub fn get_next_txabundance(&mut self) -> Option<TxAbundance> {
-        if self.curr_processed_idx >= self.offsets.len() {
-            return None;
+        if self.records.len() > 0 {
+            self.curr_offset = 0;
+            // sort the records by orig_idx
+            self.records.sort_by_key(|tx_abd| tx_abd.orig_idx);
+            // write to file
+            let shard_file_path = self
+                .file_base_path
+                .with_extension(format!("tmp.{}", self.curr_shard_idx));
+
+            // create a buffer writer
+            let mut file_h = std::fs::File::create(&shard_file_path).unwrap_or_else(|_| {
+                panic!(
+                    "Could not create temporary output file {}",
+                    shard_file_path.display()
+                )
+            });
+            let mut bufwriter = BufWriter::new(&mut file_h);
+
+            let mut curr_shard_offsets = Vec::new();
+
+            for tx_abd in self.records.iter() {
+                let bytes = tx_abd.encode();
+                let length = bytes.len() as u64;
+                bufwriter.write_all(&bytes).unwrap_or_else(|_| {
+                    panic!(
+                        "Could not write to temporary output file {}",
+                        shard_file_path.display()
+                    )
+                });
+                curr_shard_offsets.push((tx_abd.orig_idx, self.curr_offset, length));
+                self.curr_offset += length;
+            }
+
+            self.shards_offsets_vec.push(curr_shard_offsets);
+            bufwriter.flush().unwrap_or_else(|_| {
+                panic!(
+                    "Could not flush to temporary output file {}",
+                    shard_file_path.display()
+                )
+            });
+            info!(
+                "Wrote final shard {} with {} records to {}",
+                self.curr_shard_idx,
+                self.records.len(),
+                shard_file_path.display()
+            );
+            self.curr_shard_idx += 1;
+            self.records.clear();
         }
 
-        let (_orig_idx, offset, length) = self.offsets[self.curr_processed_idx];
-        self.file_handle
-            .seek(std::io::SeekFrom::Start(offset))
-            .unwrap_or_else(|_| {
+        // prepare mmap readers
+        for shard_idx in 0..self.curr_shard_idx {
+            let shard_file_path = self
+                .file_base_path
+                .with_extension(format!("tmp.{}", shard_idx));
+            let file_h = File::open(&shard_file_path).unwrap_or_else(|_| {
                 panic!(
-                    "Could not seek in temporary output file {}",
-                    self.file_path.display()
+                    "Could not open temporary output file {} for mmap",
+                    shard_file_path.display()
                 )
             });
-        let mut buffer = vec![0u8; length as usize];
-        self.file_handle
-            .read_exact(&mut buffer)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Could not read from temporary output file {}, with offset {}, length {}: {}",
-                    self.file_path.display(),
+            let mmap = unsafe { Mmap::map(&file_h).expect("mmap failed") };
+            mmap.advise(memmap2::Advice::Sequential)
+                .expect("Can not set mmap advice");
+            self.data_readers.push(mmap);
+        }
+        // 初始化每个 shard 的读取索引
+        self.shard_read_indices = vec![0; self.curr_shard_idx];
+
+        // init the heap - 将每个 shard 的第一个元素加入堆
+        for shard_idx in 0..self.curr_shard_idx {
+            if !self.shards_offsets_vec[shard_idx].is_empty() {
+                let (orig_idx, offset, length) = self.shards_offsets_vec[shard_idx][0];
+                self.heap.push(Reverse(HeapEntry {
+                    orig_idx,
+                    shard_idx,
                     offset,
                     length,
-                    e
-                )
-            });
-        let tx_abd = TxAbundance::decode(&buffer);
-        self.curr_processed_idx += 1;
-        Some(tx_abd)
+                }));
+            }
+        }
+
+        info!(
+            "K-way merge initialized with {} shards, heap size: {}",
+            self.curr_shard_idx,
+            self.heap.len()
+        );
+    }
+
+    pub fn clean_up(&mut self) -> Result<()> {
+        // remove temporary files
+        for shard_idx in 0..self.curr_shard_idx {
+            let shard_file_path = self
+                .file_base_path
+                .with_extension(format!("tmp.{}", shard_idx));
+            if std::fs::remove_file(&shard_file_path).is_err() {
+                warn!(
+                    "Could not remove temporary output file {}",
+                    shard_file_path.display()
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Eq, PartialEq)]
+pub struct HeapEntry {
+    orig_idx: OrigIdx,
+    shard_idx: usize,
+    offset: Offset,
+    length: Length,
+}
+
+impl Ord for HeapEntry {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.orig_idx
+            .cmp(&other.orig_idx)
+            .then_with(|| self.shard_idx.cmp(&other.shard_idx))
+    }
+}
+
+impl PartialOrd for HeapEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -1055,6 +1134,93 @@ impl Iterator for TmpOutputManager {
     type Item = TxAbundance;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.get_next_txabundance()
+        // 从堆中取出最小的元素
+        let Reverse(entry) = self.heap.pop()?;
+
+        let HeapEntry {
+            shard_idx,
+            offset,
+            length,
+            ..
+        } = entry;
+
+        // 从对应的 shard 读取数据
+        let mmap = &self.data_readers[shard_idx];
+        let start = offset as usize;
+        let end = start + length as usize;
+        let data = &mmap[start..end];
+        let tx_abd = TxAbundance::decode(data);
+
+        // 更新该 shard 的读取索引
+        self.shard_read_indices[shard_idx] += 1;
+        let next_idx = self.shard_read_indices[shard_idx];
+
+        // 如果该 shard 还有数据，将下一个元素加入堆
+        if next_idx < self.shards_offsets_vec[shard_idx].len() {
+            let (next_orig_idx, next_offset, next_length) =
+                self.shards_offsets_vec[shard_idx][next_idx];
+            self.heap.push(Reverse(HeapEntry {
+                orig_idx: next_orig_idx,
+                shard_idx,
+                offset: next_offset,
+                length: next_length,
+            }));
+        }
+
+        Some(tx_abd)
+    }
+}
+
+impl GetMemSize for TxAbundance {
+    fn get_mem_size(&self) -> usize {
+        let size = std::mem::size_of_val(&self.id)
+            + std::mem::size_of_val(&0f32) * self.fsm_abundance.len()
+            + std::mem::size_of_val(&0f32) * self.abundance_cur.len()
+            + std::mem::size_of_val(&0f32) * self.abundance_prev.len()
+            + std::mem::size_of_val(&self.sample_size)
+            + std::mem::size_of_val(&self.inv_pt)
+            // + std::mem::size_of_val(&self.is_ok)
+            + std::mem::size_of_val(&self.msjc_ids);
+        size
+    }
+}
+
+impl GetMemSize for GroupedTx {
+    fn get_mem_size(&self) -> usize {
+        let mut size = std::mem::size_of_val(&self.positions);
+
+        for tx_ab in self.tx_abundances.iter() {
+            size += tx_ab.get_mem_size();
+        }
+
+        for msjc in self.msjcs.iter() {
+            size += msjc.get_mem_size();
+        }
+
+        size
+    }
+}
+
+impl GetMemSize for MSJC {
+    fn get_mem_size(&self) -> usize {
+        std::mem::size_of::<u64>()
+            + std::mem::size_of::<usize>()
+            + self.nonzero_sample_indices.len() * std::mem::size_of::<usize>()
+            + self.cov_vec.len() * std::mem::size_of::<f32>()
+            + self.txids.len() * std::mem::size_of::<usize>()
+            + self.gamma_data.len() * std::mem::size_of::<f32>()
+            + self.totals_buffer.len() * std::mem::size_of::<f32>()
+    }
+}
+
+impl GetMemSize for ChromGroupedTxManager {
+    fn get_mem_size(&self) -> usize {
+        let mut size = std::mem::size_of_val(&self.chrom);
+
+        for grouped_tx in self.group_queries.iter() {
+            size += grouped_tx.get_mem_size();
+        }
+        // + std::mem::size_of_val(&self._position_to_group_idx);
+        size
     }
 }

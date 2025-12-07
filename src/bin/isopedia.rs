@@ -17,7 +17,7 @@ use isopedia::logger::init_logger;
 #[derive(Parser)]
 #[command(
     name = "isopedia",
-    about = "[Isopedia] Simultaneous exploration of thousands of long-read transcriptomes by read-level indexing\n\nRepository: https://github.com/zhengxinchang/isopedia \nContact: Xinchang Zheng <zhengxc93@gmail.com>",
+    about = "Isopedia: Simultaneous exploration of thousands of long-read transcriptomes by read-level indexing\n\nRepository: https://github.com/zhengxinchang/isopedia \nContact: Xinchang Zheng <zhengxc93@gmail.com>",
     author,
     version,
     after_long_help = "

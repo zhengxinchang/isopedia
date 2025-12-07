@@ -66,13 +66,6 @@ t1111:build
 	-o test/flnc.isoform.out -d 
 
 
-scp2bcm:
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-profile  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-tool  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-merge  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
-	scp -r -oHostKeyAlgorithms=+ssh-rsa  /ssd1/stix-iso-devspace/isopedia-dev/target/x86_64-unknown-linux-musl/release/isopedia-index  u249633@hgsc-analysis1:/stornext/snfs170/next-gen/Fritz_Production/zhengxc/isopedia-index/SRA/bin
-
-
 t2:build
 	/usr/bin/time -v target/release/isopedia merge  -i test/HG002.manifest.txt -o test/HG002_idx/
 
@@ -102,15 +95,14 @@ t43:build
 	 -o test/test.assembled2.output.gz --info
 
 tlarge:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
+	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /ssd2/isopedia_wk/isopedia_index \
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
 	 -o test/test.em.output2.gz 
 tlarge12:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
+	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /ssd2/isopedia_wk/isopedia_index -c 10 \
 	 -g test/hs_chr12.gtf \
 	 -o test/test.em.output2.gz 
 
-	 
 
 t45:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i test/HG002_idx/ \
@@ -129,7 +121,7 @@ tchrm:build
 	 -o test/test.em.output2.gz
 
 
-t46:build
+tsamd:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g test/lrgasp_sim_ont.SAMD11.gtf  \
 	 -o test/test.em.output3.gz --verbose
@@ -188,7 +180,7 @@ isoquant:
 	--genedb ../stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf \
 	--bam  test/bams/hg002.pbcluster.bam \
 	--data_type pacbio_ccs \
-	-o test/isoquant_output
+	-o test/isoquant_output/ \
 
 
 t1g:build

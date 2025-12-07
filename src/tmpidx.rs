@@ -1,4 +1,4 @@
-use crate::constants::{BUF_SIZE_1M, BUF_SIZE_4M, BUF_SIZE_64M};
+use crate::constants::{BUF_SIZE_4M, BUF_SIZE_64M};
 use crate::constants::{MAGIC, ORDER};
 use ahash::HashSet;
 use indexmap::IndexMap;
@@ -59,7 +59,7 @@ impl Tmpindex {
     }
 
     /// Human readable MB
-    pub fn memory_usage_mb(&self) -> f64 {
+    pub fn get_mem_size(&self) -> f64 {
         self.memory_usage_bytes() as f64 / (1024.0 * 1024.0)
     }
 
@@ -147,7 +147,7 @@ impl Tmpindex {
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
-                let reader = BufReader::with_capacity(BUF_SIZE_1M, file);
+                let reader = BufReader::with_capacity(BUF_SIZE_4M, file);
                 reader
             })
             .collect::<Vec<_>>();
@@ -167,13 +167,35 @@ impl Tmpindex {
             .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
 
+        // let data_mmaps = merged_data_file_list
+        //     .iter()
+        //     .map(|path| {
+        //         // let file = fs::File::open(path).expect("Can not open chunk file");
+        //         // let mmap = unsafe { Mmap::map(&file).expect("mmap failed") };
+        //         // mmap.advise(memmap2::Advice::Sequential)
+        //         //     .expect("Can not set mmap advice");
+        //         // mmap
+
+        //         let file = fs::File::open(path).expect("Can not open chunk file");
+        //         let reader = BufReader::with_capacity(BUF_SIZE_1M, file);
+        //         reader
+        //     })
+        //     .collect::<Vec<_>>();
+
         let data_mmaps = merged_data_file_list
             .iter()
             .map(|path| {
                 let file = fs::File::open(path).expect("Can not open chunk file");
                 let mmap = unsafe { Mmap::map(&file).expect("mmap failed") };
+
                 mmap.advise(memmap2::Advice::Sequential)
                     .expect("Can not set mmap advice");
+
+                // #[cfg(target_os = "linux")]
+                // {
+                //     mmap.advise(memmap2::Advice::WillNeed).ok();
+                // }
+
                 mmap
             })
             .collect::<Vec<_>>();
@@ -198,6 +220,8 @@ impl Tmpindex {
                 heap.push(Reverse((interim_rec, idx)));
             }
         }
+
+        // let mut buffer = vec![0u8; 10 * 1024 * 1024]; // 10 MB buffer
 
         // process the heap
         while let Some(Reverse((interim_rec, idx))) = heap.pop() {
@@ -245,6 +269,12 @@ impl Tmpindex {
 
             let length = interim_rec.record_ptr.length as usize;
 
+            // if buffer.len() < length {
+            //     buffer.resize(length, 0);
+            // }
+
+            // let slice = &data_mmaps[idx][old_offset as usize..old_offset as usize + length];
+
             let slice = &data_mmaps[idx][old_offset as usize..old_offset as usize + length];
 
             data_writer
@@ -270,7 +300,7 @@ impl Tmpindex {
             _curr_offset += *count;
         }
 
-        info!("Total {} index records written", total_idx_n);
+        info!("Total {} index offsets written", total_idx_n);
 
         if self.meta.data_size != total_idx_n {
             panic!("The total index records merged does not match the original size, consider the index is corrupted?");
@@ -299,6 +329,9 @@ impl Tmpindex {
             .expect("Can not flush the record data file to disk");
 
         info!("Clean up temporary files...");
+
+        // drop the mmaps
+        drop(data_mmaps);
 
         // remove chunk files
         for path in tmp_file_list.iter() {

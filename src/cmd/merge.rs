@@ -51,7 +51,12 @@ pub struct MergeCli {
     pub input: PathBuf,
 
     /// Chunk size for merging
-    #[arg(short = 'c', long, default_value_t = 1_000_000)]
+    #[arg(
+        short = 'c',
+        long,
+        default_value_t = 1_000_000,
+        help = "Chunk size for merging isoform records.\nLarger chunk size requires more memory but may speed up the merging process\nReduce the chunk size if you encounter out-of-memory error."
+    )]
     pub chunk_size: usize,
 
     /// Output index directory
@@ -285,19 +290,6 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             for (_, _, signature) in tmp_vec.iter() {
                 let merged_isoform_rec = merged_map.get(signature).unwrap();
                 let bytes_len = isoform_archive_writer.dump_to_disk(&merged_isoform_rec);
-                // let sjs = merged_isoform_rec.get_common_splice_sites();
-                // sjs.iter().for_each(|sj| {
-                //     let interim_record = MergedIsoformOffsetPlusGenomeLoc {
-                //         chrom_id: merged_isoform_rec.chrom_id,
-                //         pos: *sj,
-                //         record_ptr: MergedIsoformOffsetPtr {
-                //             offset: merged_offset,
-                //             length: bytes_len,
-                //             n_splice_sites: sjs.len() as u32,
-                //         },
-                //     };
-                //     tmpidx.add_one(interim_record);
-                // });
 
                 let sjs = merged_isoform_rec.get_common_splice_sites();
                 let mut seen_sj = FxHashSet::default();
@@ -315,22 +307,6 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                         tmpidx.add_one(interim_record);
                     }
                 }
-
-                // add the left and right position of a single read, this ensure the detection of fusion gene.
-                // let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
-                // read_ref_spans.iter().for_each(|position| {
-                //     let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
-                //         MergedIsoformOffsetPlusGenomeLoc {
-                //             chrom_id: merged_isoform_rec.chrom_id,
-                //             pos: *position,
-                //             record_ptr: MergedIsoformOffsetPtr {
-                //                 offset: merged_offset,
-                //                 length: bytes_len,
-                //                 n_splice_sites: 0, // for fusion gene detection
-                //             },
-                //         };
-                //     tmpidx.add_one(offset_plus_genomeloc);
-                // });
 
                 let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
                 let mut seen_span = FxHashSet::default();
@@ -459,7 +435,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     // make mb in two decimal points
     info!(
         "The memory size of tmpidx in MB: {:.2}",
-        tmpidx.memory_usage_mb()
+        tmpidx.get_mem_size()
     );
 
     // info!("Dumping tmpidx to disk...");

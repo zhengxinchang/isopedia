@@ -433,3 +433,7 @@ pub fn intersect_sorted<T: Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
     }
     result
 }
+
+pub trait GetMemSize {
+    fn get_mem_size(&self) -> usize;
+}

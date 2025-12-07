@@ -24,11 +24,6 @@
 !src/output.rs
 !src/**/output.rs 
 ROADMAP.txt
-
-# toy_ex/index
-# toy_ex/hg002_ont_chr22.isoform.gz
-# toy_ex/hg002_pb_chr22.isoform.gz
-
+test_script/
 ver_release/
-
 linux_build/
