@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
-    io::MyGzWriter,
+    myio::MyGzWriter,
     reads::{AggrRead, SingleRead},
 };
 use anyhow::Result;

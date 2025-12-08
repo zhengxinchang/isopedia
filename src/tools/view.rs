@@ -5,7 +5,7 @@ use crate::tmpidx::Tmpindex;
 use crate::tools::ToolCmdValidate;
 use clap::Parser;
 // use isopedia::tools::ToolCmdValidate;
-use crate::io::MyGzWriter;
+use crate::myio::MyGzWriter;
 use log::error;
 // #[allow(dead_code, unused)]
 // use noodles_fasta::fai::read;

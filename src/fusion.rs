@@ -3,7 +3,7 @@ use std::vec;
 use crate::{
     dataset_info::DatasetInfo,
     gene_index::{CandidateMatchStatus, GeneInterval, GeneIntervalTree},
-    io::{Line, SampleChip},
+    myio::{Line, SampleChip},
     reads::Segment,
     results::TableOutput,
     utils::{hash_vec, is_overlap},
@@ -497,11 +497,11 @@ impl FusionCluster {
 
     pub fn generate_record_line(
         &self,
-        index_info: &DatasetInfo,
+        db_info: &DatasetInfo,
         fusiondiscovery_out: &mut TableOutput,
     ) -> Result<()> {
         // let mut out_str = String::new();
-        let total_samples = index_info.get_size();
+        let total_samples = db_info.get_size();
 
         let mut merged_sample_evidence = FxHashMap::default();
 
@@ -510,17 +510,17 @@ impl FusionCluster {
                 *merged_sample_evidence.entry(*sample_id).or_insert(0) += *count;
             }
         }
-        let mut out_line = Line::new();
+        let mut out_line = Line::with_capacity(db_info.get_size());
 
         let mut sample_count_str = String::new();
         for sample_id in 0..total_samples {
             if let Some(count) = merged_sample_evidence.get(&(sample_id as u32)) {
                 sample_count_str.push_str(&format!("{}\t", count));
-                let sample_chip = SampleChip::new(None, vec![count.to_string()]);
+                let sample_chip = SampleChip::new(None, count.to_string());
                 out_line.add_sample(sample_chip);
             } else {
                 sample_count_str.push_str("0\t");
-                out_line.add_sample(SampleChip::new(None, vec!["0".to_string()]));
+                out_line.add_sample(SampleChip::new(None, "0".to_string()));
             }
         }
 

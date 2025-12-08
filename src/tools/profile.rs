@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-use crate::io::MyGzWriter;
+use crate::myio::MyGzWriter;
 use crate::reads::AggrRead;
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]

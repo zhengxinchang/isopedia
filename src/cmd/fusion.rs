@@ -12,10 +12,10 @@ use crate::{
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionCluster},
     gene_index::GeneIntervalTree,
-    io::*,
     isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
     meta::Meta,
+    myio::*,
     results::TableOutput,
     utils,
 };
@@ -285,7 +285,7 @@ fn anno_single_fusion(
             .collect();
     }
 
-    let mut out_line = Line::new();
+    let mut out_line = Line::with_capacity(dbinfo.get_size());
     out_line.add_field(&breakpoints.0 .0.to_string());
     out_line.add_field(&breakpoints.0 .1.to_string());
     out_line.add_field(&breakpoints.1 .0.to_string());
@@ -304,7 +304,7 @@ fn anno_single_fusion(
 
     for idx in 0..dbinfo.get_size() {
         // record_parts.push(fusion_evidence_vec[idx].to_string());
-        let samplechip = SampleChip::new(None, vec![fusion_evidence_vec[idx].to_string()]);
+        let samplechip = SampleChip::new(None, fusion_evidence_vec[idx].to_string());
         out_line.add_sample(samplechip);
     }
 

@@ -1,8 +1,8 @@
 use crate::bptree::BPForest;
 use crate::breakpoints::{self, BreakPointPair};
 use crate::dataset_info::DatasetInfo;
-use crate::io::{self, DBInfos, Line};
 use crate::isoform::MergedIsoform;
+use crate::myio::{self, DBInfos, Line};
 use crate::results::TableOutput;
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
@@ -150,7 +150,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
 
     const SPLICE_FORMAT: &str = "COUNT:CPM:START,END,STRAND";
 
-    let mut out_header = io::Header::new();
+    let mut out_header = myio::Header::new();
     out_header.add_column("id")?;
     out_header.add_column("chr1")?;
     out_header.add_column("pos1")?;
@@ -237,7 +237,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
             warn!("No isoforms found for query: {}", query.id);
         } else {
             for offset in &isoforms_ptr {
-                let mut out_line = Line::new();
+                let mut out_line = Line::with_capacity(dataset_info.get_size());
                 out_line.add_field(&query.id);
                 out_line.add_field(&query.left_chr);
                 out_line.add_field(&query.left_pos.to_string());

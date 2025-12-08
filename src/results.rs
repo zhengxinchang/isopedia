@@ -1,7 +1,7 @@
 use crate::constants::FORMAT_STR_NAME;
-use crate::io::MyGzWriter;
-use crate::io::{DBInfos, GeneralOutputIO, Header, Line, MyGzReader};
 use crate::meta::Meta;
+use crate::myio::MyGzWriter;
+use crate::myio::{DBInfos, GeneralOutputIO, Header, Line, MyGzReader};
 // use crate::output_traits::GeneralTableOutputTrait;
 use crate::utils;
 use anyhow::Result;
@@ -29,10 +29,10 @@ impl TableOutput {
                 total += s.capacity();
             }
 
-            total += line.sample_vec.capacity() * std::mem::size_of::<crate::io::SampleChip>();
+            total += line.sample_vec.capacity() * std::mem::size_of::<crate::myio::SampleChip>();
             for sample in &line.sample_vec {
-                total += sample.fields.capacity() * std::mem::size_of::<String>();
-                for s in &sample.fields {
+                total += sample.init_string.capacity() * std::mem::size_of::<String>();
+                for s in &sample.init_string {
                     total += s.capacity();
                 }
             }
@@ -308,7 +308,7 @@ impl TableOutput {
             let mut acc_sample_evidence_arr = Vec::new();
             for sample in &line.sample_vec {
                 // dbg!(&sample);
-                acc_sample_evidence_arr.push(sample.fields[1].parse::<u32>().unwrap());
+                acc_sample_evidence_arr.push(sample.init_string[1].parse::<u32>().unwrap());
                 // evidence is at index 1
             }
 

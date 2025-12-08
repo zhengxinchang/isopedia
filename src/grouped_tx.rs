@@ -4,9 +4,9 @@ use crate::{
     dataset_info::DatasetInfo,
     global_stats::GlobalStats,
     gtf::Transcript,
-    io::{Line, SampleChip},
     isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
+    myio::{Line, SampleChip},
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, intersect_sorted, GetMemSize},
 };
@@ -299,7 +299,7 @@ impl GroupedTx {
                 );
             }
 
-            let fsm_msjc_offsets = find_fsm(fsm_misoforms);
+            let fsm_msjc_offsets = find_fsm(fsm_misoforms, tx_abd.sj_pairs.len());
 
             // remove fsm offsets from msjc_map
             for fsm in fsm_msjc_offsets.iter() {
@@ -324,26 +324,60 @@ impl GroupedTx {
 
             // add msjcs
 
+            // for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
+            //     if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
+            //         let existing_msjc = &mut self.msjcs[msjc_idx];
+            //         let local_id = existing_msjc.add_txabundance(tx_abd);
+            //         tx_abd.msjc_ids.push((msjc_idx, local_id));
+            //     } else {
+            //         let mut msjc = MSJC::new(
+            //             offset,
+            //             dbinfo.get_size(),
+            //             &archive_cache.read_bytes(&msjc_ptr),
+            //         );
+            //         let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+
+            //         let grouped_tx_msjc_idx = self.msjcs.len();
+            //         self.msjcs.push(msjc);
+            //         msjc_map_global.insert(offset, grouped_tx_msjc_idx);
+
+            //         tx_abd
+            //             .msjc_ids
+            //             .push((grouped_tx_msjc_idx, tx_local_id_in_this_msjc));
+            //     }
+            // }
+
             for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
-                if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
-                    let existing_msjc = &mut self.msjcs[msjc_idx];
-                    let local_id = existing_msjc.add_txabundance(tx_abd);
-                    tx_abd.msjc_ids.push((msjc_idx, local_id));
+                let msjc = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
+                    &mut self.msjcs[msjc_idx]
                 } else {
-                    let mut msjc = MSJC::new(
+                    let msjc = MSJC::new(
                         offset,
                         dbinfo.get_size(),
                         &archive_cache.read_bytes(&msjc_ptr),
                     );
-                    let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
-
-                    let grouped_tx_msjc_idx = self.msjcs.len();
                     self.msjcs.push(msjc);
+                    let grouped_tx_msjc_idx = self.msjcs.len() - 1;
                     msjc_map_global.insert(offset, grouped_tx_msjc_idx);
+                    &mut self.msjcs[grouped_tx_msjc_idx]
+                };
 
-                    tx_abd
-                        .msjc_ids
-                        .push((grouped_tx_msjc_idx, tx_local_id_in_this_msjc));
+                let (is_all_matched, first_match_pos, matched_count) =
+                    msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+
+                // consider adjust the match logic here and compare the correlations with ground truth
+                if is_all_matched {
+                    if msjc.splice_junctions_vec.len() > 1 && matched_count >= 3 {
+                        let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+                        tx_abd
+                            .msjc_ids
+                            .push((msjc_map_global[&offset], tx_local_id_in_this_msjc));
+                    } else {
+                        let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+                        tx_abd
+                            .msjc_ids
+                            .push((msjc_map_global[&offset], tx_local_id_in_this_msjc));
+                    }
                 }
             }
         }
@@ -460,12 +494,15 @@ pub fn quick_find_partial_msjc_exclude_terminals<'a>(
     }
 }
 
-pub fn find_fsm(vecs: Vec<&Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOffsetPtr> {
+pub fn find_fsm(
+    vecs: Vec<&Vec<MergedIsoformOffsetPtr>>,
+    sj_pairs_n: usize,
+) -> Vec<MergedIsoformOffsetPtr> {
     if vecs.is_empty() {
         return vec![];
     }
 
-    let n_splice_sites = vecs.len(); // each splice junction has two positions
+    let n_splice_sites = sj_pairs_n * 2; // each splice junction has two positions
     let mut result = vecs[0].clone();
 
     for v in vecs.iter().skip(1) {
@@ -668,11 +705,178 @@ impl TxAbundance {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("Can not serialize the grouped_tx")
+        let mut buf = Vec::new();
+
+        // 固定字段
+        buf.extend_from_slice(&(self.id as u32).to_le_bytes());
+        buf.extend_from_slice(&self.orig_idx.to_le_bytes());
+        buf.extend_from_slice(&self.orig_tx_len.to_le_bytes());
+        buf.extend_from_slice(&self.orig_n_exon.to_le_bytes());
+        buf.extend_from_slice(&self.orig_start.to_le_bytes());
+        buf.extend_from_slice(&self.orig_end.to_le_bytes());
+        buf.extend_from_slice(&self.inv_pt.to_le_bytes());
+        buf.push(self.is_need_em as u8);
+        buf.extend_from_slice(&(self.sample_size as u32).to_le_bytes());
+
+        // 字符串：长度 + 内容
+        for s in [
+            &self.orig_tx_id,
+            &self.orig_gene_id,
+            &self.orig_chrom,
+            &self.orig_attrs,
+        ] {
+            buf.extend_from_slice(&(s.len() as u32).to_le_bytes());
+            buf.extend_from_slice(s.as_bytes());
+        }
+
+        // sj_pairs
+        buf.extend_from_slice(&(self.sj_pairs.len() as u32).to_le_bytes());
+        for (a, b) in &self.sj_pairs {
+            buf.extend_from_slice(&a.to_le_bytes());
+            buf.extend_from_slice(&b.to_le_bytes());
+        }
+
+        // f32 数组（直接写，长度由 sample_size 决定）
+        for v in &self.fsm_abundance {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+        for v in &self.abundance_cur {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
+
+        // bitmap
+        buf.extend_from_slice(&self.alive_samples_bitmap);
+
+        buf
+    }
+
+    pub fn decode_read<'a>(n: usize, pos: &'a mut usize, data: &'a [u8]) -> &'a [u8] {
+        let slice = &data[*pos..*pos + n];
+        *pos += n;
+        slice
+    }
+
+    pub fn decode_readstring<'a>(pos: &mut usize, data: &'a [u8]) -> String {
+        let len = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap()) as usize;
+        *pos += 4;
+        let s = String::from_utf8_lossy(&data[*pos..*pos + len]).into_owned();
+        *pos += len;
+        s
     }
 
     pub fn decode(data: &[u8]) -> Self {
-        bincode::deserialize(data).expect("Can not deserialize the grouped_tx")
+        let mut pos = 0;
+
+        let id = u32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        ) as usize;
+        let orig_idx = u32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        );
+        let orig_tx_len = u32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        );
+        let orig_n_exon = u32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        );
+        let orig_start = u64::from_le_bytes(
+            TxAbundance::decode_read(8, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        );
+        let orig_end = u64::from_le_bytes(
+            TxAbundance::decode_read(8, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        );
+        let inv_pt = f32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        );
+        let is_need_em = TxAbundance::decode_read(1, &mut pos, data)[0] != 0;
+        let sample_size = u32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        ) as usize;
+
+        let orig_tx_id = TxAbundance::decode_readstring(&mut pos, data);
+        let orig_gene_id = TxAbundance::decode_readstring(&mut pos, data);
+        let orig_chrom = TxAbundance::decode_readstring(&mut pos, data);
+        let orig_attrs = TxAbundance::decode_readstring(&mut pos, data);
+
+        // sj_pairs
+        let sj_len = u32::from_le_bytes(
+            TxAbundance::decode_read(4, &mut pos, data)
+                .try_into()
+                .unwrap(),
+        ) as usize;
+        let mut sj_pairs = Vec::with_capacity(sj_len);
+        for _ in 0..sj_len {
+            let a = u64::from_le_bytes(
+                TxAbundance::decode_read(8, &mut pos, data)
+                    .try_into()
+                    .unwrap(),
+            );
+            let b = u64::from_le_bytes(
+                TxAbundance::decode_read(8, &mut pos, data)
+                    .try_into()
+                    .unwrap(),
+            );
+            sj_pairs.push((a, b));
+        }
+
+        // f32 数组
+        let mut fsm_abundance = Vec::with_capacity(sample_size);
+        let mut abundance_cur = Vec::with_capacity(sample_size);
+        for _ in 0..sample_size {
+            fsm_abundance.push(f32::from_le_bytes(
+                TxAbundance::decode_read(4, &mut pos, data)
+                    .try_into()
+                    .unwrap(),
+            ));
+        }
+        for _ in 0..sample_size {
+            abundance_cur.push(f32::from_le_bytes(
+                TxAbundance::decode_read(4, &mut pos, data)
+                    .try_into()
+                    .unwrap(),
+            ));
+        }
+
+        let bitmap_len = (sample_size + 7) / 8;
+        let alive_samples_bitmap = data[pos..pos + bitmap_len].to_vec();
+
+        TxAbundance {
+            id,
+            orig_idx,
+            orig_tx_id,
+            orig_gene_id,
+            orig_tx_len,
+            orig_n_exon,
+            orig_chrom,
+            orig_start,
+            orig_end,
+            orig_attrs,
+            sj_pairs,
+            fsm_abundance,
+            abundance_cur,
+            abundance_prev: Vec::new(),
+            sample_size,
+            inv_pt,
+            msjc_ids: Vec::new(),
+            is_need_em,
+            alive_samples_bitmap,
+        }
     }
 
     pub fn get_positive_samples(&self, min_read: f32) -> usize {
@@ -692,7 +896,7 @@ impl TxAbundance {
         dbinfo: &DatasetInfo,
         cli: &AnnIsoCli,
     ) -> Line {
-        let mut out_line = Line::new();
+        let mut out_line = Line::with_capacity(dbinfo.get_size());
 
         out_line.add_field(&self.orig_chrom);
         out_line.add_field(&self.orig_start.to_string());
@@ -734,21 +938,32 @@ impl TxAbundance {
 
         for sid in 0..dbinfo.get_size() {
             let fsm = self.fsm_abundance[sid];
-            let em = self.abundance_cur[sid];
-            let total = fsm + em;
+            let em = match self.abundance_cur[sid] >= cli.min_em_abundance {
+                true => self.abundance_cur[sid],
+                false => 0.0,
+            };
+            // let em = self.abundance_cur[sid];
+            let total_abd = fsm + em;
             let total_cov = global_stats.fsm_em_total[sid];
 
             let fsm_cpm = utils::calc_cpm_f32(&fsm, &total_cov);
             let em_cpm = utils::calc_cpm_f32(&em, &total_cov);
-            let total_cpm = utils::calc_cpm_f32(&total, &total_cov);
+            let total_cpm = utils::calc_cpm_f32(&total_abd, &total_cov);
 
-            let sample = SampleChip::new(
-                Some(dbinfo.get_sample_names()[sid].clone()),
-                vec![format!(
-                    "{}:{}:{}:{}:{}:{}",
-                    total_cpm, total, fsm_cpm, fsm, em_cpm, em
-                )],
-            );
+            let mut s: String = String::new();
+            s.push_str(&total_cpm.to_string());
+            s.push(':');
+            s.push_str(&total_abd.to_string());
+            s.push(':');
+            s.push_str(&fsm_cpm.to_string());
+            s.push(':');
+            s.push_str(&fsm.to_string());
+            s.push(':');
+            s.push_str(&em_cpm.to_string());
+            s.push(':');
+            s.push_str(&em.to_string());
+
+            let sample = SampleChip::new(Some(dbinfo.get_sample_names()[sid].clone()), s);
             out_line.add_sample(sample);
         }
 
@@ -775,6 +990,8 @@ pub struct MSJC {
 
     // Buffer to hold totals during E-step
     totals_buffer: Vec<f32>, // lenghth: K
+
+    splice_junctions_vec: Vec<(u64, u64)>,
 }
 
 impl MSJC {
@@ -797,6 +1014,7 @@ impl MSJC {
             txids: Vec::new(),
             gamma_data: Vec::new(),
             totals_buffer: Vec::new(),
+            splice_junctions_vec: misoform.splice_junctions_vec.clone(),
         }
     }
 
@@ -906,6 +1124,57 @@ impl MSJC {
             }
         }
     }
+
+    pub fn splice_junctions_aligned_to_tx(
+        &self,
+        reference_sjs: &Vec<(u64, u64)>,
+        flank: u64,
+    ) -> (bool, i32, u32) {
+        let mut matched_count = 0;
+        let mut first_match_pos = -1i32;
+        let mut is_all_matched = true;
+
+        if self.splice_junctions_vec.len() > reference_sjs.len() {
+            is_all_matched = false;
+            return (is_all_matched, first_match_pos, matched_count);
+        }
+
+        let mut qidx = 0;
+        let mut sidx = 0;
+
+        loop {
+            if qidx >= reference_sjs.len() || sidx >= self.splice_junctions_vec.len() {
+                if sidx < self.splice_junctions_vec.len() {
+                    is_all_matched = false;
+                }
+                break;
+            }
+
+            let query_sj = &reference_sjs[qidx];
+            let isoform_sj = &self.splice_junctions_vec[sidx];
+
+            if (isoform_sj.0.abs_diff(query_sj.0) <= flank)
+                && (isoform_sj.1.abs_diff(query_sj.1) <= flank)
+            {
+                matched_count += 1;
+                if first_match_pos == -1 {
+                    first_match_pos = qidx as i32;
+                }
+                qidx += 1;
+                sidx += 1;
+            } else {
+                if first_match_pos == -1 {
+                    qidx += 1;
+                } else {
+                    // skip sjs
+                    is_all_matched = false;
+                    break;
+                }
+            }
+        }
+
+        (is_all_matched, first_match_pos, matched_count)
+    }
 }
 
 type OrigIdx = u32;
@@ -923,7 +1192,7 @@ pub struct TmpOutputManager {
     pub curr_shard_idx: usize,
     pub shard_capacity: usize,
     pub heap: BinaryHeap<Reverse<HeapEntry>>, // (orig_idx, shard_idx, offset, length)
-    pub data_readers: Vec<memmap2::Mmap>,
+    pub data_readers: Vec<Mmap>,
     pub shard_read_indices: Vec<usize>,
 }
 
@@ -968,6 +1237,13 @@ impl TmpOutputManager {
 
             let mut curr_shard_offsets = Vec::new();
 
+            info!(
+                "Writing shard {} with {} records to {}",
+                self.curr_shard_idx,
+                self.records.len(),
+                shard_file_path.display()
+            );
+
             for tx_abd in self.records.iter() {
                 let bytes = tx_abd.encode();
                 let length = bytes.len() as u64;
@@ -990,12 +1266,6 @@ impl TmpOutputManager {
             });
             self.curr_shard_idx += 1;
             self.records.clear();
-            info!(
-                "Wrote shard {} with {} records to {}",
-                self.curr_shard_idx,
-                self.records.len(),
-                shard_file_path.display()
-            );
         }
     }
 
@@ -1022,6 +1292,13 @@ impl TmpOutputManager {
 
             let mut curr_shard_offsets = Vec::new();
 
+            info!(
+                "Writing final shard {} with {} records to {}",
+                self.curr_shard_idx,
+                self.records.len(),
+                shard_file_path.display()
+            );
+
             for tx_abd in self.records.iter() {
                 let bytes = tx_abd.encode();
                 let length = bytes.len() as u64;
@@ -1042,12 +1319,7 @@ impl TmpOutputManager {
                     shard_file_path.display()
                 )
             });
-            info!(
-                "Wrote final shard {} with {} records to {}",
-                self.curr_shard_idx,
-                self.records.len(),
-                shard_file_path.display()
-            );
+
             self.curr_shard_idx += 1;
             self.records.clear();
         }
@@ -1108,6 +1380,44 @@ impl TmpOutputManager {
     }
 }
 
+impl Iterator for TmpOutputManager {
+    type Item = TxAbundance;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // 从堆中取出最小的元素
+        let Reverse(entry) = self.heap.pop()?;
+
+        let HeapEntry {
+            shard_idx,
+            offset,
+            length,
+            ..
+        } = entry;
+
+        let mmap = &self.data_readers[shard_idx];
+        let start = offset as usize;
+        let end = start + length as usize;
+        let data = &mmap[start..end];
+        let tx_abd = TxAbundance::decode(data);
+
+        self.shard_read_indices[shard_idx] += 1;
+        let next_idx = self.shard_read_indices[shard_idx];
+
+        if next_idx < self.shards_offsets_vec[shard_idx].len() {
+            let (next_orig_idx, next_offset, next_length) =
+                self.shards_offsets_vec[shard_idx][next_idx];
+            self.heap.push(Reverse(HeapEntry {
+                orig_idx: next_orig_idx,
+                shard_idx,
+                offset: next_offset,
+                length: next_length,
+            }));
+        }
+
+        Some(tx_abd)
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub struct HeapEntry {
     orig_idx: OrigIdx,
@@ -1127,47 +1437,6 @@ impl Ord for HeapEntry {
 impl PartialOrd for HeapEntry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-impl Iterator for TmpOutputManager {
-    type Item = TxAbundance;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // 从堆中取出最小的元素
-        let Reverse(entry) = self.heap.pop()?;
-
-        let HeapEntry {
-            shard_idx,
-            offset,
-            length,
-            ..
-        } = entry;
-
-        // 从对应的 shard 读取数据
-        let mmap = &self.data_readers[shard_idx];
-        let start = offset as usize;
-        let end = start + length as usize;
-        let data = &mmap[start..end];
-        let tx_abd = TxAbundance::decode(data);
-
-        // 更新该 shard 的读取索引
-        self.shard_read_indices[shard_idx] += 1;
-        let next_idx = self.shard_read_indices[shard_idx];
-
-        // 如果该 shard 还有数据，将下一个元素加入堆
-        if next_idx < self.shards_offsets_vec[shard_idx].len() {
-            let (next_orig_idx, next_offset, next_length) =
-                self.shards_offsets_vec[shard_idx][next_idx];
-            self.heap.push(Reverse(HeapEntry {
-                orig_idx: next_orig_idx,
-                shard_idx,
-                offset: next_offset,
-                length: next_length,
-            }));
-        }
-
-        Some(tx_abd)
     }
 }
 

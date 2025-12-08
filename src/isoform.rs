@@ -5,7 +5,7 @@ use crate::{
     breakpoints::BreakPointPair,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
-    io::SampleChip,
+    myio::SampleChip,
     reads::{AggrRead, Segment, Strand},
     utils::{self, calc_cpm},
 };
@@ -255,17 +255,7 @@ impl MergedIsoform {
             &self
                 .isoform_reads_slim_vec
                 .iter()
-                .map(|delta| {
-                    // format!(
-                    //     "{}-{}:{}:{}:{}",
-                    //     delta.left,
-                    //     delta.right,
-                    //     delta.strand.to_string(),
-                    //     delta.supp_seg_vec_offset,
-                    //     delta.supp_seg_vec_length
-                    // )
-                    delta.to_string()
-                })
+                .map(|delta| delta.to_string())
                 .collect::<Vec<String>>()
                 .join(","),
         );
@@ -294,31 +284,12 @@ impl MergedIsoform {
         return length as u32;
     }
 
-    // DEPRECATED,SLOW
-    // pub fn xz_encode(&self, buf: &mut Vec<u8>) -> u32 {
-    //     let tmp_buf = bincode::serialize(&self).expect("Can not serialize the AggRecord");
-
-    //     let length = XzEncoder::new(tmp_buf.as_slice(), 6)
-    //         .read_to_end(buf)
-    //         .expect("Can not compress the AggRecord");
-
-    //     return length as u32;
-    // }
-
     pub fn gz_decode(bytes: &[u8]) -> Result<MergedIsoform, bincode::Error> {
         let mut decoder = flate2::bufread::GzDecoder::new(bytes);
         let mut bytes = Vec::new();
         decoder.read_to_end(&mut bytes)?;
         bincode::deserialize(&bytes[..])
     }
-
-    // DEPRECATED,SLOW
-    // pub fn xz_decode(bytes: &[u8]) -> Result<MergedIsoform, bincode::Error> {
-    //     let mut decoder = XzDecoder::new(bytes);
-    //     let mut bytes = Vec::new();
-    //     decoder.read_to_end(&mut bytes)?;
-    //     bincode::deserialize(&bytes[..])
-    // }
 
     pub fn get_common_splice_sites(&self) -> Vec<u64> {
         self.splice_junctions_vec
@@ -432,19 +403,6 @@ impl MergedIsoform {
         let mut matched_count = 0;
         let mut first_match_pos = -1i32;
         let mut is_all_matched = true;
-        // for (qidx ,query_sj) in splice_sjs.iter().enumerate() {
-        //     for isoform_sj in self.splice_junctions_vec.iter() {
-        //         if (isoform_sj.0.abs_diff(query_sj.0) <= flank)
-        //             && (isoform_sj.1.abs_diff(query_sj.1) <= flank)
-        //         {
-        //             matched_count += 1;
-        //             if first_match_pos == -1 {
-        //                 first_match_pos = qidx as i32;
-        //             }
-        //             break;
-        //         }
-        //     }
-        // }
 
         if self.splice_junctions_vec.len() > reference_sjs.len() {
             is_all_matched = false;
@@ -456,22 +414,9 @@ impl MergedIsoform {
 
         loop {
             if qidx >= reference_sjs.len() || sidx >= self.splice_junctions_vec.len() {
-                // if qidx < reference_sjs.len(){
-                // /*
-                //     q -- -- -- -- --
-                //     s.   -- -- --
-                //  */
-                //     is_all_matched = false;
-                // }
-
                 if sidx < self.splice_junctions_vec.len() {
-                    /*
-                       q -- -- -- --
-                       s.   -- -- -- --
-                    */
                     is_all_matched = false;
                 }
-
                 break;
             }
 

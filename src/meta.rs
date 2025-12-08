@@ -7,7 +7,7 @@ use std::{
     path::Path,
 };
 
-use crate::{io::GeneralOutputIO, utils};
+use crate::{myio::GeneralOutputIO, utils};
 
 #[derive(Debug, Clone)]
 pub struct SampleMetaEntry {

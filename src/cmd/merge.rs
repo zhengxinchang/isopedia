@@ -4,10 +4,10 @@ use crate::{
     chromosome::{ChromMapping, ChromMappingHelper},
     constants::*,
     dataset_info::DatasetInfo,
-    io::GeneralOutputIO,
     isoform::MergedIsoform,
     isoformarchive::IsoformArchiveWriter,
     meta::Meta,
+    myio::GeneralOutputIO,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
 };

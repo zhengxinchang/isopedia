@@ -8,9 +8,9 @@ use crate::{
     global_stats::GlobalStats,
     grouped_tx::{ChromGroupedTxManager, TmpOutputManager},
     gtf::{open_gtf_reader, TranscriptChunker},
-    io::{DBInfos, Header},
     isoformarchive::ArchiveCache,
     meta::Meta,
+    myio::{DBInfos, Header},
     results::TableOutput,
 };
 use anyhow::Result;
@@ -82,6 +82,10 @@ pub struct AnnIsoCli {
     // EM effective length coefficient
     #[arg(long, default_value_t = 10)]
     pub em_effective_len_coef: usize,
+
+    // Minimum EM abundance to report
+    #[arg(long, default_value_t = 0.01)]
+    pub min_em_abundance: f32,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]
@@ -282,15 +286,19 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     {
         tmp_tx_manger.finish();
+        info!("Sorting final output table");
         while let Some(tx_abd) = tmp_tx_manger.next() {
+            info!("writeing transcript {}", tx_abd.orig_tx_id);
             let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
 
             tableout.add_line(&mut line)?;
+            info!("writen transcript {} done", tx_abd.orig_tx_id);
         }
     }
-
+    info!("Writing final output table");
     tableout.finish()?;
 
+    info!("Cleaning up temporary files");
     tmp_tx_manger.clean_up()?;
 
     info!("Finished!");

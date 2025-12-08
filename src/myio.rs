@@ -133,6 +133,14 @@ impl Line {
         }
     }
 
+    pub fn with_capacity(sample_count: usize) -> Self {
+        Line {
+            field_vec: Vec::new(),
+            format_str: None,
+            sample_vec: Vec::with_capacity(sample_count),
+        }
+    }
+
     pub fn add_sample(&mut self, sample: SampleChip) {
         self.sample_vec.push(sample);
     }
@@ -144,41 +152,32 @@ impl Line {
     pub fn add_field(&mut self, field: &str) {
         self.field_vec.push(field.to_string());
     }
-
-    // pub fn merge(&mut self, other: &Line) -> Result<()> {
-    //     if self.field_vec != other.field_vec {
-
-    //         error!("Self field_vec: {:?}", self.field_vec);
-    //         error!("Other field_vec: {:?}", other.field_vec);
-
-    //         return Err(anyhow::anyhow!("Cannot merge lines with different field_vec"));
-    //     }
-    //     if self.format_str != other.format_str {
-    //         return Err(anyhow::anyhow!("Cannot merge lines with different format_str"));
-    //     }
-    //     self.sample_vec.extend(other.sample_vec.clone());
-    //     Ok(())
-    // }
 }
 
 impl GeneralOutputIO for Line {
     /// sep does not work for Line
     fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
-        let mut parts = Vec::new();
-
-        for value in &self.field_vec {
-            parts.push(value.clone());
+        let mut bufstring = String::with_capacity(1024);
+        for (i, value) in self.field_vec.iter().enumerate() {
+            if i > 0 {
+                bufstring.push('\t');
+            }
+            bufstring.push_str(value);
         }
+        bufstring.push('\t');
 
-        parts.push(self.format_str.clone().unwrap());
+        bufstring.push_str(self.format_str.as_ref().expect("Line format_str is None"));
+        bufstring.push('\t');
 
-        for sample in &self.sample_vec {
+        for (idx, sample) in self.sample_vec.iter().enumerate() {
+            if idx > 0 {
+                bufstring.push('\t');
+            }
             let sample_str = sample.to_table(None, Some(":"));
-            parts.push(sample_str);
+            bufstring.push_str(&sample_str);
         }
-
-        let line = parts.join("\t") + "\n";
-        let line = add_prefix(&line, &prefix);
+        bufstring.push('\n');
+        let line = add_prefix(&bufstring, &prefix);
         line
     }
 
@@ -187,8 +186,6 @@ impl GeneralOutputIO for Line {
         prefix: Option<&str>,
         sep: Option<&str>,
     ) -> Result<Self> {
-        // debug_assert!(sep.is_some());
-
         if prefix.is_some() {
             return Err(anyhow!("Line::from_reader: prefix must be None"));
         }
@@ -254,7 +251,7 @@ impl GeneralOutputIO for Line {
 #[derive(Debug, Clone)]
 pub struct SampleChip {
     pub sample_name: Option<String>,
-    pub fields: Vec<String>,
+    pub init_string: Vec<String>,
 }
 
 impl SampleChip {
@@ -262,26 +259,27 @@ impl SampleChip {
         let f = Vec::new();
         SampleChip {
             sample_name: name,
-            fields: f,
+            init_string: f,
         }
     }
 
-    pub fn new(name: Option<String>, fields: Vec<String>) -> Self {
+    #[inline]
+    pub fn new(name: Option<String>, init_string: String) -> Self {
         SampleChip {
             sample_name: name,
-            fields,
+            init_string: vec![init_string],
         }
     }
 
     pub fn add_item(&mut self, item: &str) {
-        self.fields.push(item.to_string());
+        self.init_string.push(item.to_string());
     }
 }
 
 impl GeneralOutputIO for SampleChip {
     fn to_table(&self, _prefix: Option<&str>, _sep: Option<&str>) -> String {
         let mut parts = Vec::new();
-        for value in &self.fields {
+        for value in &self.init_string {
             parts.push(value.clone());
         }
         let line = parts.join(":");
@@ -327,7 +325,7 @@ impl GeneralOutputIO for SampleChip {
 
         Ok(SampleChip {
             sample_name: None,
-            fields: sample_fields,
+            init_string: sample_fields,
         })
     }
 }
@@ -498,55 +496,3 @@ impl GeneralOutputIO for Header {
         })
     }
 }
-
-// pub struct OutputVersion{
-//     type_: String,
-//     version: String,
-// }
-
-// impl OutputVersion {
-//     pub fn new(type_: &str, version: &str) -> Self {
-//         OutputVersion {
-//             type_: type_.to_string(),
-//             version: version.to_string(),
-//         }
-//     }
-// }
-
-// impl GeneralOutputIO for OutputVersion {
-//     fn to_table(&self, prefix: Option<&str>, _sep: Option<&str>) -> String {
-//         let mut parts = Vec::new();
-//         parts.push(format!("type={}",self.type_));
-//         parts.push(format!("version={}",self.version));
-//         let line = parts.join(";") + "\n";
-//         let line = add_prefix(&line, &prefix);
-//         line
-//     }
-
-//     fn from_reader<R: BufRead>(
-//         reader: &mut R,
-//         prefix: Option<&str>,
-//         _sep: Option<&str>,
-//     ) -> Result<Self> {
-//         let mut bufline = String::new();
-//         reader.read_line(&mut bufline)?;
-//         let line = if !prefix.is_none() {
-//             bufline.trim_start_matches(prefix.unwrap()).trim()
-//         } else {
-//             bufline.trim()
-//         };
-//         let mut type_ = String::new();
-//         let mut version = String::new();
-//         for part in line.split(';') {
-//             let mut kv = part.splitn(2, '=');
-//             let key = kv.next().unwrap();
-//             let value = kv.next().unwrap();
-//             match key {
-//                 "type" => type_ = value.to_string(),
-//                 "version" => version = value.to_string(),
-//                 _ => {}
-//             }
-//         }
-//         Ok(OutputVersion { type_, version })
-//     }
-// }

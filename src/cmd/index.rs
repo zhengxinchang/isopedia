@@ -5,8 +5,8 @@ use crate::{
     chromosome::{ChromMapping, ChromMappingHelper},
     constants::*,
     dataset_info::DatasetInfo,
-    io::GeneralOutputIO,
     meta::Meta,
+    myio::GeneralOutputIO,
     tmpidx::Tmpindex,
 };
 use anyhow::Result;

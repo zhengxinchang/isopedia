@@ -20,8 +20,10 @@ use std::{
 use zerocopy::{FromBytes, IntoBytes};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes};
 
+use lru::LruCache;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::num::NonZeroUsize;
 
 type ChromIdxStartart = u64;
 type ChromIdxLength = u64;
@@ -152,14 +154,22 @@ impl Tmpindex {
             })
             .collect::<Vec<_>>();
 
-        let mut total_idx_n = 0;
+        // let mut offset_mapping_vec: Vec<FxHashMap<u64, u64>> = Vec::new();
 
-        // let mut processed_offsets = FxHashSet::default();
-        let mut offset_mapping_vec: Vec<FxHashMap<u64, u64>> = Vec::new();
+        // for _ in 0..self.chunks {
+        //     offset_mapping_vec.push(FxHashMap::default());
+        // }
 
-        for _ in 0..self.chunks {
-            offset_mapping_vec.push(FxHashMap::default());
-        }
+        let mut offset_managers: Vec<ChunkOffsetManager> = (0..self.chunks)
+            .map(|i| {
+                ChunkOffsetManager::new(
+                    i,
+                    self.file_name.clone(),
+                    8,  // 256 个桶
+                    32, // 每个 chunk 最多 32 个桶在内存
+                )
+            })
+            .collect();
 
         // mmap the input file
 
@@ -206,6 +216,7 @@ impl Tmpindex {
         );
 
         let mut new_offset: u64 = 0;
+        let mut total_idx_n = 0;
 
         let mut heap: BinaryHeap<Reverse<(MergedIsoformOffsetPlusGenomeLoc, usize)>> =
             BinaryHeap::new();
@@ -254,18 +265,25 @@ impl Tmpindex {
             let mut interim_rec = interim_rec.clone();
             let old_offset = interim_rec.record_ptr.offset;
 
-            if let Some(&mapped_offset) = offset_mapping_vec[idx].get(&old_offset) {
+            // if let Some(&mapped_offset) = offset_mapping_vec[idx].get(&old_offset) {
+            //     interim_rec.record_ptr.offset = mapped_offset;
+
+            //     tmpidx_writer
+            //         .write_all(&interim_rec.to_bytes())
+            //         .expect("Can not write to tmpidx file");
+
+            //     continue;
+            // }
+
+            if let Some(mapped_offset) = offset_managers[idx].get(old_offset) {
                 interim_rec.record_ptr.offset = mapped_offset;
-
-                tmpidx_writer
-                    .write_all(&interim_rec.to_bytes())
-                    .expect("Can not write to tmpidx file");
-
+                tmpidx_writer.write_all(&interim_rec.to_bytes()).unwrap();
                 continue;
             }
 
             // first time seeing this record
-            offset_mapping_vec[idx].insert(old_offset, new_offset);
+            // offset_mapping_vec[idx].insert(old_offset, new_offset);
+            offset_managers[idx].insert(old_offset, new_offset);
 
             let length = interim_rec.record_ptr.length as usize;
 
@@ -330,8 +348,8 @@ impl Tmpindex {
 
         info!("Clean up temporary files...");
 
-        // drop the mmaps
         drop(data_mmaps);
+        drop(offset_managers);
 
         // remove chunk files
         for path in tmp_file_list.iter() {
@@ -689,5 +707,137 @@ impl Hash for MergedIsoformOffsetPtr {
         self.offset.hash(state);
         self.length.hash(state);
         self.n_splice_sites.hash(state);
+    }
+}
+
+pub struct ChunkOffsetManager {
+    chunk_idx: usize,
+    base_path: PathBuf,
+    bucket_bits: u32,
+    buckets: LruCache<u32, FxHashMap<u64, u64>>, // 直接用 LruCache
+    max_buckets: usize,
+}
+
+impl ChunkOffsetManager {
+    pub fn new(chunk_idx: usize, base_path: PathBuf, bucket_bits: u32, max_buckets: usize) -> Self {
+        Self {
+            chunk_idx,
+            base_path,
+            bucket_bits,
+            buckets: LruCache::new(
+                NonZeroUsize::new(max_buckets).expect("max_buckets must be > 0"),
+            ),
+            max_buckets,
+        }
+    }
+
+    #[inline]
+    fn bucket_index(&self, offset: u64) -> u32 {
+        (offset >> (64 - self.bucket_bits)) as u32
+    }
+
+    fn bucket_path(&self, bucket_idx: u32) -> PathBuf {
+        // make a file under the base path with chunk idx and bucket idx
+        self.base_path
+            .with_extension(format!("chunk{}_bucket{}", self.chunk_idx, bucket_idx))
+    }
+
+    /// 保存 bucket 到磁盘
+    fn save_bucket(&self, bucket_idx: u32, map: &FxHashMap<u64, u64>) {
+        if map.is_empty() {
+            return;
+        }
+        let mut writer = BufWriter::new(
+            File::create(self.bucket_path(bucket_idx)).expect("Failed to create bucket file"),
+        );
+        for (&k, &v) in map.iter() {
+            writer
+                .write_all(&k.to_le_bytes())
+                .expect("Failed to write key");
+            writer
+                .write_all(&v.to_le_bytes())
+                .expect("Failed to write value");
+        }
+    }
+
+    /// 从磁盘加载 bucket
+    fn load_bucket(&self, bucket_idx: u32) -> FxHashMap<u64, u64> {
+        let path = self.bucket_path(bucket_idx);
+        if !path.exists() {
+            return FxHashMap::default();
+        }
+
+        let mut map = FxHashMap::default();
+        let mut reader = BufReader::new(File::open(&path).expect("Failed to open bucket file"));
+        let mut buf = [0u8; 16];
+
+        while reader.read_exact(&mut buf).is_ok() {
+            let k = u64::from_le_bytes(
+                buf[0..8]
+                    .try_into()
+                    .expect("Failed to convert bytes to u64"),
+            );
+            let v = u64::from_le_bytes(
+                buf[8..16]
+                    .try_into()
+                    .expect("Failed to convert bytes to u64"),
+            );
+            map.insert(k, v);
+        }
+
+        std::fs::remove_file(&path).ok();
+        map
+    }
+
+    /// 确保 bucket 在缓存中
+    fn ensure_bucket(&mut self, bucket_idx: u32) {
+        if self.buckets.contains(&bucket_idx) {
+            return;
+        }
+
+        // 驱逐最老的 bucket
+        if self.buckets.len() >= self.max_buckets {
+            if let Some((old_idx, old_map)) = self.buckets.pop_lru() {
+                self.save_bucket(old_idx, &old_map);
+            }
+        }
+
+        // 加载新 bucket
+        let map = self.load_bucket(bucket_idx);
+        self.buckets.put(bucket_idx, map);
+    }
+
+    pub fn get(&mut self, old_offset: u64) -> Option<u64> {
+        let idx = self.bucket_index(old_offset);
+        self.ensure_bucket(idx);
+        self.buckets
+            .get(&idx)
+            .and_then(|m| m.get(&old_offset).copied())
+    }
+
+    pub fn insert(&mut self, old_offset: u64, new_offset: u64) {
+        let idx = self.bucket_index(old_offset);
+        self.ensure_bucket(idx);
+        self.buckets
+            .get_mut(&idx)
+            .unwrap()
+            .insert(old_offset, new_offset);
+    }
+
+    pub fn cleanup(&mut self) {
+        // 先保存所有内存中的 bucket
+        while let Some((idx, map)) = self.buckets.pop_lru() {
+            self.save_bucket(idx, &map);
+        }
+        // 删除所有磁盘文件
+        for i in 0..(1 << self.bucket_bits) {
+            std::fs::remove_file(self.bucket_path(i)).ok();
+        }
+    }
+}
+
+impl Drop for ChunkOffsetManager {
+    fn drop(&mut self) {
+        self.cleanup();
     }
 }

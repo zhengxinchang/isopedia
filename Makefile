@@ -98,10 +98,11 @@ tlarge:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /ssd2/isopedia_wk/isopedia_index \
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
 	 -o test/test.em.output2.gz 
-tlarge12:build
+
+tlarge1:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /ssd2/isopedia_wk/isopedia_index -c 10 \
-	 -g test/hs_chr12.gtf \
-	 -o test/test.em.output2.gz 
+	 -g test/chr1.gtf \
+	 -o test/test.em.output.chr1.gz 
 
 
 t45:build
@@ -116,7 +117,7 @@ tbench:build
 	 -o test/test.em.output.gz 
 
 tchrm:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /hdd1/isopedia_datadownload/isopedia_index -c 10\
+	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd2/isopedia_wk/isopedia_index  -c 10\
 	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF \
 	 -o test/test.em.output2.gz
 
