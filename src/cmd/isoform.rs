@@ -73,7 +73,7 @@ pub struct AnnIsoCli {
 
     // EM convergence threshold
     #[arg(long, default_value_t = 0.01)]
-    pub em_converge: f32,
+    pub em_conv_min_diff: f32,
 
     // EM chunk size, reduce it if you have low memory
     #[arg(long, default_value_t = 4)]

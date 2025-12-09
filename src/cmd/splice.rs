@@ -231,7 +231,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         ));
 
         let (isoforms_ptr, _) =
-            forest.search2_all_match(&query.to_pos_vec(), cli.flank, cli.lru_size);
+            forest.fsm_and_all_candidate_search_flank(&query.to_pos_vec(), cli.flank, cli.lru_size);
 
         if isoforms_ptr.is_empty() {
             warn!("No isoforms found for query: {}", query.id);

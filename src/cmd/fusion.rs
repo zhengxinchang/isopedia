@@ -225,9 +225,9 @@ fn anno_single_fusion(
         breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
     );
     let left_target =
-        forest.search0_one_range(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
+        forest.base_single_search_flank(&breakpoints.0 .0, breakpoints.0 .1, cli.flank, cli.lru_size);
     let right_target =
-        forest.search0_one_range(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
+        forest.base_single_search_flank(&breakpoints.1 .0, breakpoints.1 .1, cli.flank, cli.lru_size);
 
     if left_target.is_empty() || right_target.is_empty() {
         if cli.verbose {
@@ -493,7 +493,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                     .collect::<Vec<(String, u64)>>();
 
                 let targets =
-                    forest.search2_partial_match(&quried_positions, cli.flank, 1, cli.lru_size);
+                    forest.fusion_search(&quried_positions, cli.flank, 1, cli.lru_size);
 
                 if targets.is_empty() {
                     skipped_genes += 1;

@@ -720,7 +720,7 @@ impl BPTree {
     /// return the record pointer list
     /// if the key is not found, return None
     /// this function does not need chrom id since one bptree for one chromsome
-    pub fn single_pos_search(&mut self, key: KeyType) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn search_pos(&mut self, key: KeyType) -> Vec<MergedIsoformOffsetPtr> {
         // println!("search key: {}", &key);
         // let mut cache = cache::DataCache::from_disk("./test/block0.dat");
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -755,7 +755,7 @@ impl BPTree {
         }
     }
 
-    pub fn range_search2(&mut self, pos: KeyType, flank: KeyType) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn search_flank(&mut self, pos: KeyType, flank: KeyType) -> Vec<MergedIsoformOffsetPtr> {
         let start = pos.saturating_sub(flank);
         let end = pos.saturating_add(flank);
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -813,6 +813,72 @@ impl BPTree {
         }
         results
     }
+
+    pub fn search_start_end(
+        &mut self,
+        start: KeyType,
+        end: KeyType,
+    ) -> Vec<MergedIsoformOffsetPtr> {
+        let cache = self.cache.as_mut().expect("Can not get cache");
+
+        let mut node = {
+            let mut n = cache.get_root_node();
+            loop {
+                if n.is_leaf() {
+                    break n;
+                }
+
+                let slice = &n.header.keys[..n.header.num_keys as usize];
+                let idx = match slice.binary_search(&start) {
+                    Ok(idx) => idx,
+                    Err(idx) => idx,
+                };
+
+                let child_id = n.header.childs[idx];
+                // println!("searching node: {}, ", child_id);
+
+                if child_id == 0 || child_id > cache.header.total_nodes {
+                    // eprintln!("No such node: {}", child_id);
+                    return vec![]; // no such node
+                }
+
+                n = cache.get_node2(child_id).expect("Can not get next node");
+            }
+        };
+
+        let mut results = Vec::new();
+
+        loop {
+            let keys = &node.header.keys[..node.header.num_keys as usize];
+            for (nk, k) in keys.iter().enumerate() {
+                if *k < start {
+                    continue;
+                }
+
+                if *k > end {
+                    results.sort_unstable();
+                    results.dedup();
+                    return results;
+                }
+
+                let combined = node.header.childs[nk];
+                for addr in node.get_addresses_by_children_value(&combined) {
+                    results.push(addr);
+                }
+            }
+
+            let next_node_id = node.header.node_id + 1;
+            if next_node_id > cache.header.leaf_nodes {
+                break;
+            }
+            node = cache
+                .get_node2(next_node_id)
+                .expect("Can not get next leaf node");
+        }
+        results.sort_unstable();
+        results.dedup();
+        results
+    }
 }
 
 pub struct BPForest {
@@ -867,7 +933,7 @@ impl BPForest {
     }
 
     // basic search functions
-    pub fn search0_one_pos(
+    pub fn base_single_search_exact(
         &mut self,
         chrom_name: &str,
         pos: u64,
@@ -888,11 +954,11 @@ impl BPForest {
             .trees_by_chrom
             .entry(chrom_id)
             .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
-        return tree.single_pos_search(pos);
+        return tree.search_pos(pos);
     }
 
     // basic search functions
-    pub fn search0_one_range(
+    pub fn base_single_search_flank(
         &mut self,
         chrom_name: &str,
         pos: u64,
@@ -918,28 +984,25 @@ impl BPForest {
             .entry(chrom_id)
             .or_insert_with(|| BPTree::from_disk(&self.index_dir, chrom_id, lru_size));
 
-        return tree.range_search2(pos, flank);
+        return tree.search_flank(pos, flank);
     }
 
     // basic multi-position search functions
-    fn search1_multi_exact(
+    fn fsm_search_exact(
         &mut self,
         positions: &Vec<(String, u64)>,
-        // min_match: usize,
         lru_size: usize,
     ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
         let mut res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search0_one_pos(&chrom_name.to_ascii_uppercase(), pos.clone(), lru_size)
+                self.base_single_search_exact(
+                    &chrom_name.to_ascii_uppercase(),
+                    pos.clone(),
+                    lru_size,
+                )
             })
             .collect();
-
-        // if min_match == 0 || min_match >= positions.len() {
-        //     return find_common(res_vec);
-        // } else {
-        //     return find_partial_common(&res_vec, min_match);
-        // }
 
         dedup_vec_vec(&mut res_vec);
 
@@ -947,7 +1010,7 @@ impl BPForest {
     }
 
     // basic multi-position range search functions
-    fn search1_multi_range(
+    fn fsm_search_flank(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -957,7 +1020,7 @@ impl BPForest {
         let mut res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
-                self.search0_one_range(
+                self.base_single_search_flank(
                     &chrom_name.to_ascii_uppercase(),
                     pos.clone(),
                     flank,
@@ -971,7 +1034,7 @@ impl BPForest {
         res_vec
     }
 
-    pub fn search2_all_match(
+    pub fn fsm_and_all_candidate_search_flank(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -981,16 +1044,16 @@ impl BPForest {
         Vec<Vec<MergedIsoformOffsetPtr>>, // positional matched results, each position one vec
     ) {
         if flank == 0 {
-            let res = self.search1_multi_exact(positions, lru_size);
+            let res = self.fsm_search_exact(positions, lru_size);
 
             (find_common(res.clone()), res)
         } else {
-            let res = self.search1_multi_range(positions, flank, lru_size);
+            let res = self.fsm_search_flank(positions, flank, lru_size);
             (find_common(res.clone()), res)
         }
     }
 
-    pub fn search2_all_match_only(
+    pub fn all_candidate_match_search_flank(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -998,17 +1061,17 @@ impl BPForest {
     ) -> Vec<Vec<MergedIsoformOffsetPtr>> // positional matched results, each position one vec
     {
         if flank == 0 {
-            let res = self.search1_multi_exact(positions, lru_size);
+            let res = self.fsm_search_exact(positions, lru_size);
             res
         } else {
-            let res = self.search1_multi_range(positions, flank, lru_size);
+            let res = self.fsm_search_flank(positions, flank, lru_size);
             res
         }
     }
 
     // basic multi-position partial match search functions
     // the min_match is defined as the min number of positions that an isoform must cover
-    pub fn search2_partial_match(
+    pub fn fusion_search(
         &mut self,
         positions: &Vec<(String, u64)>,
         flank: u64,
@@ -1016,7 +1079,7 @@ impl BPForest {
         lru_size: usize,
     ) -> Vec<MergedIsoformOffsetPtr> {
         if flank == 0 {
-            let res = self.search1_multi_exact(positions, lru_size);
+            let res = self.fsm_search_exact(positions, lru_size);
 
             if min_match == 0 || min_match >= positions.len() {
                 // defeinsivly make sure the min_match is valid
@@ -1026,13 +1089,66 @@ impl BPForest {
                 find_partial_common(&res, min_match)
             }
         } else {
-            let res = self.search1_multi_range(positions, flank, lru_size);
+            let res = self.fsm_search_flank(positions, flank, lru_size);
             if min_match == 0 || min_match >= positions.len() {
                 find_common(res)
             } else {
                 find_partial_common(&res, min_match)
             }
         }
+    }
+
+    pub fn search_mono_exons(
+        &mut self,
+        chrom: &str,
+        positions: &Vec<(u64, u64)>,
+        flank: u64,
+        lru_size: usize,
+    ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
+        let tree = match self.trees_by_chrom.get_mut(
+            &self
+                .chrom_mapping
+                .get_chrom_idx(chrom)
+                .expect("search_mono_exons: Can not find chrom id"),
+        ) {
+            Some(t) => t,
+            None => {
+                // load the tree
+                self.trees_by_chrom.clear();
+                self.trees_by_chrom.shrink_to_fit();
+                self.trees_by_chrom.insert(
+                    self.chrom_mapping
+                        .get_chrom_idx(chrom)
+                        .expect("Error getting chrom id"),
+                    BPTree::from_disk(
+                        &self.index_dir,
+                        self.chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                        lru_size,
+                    ),
+                );
+                self.trees_by_chrom
+                    .get_mut(
+                        &self
+                            .chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                    )
+                    .expect("Error getting tree")
+            }
+        };
+
+        let mut results = Vec::new();
+        for (start, end) in positions {
+            let mut res =
+                tree.search_start_end(start.saturating_sub(flank), end.saturating_add(flank));
+
+            res.sort_unstable();
+            res.dedup();
+            results.push(res);
+        }
+        results
     }
 }
 
