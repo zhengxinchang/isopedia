@@ -1098,6 +1098,7 @@ impl BPForest {
         }
     }
 
+    /// only return the sj ptr, any read end ptr that has n_splice_sites == 0 will be ignored
     pub fn search_mono_exons(
         &mut self,
         chrom: &str,
@@ -1146,6 +1147,7 @@ impl BPForest {
 
             res.sort_unstable();
             res.dedup();
+            res.retain(|s| s.n_splice_sites > 0);
             results.push(res);
         }
         results

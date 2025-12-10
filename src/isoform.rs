@@ -353,22 +353,23 @@ impl MergedIsoform {
     }
 
     pub fn is_mono_exonic(&self) -> bool {
-
         if self.splice_junctions_vec.len() != 1 {
             return false;
         }
-        
+
         let mut is_mono_exonic = true;
- 
-       for (left,right) in self.isoform_reads_slim_vec
+
+        for (left, right) in self
+            .isoform_reads_slim_vec
             .iter()
-            .map(|d| (d.left, d.right)) {
-                if left != self.splice_junctions_vec[0].0 || right != self.splice_junctions_vec[0].1 {
-                    is_mono_exonic = false;
-                    break;
-                }
+            .map(|d| (d.left, d.right))
+        {
+            if left != self.splice_junctions_vec[0].0 || right != self.splice_junctions_vec[0].1 {
+                is_mono_exonic = false;
+                break;
             }
-        is_mono_exonic    
+        }
+        is_mono_exonic
     }
 
     pub fn find_fusion_by_breakpoints(

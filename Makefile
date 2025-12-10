@@ -116,6 +116,12 @@ tbench:build
 	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
 	 -o test/test.em.output.gz 
 
+
+tbench13:build
+	/usr/bin/time -v  target/release/isopedia isoform -n 16  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
+	 -g test/bench_chr13.gtf  \
+	 -o test/test.em.chr13.output.gz 
+
 tchrm:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd2/isopedia_wk/isopedia_index  -c 10\
 	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF \

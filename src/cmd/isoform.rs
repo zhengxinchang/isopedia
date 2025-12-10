@@ -83,6 +83,10 @@ pub struct AnnIsoCli {
     #[arg(long, default_value_t = 10)]
     pub em_effective_len_coef: usize,
 
+    // If only consider transcripts that are fully covered by the provided splice junctions,set to false to ignore the frist and last splice junciton.
+    #[arg(long, default_value_t = false)]
+    pub only_fully_covered_tx: bool,
+
     // Minimum EM abundance to report
     #[arg(long, default_value_t = 0.01)]
     pub min_em_abundance: f32,
@@ -288,11 +292,11 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         tmp_tx_manger.finish();
         info!("Sorting final output table");
         while let Some(tx_abd) = tmp_tx_manger.next() {
-            info!("writeing transcript {}", tx_abd.orig_tx_id);
+            // info!("writeing transcript {}", tx_abd.orig_tx_id);
             let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
 
             tableout.add_line(&mut line)?;
-            info!("writen transcript {} done", tx_abd.orig_tx_id);
+            // info!("writen transcript {} done", tx_abd.orig_tx_id);
         }
     }
     info!("Writing final output table");

@@ -68,12 +68,12 @@ impl ChromGroupedTxManager {
         // push last
         merged_intervals.push(curr_mrg_tx);
 
-        debug!(
-            "Chromosome {}: formed {} grouped transcripts from {} transcripts",
-            self.chrom,
-            merged_intervals.len(),
-            tx_v.len()
-        );
+        // debug!(
+        //     "Chromosome {}: formed {} grouped transcripts from {} transcripts",
+        //     self.chrom,
+        //     merged_intervals.len(),
+        //     tx_v.len()
+        // );
 
         // convert each merged group into GroupedTx
 
@@ -130,6 +130,8 @@ impl ChromGroupedTxManager {
                     cli.cached_nodes,
                 );
 
+                // info!("{:?}",all_res_mono_exonic);
+
                 grouped_tx.update_results(
                     &all_res,
                     &all_res_mono_exonic,
@@ -140,18 +142,18 @@ impl ChromGroupedTxManager {
                 drop(all_res);
                 drop(all_res_mono_exonic);
 
-                grouped_tx.prepare_em();
+                grouped_tx.prepare_em(cli);
             }
 
             chunk.par_iter_mut().for_each(|grouped_tx| {
                 grouped_tx.em(cli_arc.as_ref());
 
-                debug!(
-                    "EM grouped tx id {} , txabundance size: {}, msjc size: {} ",
-                    grouped_tx.id,
-                    grouped_tx.tx_abundances.len(),
-                    grouped_tx.msjcs.len()
-                );
+                // debug!(
+                //     "EM grouped tx id {} , txabundance size: {}, msjc size: {} ",
+                //     grouped_tx.id,
+                //     grouped_tx.tx_abundances.len(),
+                //     grouped_tx.msjcs.len()
+                // );
                 grouped_tx.post_cleanup(cli);
             });
 
@@ -296,6 +298,10 @@ impl GroupedTx {
             panic!("Number of results does not match number of positions");
         }
 
+        if all_res_mono_exonic.len() != self.positions_mono_exonic.len() {
+            panic!("Number of mono exonic results does not match number of mono exonic positions");
+        }
+
         let mut msjc_map_global: HashMap<u64, usize> = HashMap::default();
 
         if cli.verbose {
@@ -314,10 +320,6 @@ impl GroupedTx {
                 let res_vec = &all_res_mono_exonic[local_mono_exonic_idx];
 
                 if res_vec.is_empty() {
-                    // warn!(
-                    //     "No isoforms found for mono exonic transcript: {}",
-                    //     tx_abd.orig_tx_id
-                    // );
                     local_mono_exonic_idx += 1;
                     continue;
                 }
@@ -342,11 +344,22 @@ impl GroupedTx {
                             msjc_map_global.insert(misoform_ptr.offset, new_idx);
                             new_idx
                         };
-                        
+
                         assert!(msjc_idx < self.msjcs.len());
 
-                        let tx_local_id_in_this_msjc = self.msjcs[msjc_idx].add_txabundance(tx_abd);
-                        tx_abd.msjc_ids.push((msjc_idx, tx_local_id_in_this_msjc));
+                        // check if fsm
+
+                        let msjc = &self.msjcs[msjc_idx];
+
+                        if msjc.check_mono_exon_fsm(&tx_abd, cli) {
+                            tx_abd.add_fsm_misoform(&misoform);
+                        } else {
+                            if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
+                                let tx_local_id_in_this_msjc =
+                                    self.msjcs[msjc_idx].add_txabundance(tx_abd);
+                                tx_abd.add_msjc_mono_exonic(msjc_idx, tx_local_id_in_this_msjc);
+                            }
+                        }
                     } else {
                         continue;
                     }
@@ -354,7 +367,7 @@ impl GroupedTx {
 
                 local_mono_exonic_idx += 1;
             } else {
-                let mut fsm_misoforms: Vec<&Vec<MergedIsoformOffsetPtr>> = Vec::new();
+                let mut fsm_misoforms_candidates: Vec<&Vec<MergedIsoformOffsetPtr>> = Vec::new();
                 // at least mapping with one sj to be considered as msjc
                 let mut partial_msjc_map: HashMap<u64, &MergedIsoformOffsetPtr> =
                     HashMap::default();
@@ -369,16 +382,16 @@ impl GroupedTx {
                         .get(&sj_pair.1)
                         .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.1));
 
-                    fsm_misoforms.push(&all_res[*sj_start_idx]);
-                    fsm_misoforms.push(&all_res[*sj_end_idx]);
-                    quick_find_partial_msjc_exclude_terminals(
+                    fsm_misoforms_candidates.push(&all_res[*sj_start_idx]);
+                    fsm_misoforms_candidates.push(&all_res[*sj_end_idx]);
+                    quick_find_partial_msjc_exclude_read_st_end(
                         &all_res[*sj_start_idx],
                         &all_res[*sj_end_idx],
                         &mut partial_msjc_map,
                     );
                 }
 
-                let fsm_msjc_offsets = find_fsm(fsm_misoforms, tx_abd.sj_pairs.len());
+                let fsm_msjc_offsets = find_fsm(fsm_misoforms_candidates, tx_abd.sj_pairs.len());
 
                 // remove fsm offsets from msjc_map
                 for fsm in fsm_msjc_offsets.iter() {
@@ -398,6 +411,11 @@ impl GroupedTx {
                 for fsm in fsm_msjc_offsets.into_iter() {
                     // info!("adding fsm misoform offset {:?}", fsm);
                     let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
+
+                    // if tx_abd.orig_tx_id == "ENST00000352527.6" {
+                    //     println!("FSM{}:{:?}", tx_abd.orig_tx_id, fsm_msjc_rec);
+                    // }
+
                     tx_abd.add_fsm_misoform(&fsm_msjc_rec);
                 }
 
@@ -419,23 +437,21 @@ impl GroupedTx {
                     };
 
                     let msjc = &mut self.msjcs[msjc_idx];
-                    let (is_all_matched, _first_match_pos, matched_count) =
+                    let (is_all_matched, first_match_pos, matched_count) =
                         msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
 
                     // consider adjust the match logic here and compare the correlations with ground truth
                     if is_all_matched {
-                        if msjc.splice_junctions_vec.len() > 1 {
-                            if matched_count >= 3 {
+                        if msjc.splice_junctions_vec.len() >= 1 {
+                            if matched_count >= 1 {
                                 let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
-                                tx_abd
-                                    .msjc_ids
-                                    .push((msjc_map_global[&offset], tx_local_id_in_this_msjc));
+                                tx_abd.add_msjc(
+                                    msjc_map_global[&offset],
+                                    tx_local_id_in_this_msjc,
+                                    first_match_pos as usize,
+                                    matched_count,
+                                );
                             }
-                        } else {
-                            let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
-                            tx_abd
-                                .msjc_ids
-                                .push((msjc_map_global[&offset], tx_local_id_in_this_msjc));
                         }
                     }
                 }
@@ -445,14 +461,24 @@ impl GroupedTx {
         // self.msjcs = msjc_map_global;
     }
 
-    pub fn prepare_em(&mut self) {
+    pub fn prepare_em(&mut self, cli: &AnnIsoCli) {
         for msjc in self.msjcs.iter_mut() {
             msjc.prepare_em(self.tx_abundances.len());
-            debug!("msjc positive samples: {}", msjc.nonzero_count());
+            assert!(msjc.nonzero_count() > 0);
+            // debug!("msjc positive samples: {}", msjc.nonzero_count());
         }
 
         for txabd in self.tx_abundances.iter_mut() {
-            txabd.prepare_em(&self.msjcs);
+            txabd.prepare_em(&self.msjcs, cli);
+
+            info!(
+                "Transcript_id {},sjn: {} needs EM: {}, is_all_splice_covered_by_msjc: {:?} {}",
+                txabd.orig_tx_id,
+                txabd.sj_pairs.len(),
+                txabd.is_need_em,
+                txabd.covered_sj_bits,
+                txabd.is_all_sj_covered(cli)
+            );
         }
 
         // clean up the position_tx_abd_map to save memory
@@ -479,6 +505,7 @@ impl GroupedTx {
 
             // E step
 
+            // info!("EM iteration {}: E step", i + 1);
             self.msjcs.par_iter_mut().for_each(|msjc| {
                 msjc.e_step(&self.tx_abundances);
                 // dbg!(msjc.)
@@ -486,6 +513,7 @@ impl GroupedTx {
 
             // M step
 
+            // info!("EM iteration {}: M step", i + 1);
             self.tx_abundances
                 .par_iter_mut()
                 .with_min_len(100)
@@ -523,7 +551,7 @@ impl GroupedTx {
     }
 }
 
-pub fn quick_find_partial_msjc_exclude_terminals<'a>(
+pub fn quick_find_partial_msjc_exclude_read_st_end<'a>(
     a: &'a Vec<MergedIsoformOffsetPtr>,
     b: &'a Vec<MergedIsoformOffsetPtr>,
     collection: &mut HashMap<u64, &'a MergedIsoformOffsetPtr>,
@@ -602,6 +630,7 @@ pub struct TxAbundance {
     pub msjc_ids: Vec<(usize, usize)>, // (msjc id, index in msjc)
     pub is_need_em: bool,
     pub alive_samples_bitmap: Vec<u8>, // bitmap to indicate which samples are alive for em
+    pub covered_sj_bits: Vec<u8>,      // bitmap to indicate which splice junctions are covered
 }
 
 impl TxAbundance {
@@ -630,6 +659,7 @@ impl TxAbundance {
             is_need_em: true,
             alive_samples_bitmap: vec![0; (sample_size + 7) / 8], // initialize all samples as alive
             is_mono_exonic: tx.is_mono_exonic,
+            covered_sj_bits: vec![0; (tx.get_splice_junction_pairs().len() + 7) / 8], // each splice junction has two positions
         }
     }
 
@@ -639,40 +669,121 @@ impl TxAbundance {
         }
     }
 
-    pub fn prepare_em(&mut self, msjc_vec: &Vec<MSJC>) {
+    pub fn add_msjc(
+        &mut self,
+        msjc_idx: usize,
+        tx_local_id: usize,
+        first_match_pos: usize,
+        matched_count: usize,
+    ) {
+        self.msjc_ids.push((msjc_idx, tx_local_id));
+
+        // mark covered splice junctions
+        // first_match_pos is the index in self.sj_pairs where the first matched splice junction is located
+        for i in 0..matched_count {
+            let sj_idx = first_match_pos + i;
+            self.covered_sj_bits[sj_idx / 8] |= 1 << (sj_idx % 8);
+        }
+    }
+
+    pub fn add_msjc_mono_exonic(&mut self, msjc_idx: usize, tx_local_id: usize) {
+        self.msjc_ids.push((msjc_idx, tx_local_id));
+    }
+
+    pub fn is_all_sj_covered(&self, cli: &AnnIsoCli) -> bool {
+        // must match all splice junctions including the first and last bits
+        if cli.only_fully_covered_tx {
+            let n_sj = self.sj_pairs.len();
+            let n_bytes = (n_sj + 7) / 8;
+            for i in 0..n_bytes {
+                let byte = self.covered_sj_bits[i];
+                if i == n_bytes - 1 {
+                    // last byte
+                    let remaining_bits = n_sj % 8;
+                    let mask = if remaining_bits == 0 {
+                        0xFF
+                    } else {
+                        (1 << remaining_bits) - 1
+                    };
+                    if byte & mask != mask {
+                        return false;
+                    }
+                } else {
+                    if byte != 0xFF {
+                        return false;
+                    }
+                }
+            }
+            true
+        } else {
+            // dont consider first and last splice junctions
+
+            let n_sj = self.sj_pairs.len();
+            if n_sj <= 2 {
+                return true;
+            } else {
+                let mut all_covered = true;
+                for sj_idx in 1..(n_sj - 1) {
+                    let byte_idx = sj_idx / 8;
+                    let bit_idx = sj_idx % 8;
+                    if (self.covered_sj_bits[byte_idx] & (1 << bit_idx)) == 0 {
+                        all_covered = false;
+                        break;
+                    }
+                }
+                all_covered
+            }
+        }
+    }
+
+    pub fn prepare_em(&mut self, msjc_vec: &Vec<MSJC>, cli: &AnnIsoCli) {
         // check all associated MSJCs, and mark the samples that have zero coverage in all MSJCs
         // set the self.alive_samples_bitmap accordingly
         // iterately process each msjc, set the bitmap
-        for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
-                            info!(
-                    "xsafe 6"
-                );
-            let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
-            for &sid in msjc.nonzero_sample_indices.iter() {
-                let byte_idx = sid / 8;
-                let bit_idx = sid % 8;
-                self.alive_samples_bitmap[byte_idx] |= 1 << bit_idx;
-            }
-        }
 
         // update the inv_pt if its a mono exonic transcript
-
         if self.is_mono_exonic {
-            let mut avg_msjc_len = 0.0;
-            let mut count = 0;
-            for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
-                info!(
-                    "xsafe 1"
-                );
-                let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
-                avg_msjc_len += msjc.get_effective_length() as f32;
-                count += 1;
-            }
-            if count > 0 && avg_msjc_len > 0.0 {
-                avg_msjc_len /= count as f32;
-                self.inv_pt = 1.0 / (avg_msjc_len as f32);
+            if self.msjc_ids.is_empty() {
+                debug!("Warning: mono exonic transcript {} has no associated msjc to calculate effective length, keep inv_pt as 1.0", self.orig_tx_id);
             } else {
-                info!("Warning: mono exonic transcript {} has no associated msjc to calculate effective length, keep inv_pt as 1.0", self.orig_tx_id);
+                let mut avg_msjc_len = 0.0;
+                let mut count = 0;
+
+                for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
+                    // info!(
+                    //     "xsafe 1"
+                    // );
+                    let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
+                    avg_msjc_len += msjc.get_effective_length() as f32;
+                    count += 1;
+                }
+                if count > 0 && avg_msjc_len > 0.0 {
+                    avg_msjc_len /= count as f32;
+                    self.inv_pt = 1.0 / (avg_msjc_len as f32);
+                } else {
+                    debug!("Warning: mono exonic transcript {} has no associated msjc to calculate effective length, keep inv_pt as 1.0", self.orig_tx_id);
+                }
+            }
+        } else {
+            if !self.is_all_sj_covered(cli) {
+                // dont need em
+                self.is_need_em = false;
+                // set abundance to zero?
+                unsafe {
+                    std::ptr::write_bytes(self.abundance_cur.as_mut_ptr(), 0, self.sample_size);
+                }
+            } else {
+                for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
+                    //             info!(
+                    //     "xsafe 6"
+                    // );
+                    let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
+                    for &sid in msjc.nonzero_sample_indices.iter() {
+                        let byte_idx = sid / 8;
+                        let bit_idx = sid % 8;
+                        self.alive_samples_bitmap[byte_idx] |= 1 << bit_idx;
+                    }
+                }
             }
         }
     }
@@ -680,11 +791,7 @@ impl TxAbundance {
     pub fn m_step(&mut self, msjc_vec: &Vec<MSJC>, cli: &AnnIsoCli) {
         if self.msjc_ids.is_empty() {
             // no msjc support, set abundance to 0
-
             if self.is_need_em {
-                                info!(
-                    "xsafe 2"
-                );
                 unsafe {
                     std::ptr::write_bytes(self.abundance_cur.as_mut_ptr(), 0, self.sample_size);
                 }
@@ -705,9 +812,9 @@ impl TxAbundance {
         }
 
         let sample_size = self.sample_size;
-                        info!(
-                    "xsafe 3"
-                );
+        //         info!(
+        //     "xsafe 3"
+        // );
         unsafe {
             for sid in 0..sample_size {
                 *self.abundance_prev.get_unchecked_mut(sid) =
@@ -765,10 +872,10 @@ impl TxAbundance {
 
         // only check the alive samples
         let mut is_converged = true;
-        debug!(
-            "Checking convergence for TxAbundance id {}, tx_id {:?}, alive samples bitmap: {:?}",
-            self.id, self.orig_tx_id, self.alive_samples_bitmap
-        );
+        // debug!(
+        //     "Checking convergence for TxAbundance id {}, tx_id {:?}, alive samples bitmap: {:?}",
+        //     self.id, self.orig_tx_id, self.alive_samples_bitmap
+        // );
         for sid in 0..self.sample_size {
             let byte_idx = sid / 8;
             let bit_idx = sid % 8;
@@ -966,6 +1073,7 @@ impl TxAbundance {
             is_need_em,
             alive_samples_bitmap,
             is_mono_exonic: false, // place holder, not stored in encoded data
+            covered_sj_bits: Vec::new(), // place holder, not stored in encoded data
         }
     }
 
@@ -1061,7 +1169,7 @@ impl TxAbundance {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MSJC {
     #[allow(unused)]
     id: u64,
@@ -1138,6 +1246,63 @@ impl MSJC {
         self.totals_buffer = vec![0.0; k];
     }
 
+    pub fn check_mono_exon_fsm(&self, txabd: &TxAbundance, cli: &AnnIsoCli) -> bool {
+        if self.splice_junctions_vec.is_empty() {
+            return false;
+        }
+
+        if self.splice_junctions_vec.len() > 1 {
+            return false;
+        }
+
+        let is_fsm = true;
+
+        if self
+            .splice_junctions_vec
+            .first()
+            .unwrap()
+            .0
+            .abs_diff(txabd.orig_start)
+            > cli.flank as u64
+        {
+            return false;
+        }
+
+        if self
+            .splice_junctions_vec
+            .last()
+            .unwrap()
+            .1
+            .abs_diff(txabd.orig_end)
+            > cli.flank as u64
+        {
+            return false;
+        }
+
+        is_fsm
+    }
+
+    pub fn check_msjc_belong_to_tx(&self, txabd: &TxAbundance, cli: &AnnIsoCli) -> bool {
+        // the MJSC must with in the transcript region
+        if self.splice_junctions_vec.is_empty() {
+            return false;
+        }
+
+        if self.splice_junctions_vec.len() > 1 {
+            return false;
+        }
+
+        if self.splice_junctions_vec.first().unwrap().0 < txabd.orig_start {
+            return false;
+        }
+
+        if self.splice_junctions_vec.last().unwrap().1 > txabd.orig_end {
+            return false;
+        }
+
+        true
+    }
+
     #[inline(always)]
     pub fn nonzero_count(&self) -> usize {
         self.nonzero_sample_indices.len()
@@ -1147,42 +1312,76 @@ impl MSJC {
     fn e_step(&mut self, txabds: &Vec<TxAbundance>) {
         let k = self.nonzero_sample_indices.len();
         let txabds_slice = txabds.as_slice();
-                        info!(
-                    "xsafe 4"
-                );
+        //         info!(
+        //     "xsafe 4"
+        // );
         unsafe {
+            // info!("step1");
             for i in 0..k {
                 *self.totals_buffer.get_unchecked_mut(i) = 0.0;
             }
 
+            // info!("step2");
             for &txid in self.txids.iter() {
+                // info!("step2 txid={}", txid);
                 let txabd = txabds_slice.get_unchecked(txid);
+                // let txabd = txabds.get(txid).unwrap();
+
+                if txabd.is_need_em == false {
+                    continue;
+                }
+
                 let inv_pt = txabd.inv_pt;
                 let abd_slice = txabd.abundance_cur.as_slice();
+                // info!("step2 abd_slice len={}", abd_slice.len());
 
                 let mut i = 0;
                 let end = k & !3;
 
                 while i < end {
                     let sid0 = *self.nonzero_sample_indices.get_unchecked(i);
+
                     let sid1 = *self.nonzero_sample_indices.get_unchecked(i + 1);
+
                     let sid2 = *self.nonzero_sample_indices.get_unchecked(i + 2);
+
                     let sid3 = *self.nonzero_sample_indices.get_unchecked(i + 3);
+
+                    // debug but change to get()
+                    // let sid0 = *self.nonzero_sample_indices.get(i).unwrap();
+                    // let sid1 = *self.nonzero_sample_indices.get(i + 1).unwrap();
+                    // let sid2 = *self.nonzero_sample_indices.get(i + 2).unwrap();
+                    // let sid3 = *self.nonzero_sample_indices.get(i + 3).unwrap();
 
                     *self.totals_buffer.get_unchecked_mut(i) +=
                         *abd_slice.get_unchecked(sid0) * inv_pt;
+
                     *self.totals_buffer.get_unchecked_mut(i + 1) +=
                         *abd_slice.get_unchecked(sid1) * inv_pt;
+
                     *self.totals_buffer.get_unchecked_mut(i + 2) +=
                         *abd_slice.get_unchecked(sid2) * inv_pt;
+
                     *self.totals_buffer.get_unchecked_mut(i + 3) +=
                         *abd_slice.get_unchecked(sid3) * inv_pt;
+
+                    // *self.totals_buffer.get_mut(i).unwrap() +=
+                    //     *abd_slice.get(sid0).unwrap() * inv_pt;
+                    // *self.totals_buffer.get_mut(i + 1).unwrap() +=
+                    //     *abd_slice.get(sid1).unwrap() * inv_pt;
+                    // *self.totals_buffer.get_mut(i + 2).unwrap() +=
+                    //     *abd_slice.get(sid2).unwrap() * inv_pt;
+                    // *self.totals_buffer.get_mut(i + 3).unwrap() +=
+                    //     *abd_slice.get(sid3).unwrap() * inv_pt;
 
                     i += 4;
                 }
 
+                // info!("step3");
                 while i < k {
+                    // info!("step3.1 i={}", i);
                     let sid = *self.nonzero_sample_indices.get_unchecked(i);
+                    // info!("step3.2 i={}", i);
                     *self.totals_buffer.get_unchecked_mut(i) +=
                         *abd_slice.get_unchecked(sid) * inv_pt;
                     i += 1;
@@ -1198,12 +1397,17 @@ impl MSJC {
                 let end = k & !3;
 
                 while i < end {
+                    // info!("step4.1 i={}", i);
                     let sid0 = *self.nonzero_sample_indices.get_unchecked(i);
+                    // info!("step4.2 i={}", i+1);
                     let sid1 = *self.nonzero_sample_indices.get_unchecked(i + 1);
+                    // info!("step4.3 i={}", i+2);
                     let sid2 = *self.nonzero_sample_indices.get_unchecked(i + 2);
+                    // info!("step4.4 i={}", i+3);
                     let sid3 = *self.nonzero_sample_indices.get_unchecked(i + 3);
 
                     let compute_gamma = |nonzero_idx: usize, sid: usize| {
+                        // info!("step4.5 i={} sid={}", i, sid);
                         let total = *self.totals_buffer.get_unchecked(nonzero_idx);
                         if total > 0.0 {
                             *abd_slice.get_unchecked(sid) * inv_pt / total
@@ -1213,22 +1417,30 @@ impl MSJC {
                     };
 
                     let base = tx_local_id * k;
+                    // info!("step4.6 i={}", i);
                     *self.gamma_data.get_unchecked_mut(base + i) = compute_gamma(i, sid0);
+                    // info!("step4.7 i={}", i+1);
                     *self.gamma_data.get_unchecked_mut(base + i + 1) = compute_gamma(i + 1, sid1);
+                    // info!("step4.8 i={}", i+2);
                     *self.gamma_data.get_unchecked_mut(base + i + 2) = compute_gamma(i + 2, sid2);
+                    // info!("step4.9 i={}", i+3);
                     *self.gamma_data.get_unchecked_mut(base + i + 3) = compute_gamma(i + 3, sid3);
 
                     i += 4;
                 }
 
                 while i < k {
+                    // info!("step5.1 i={}", i);
                     let sid = *self.nonzero_sample_indices.get_unchecked(i);
+                    // info!("step5.2 i={}", i);
                     let total = *self.totals_buffer.get_unchecked(i);
                     let gamma = if total > 0.0 {
+                        // info!("step5.3 i={}", i);
                         *abd_slice.get_unchecked(sid) * inv_pt / total
                     } else {
                         0.0
                     };
+                    // info!("step5.4 i={}", i);
                     *self.gamma_data.get_unchecked_mut(tx_local_id * k + i) = gamma;
                     i += 1;
                 }
@@ -1240,8 +1452,8 @@ impl MSJC {
         &self,
         reference_sjs: &Vec<(u64, u64)>,
         flank: u64,
-    ) -> (bool, i32, u32) {
-        let mut matched_count = 0;
+    ) -> (bool, i32, usize) {
+        let mut matched_count = 0usize;
         let mut first_match_pos = -1i32;
         let mut is_all_matched = true;
 
@@ -1446,9 +1658,9 @@ impl TmpOutputManager {
                     shard_file_path.display()
                 )
             });
-                            info!(
-                    "xsafe 5"
-                );
+            //             info!(
+            //     "xsafe 5"
+            // );
             let mmap = unsafe { Mmap::map(&file_h).expect("mmap failed") };
             mmap.advise(memmap2::Advice::Sequential)
                 .expect("Can not set mmap advice");
