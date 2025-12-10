@@ -471,14 +471,14 @@ impl GroupedTx {
         for txabd in self.tx_abundances.iter_mut() {
             txabd.prepare_em(&self.msjcs, cli);
 
-            info!(
-                "Transcript_id {},sjn: {} needs EM: {}, is_all_splice_covered_by_msjc: {:?} {}",
-                txabd.orig_tx_id,
-                txabd.sj_pairs.len(),
-                txabd.is_need_em,
-                txabd.covered_sj_bits,
-                txabd.is_all_sj_covered(cli)
-            );
+            // info!(
+            //     "Transcript_id {},sjn: {} needs EM: {}, is_all_splice_covered_by_msjc: {:?} {}",
+            //     txabd.orig_tx_id,
+            //     txabd.sj_pairs.len(),
+            //     txabd.is_need_em,
+            //     txabd.covered_sj_bits,
+            //     txabd.is_all_sj_covered(cli)
+            // );
         }
 
         // clean up the position_tx_abd_map to save memory
@@ -1282,7 +1282,7 @@ impl MSJC {
         is_fsm
     }
 
-    pub fn check_msjc_belong_to_tx(&self, txabd: &TxAbundance, cli: &AnnIsoCli) -> bool {
+    pub fn check_msjc_belong_to_tx(&self, txabd: &TxAbundance, _cli: &AnnIsoCli) -> bool {
         // the MJSC must with in the transcript region
         if self.splice_junctions_vec.is_empty() {
             return false;

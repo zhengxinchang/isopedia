@@ -259,8 +259,8 @@ impl<R: BufRead> TranscriptChunker<R> {
                         },
                         _ => {}
                     },
-                    Err(e) => {
-                        panic!("error in reading gtf: {:?}, record (no.{}: {:?}\nPlease check your gtf format. One possible reason is the input file is GFF format.", e, self.trans_count, &record);
+                    Err(_) => {
+                        panic!("error in reading gtf, record (no.{})\nPlease check your gtf format. One possible reason is the input file is GFF format.", self.trans_count);
                     }
                 },
                 None => {
