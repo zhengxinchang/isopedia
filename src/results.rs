@@ -150,17 +150,28 @@ impl TableOutput {
         Ok(())
     }
 
+    pub fn write_bytes(&mut self, bytes: &[u8]) -> Result<()> {
+        if let Some(w) = &mut self.writer {
+            w.write_all_bytes(bytes)?;
+        }
+
+        Ok(())
+    }
+
     pub fn finish(&mut self) -> Result<()> {
         // write remaining lines
         if let Some(w) = &mut self.writer {
-            for each_line in &mut self.lines {
-                if each_line.format_str.is_none() {
-                    each_line.update_format_str(&self.format_str);
-                }
-                let line_str = each_line.to_table(None, None);
+            if self.lines.len() > 0 {
+                for each_line in &mut self.lines {
+                    if each_line.format_str.is_none() {
+                        each_line.update_format_str(&self.format_str);
+                    }
+                    let line_str = each_line.to_table(None, None);
 
-                w.write_all_bytes(line_str.as_bytes())?;
+                    w.write_all_bytes(line_str.as_bytes())?;
+                }
             }
+
             w.flush()?;
         }
 

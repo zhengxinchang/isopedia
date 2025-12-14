@@ -14,7 +14,7 @@ use crate::{
     results::TableOutput,
 };
 use anyhow::Result;
-use clap::{command, Parser};
+use clap::Parser;
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
@@ -173,7 +173,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         .expect("Can not allocate thread pool");
 
     let mut forest = BPForest::init(&cli.idxdir);
-    let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
+    let index_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
     info!("Loading GTF file...");
 
@@ -197,7 +197,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         cli.cached_chunk_num,                   // max 4 chunks in cache ~2GB
     );
 
-    let mut global_stats = GlobalStats::new(dataset_info.get_size());
+    let mut global_stats = GlobalStats::new(index_info.get_size());
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
     let mut out_header = Header::new();
@@ -214,7 +214,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     out_header.add_column("positive_count/sample_size")?;
     out_header.add_column("attributes")?;
     let mut db_infos = DBInfos::new();
-    for (name, evidence) in dataset_info.get_sample_evidence_pair_vec() {
+    for (name, evidence) in index_info.get_sample_evidence_pair_vec() {
         db_infos.add_sample_evidence(&name, evidence);
         out_header.add_sample_name(&name)?;
     }
@@ -232,7 +232,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let mut chrom_grouped_tx_managers: Vec<ChromGroupedTxManager> = gtf_by_chrom
         .into_iter()
         .map(|(chrom, tx_vec)| {
-            let mut manager = ChromGroupedTxManager::new(&chrom, dataset_info.get_size());
+            let mut manager = ChromGroupedTxManager::new(&chrom, index_info.get_size());
             manager.add_transcript_by_chrom(&tx_vec, cli);
             manager
         })
@@ -258,7 +258,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             &mut forest,
             cli,
             &mut archive_cache,
-            &dataset_info,
+            &index_info,
             &mut tmp_tx_manger,
             &mut global_stats,
         );
@@ -291,11 +291,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     {
         tmp_tx_manger.finish();
         info!("Sorting final output table");
-        while let Some(tx_abd) = tmp_tx_manger.next() {
+        while let Some(tx_abd_view) = tmp_tx_manger.next() {
             // info!("writeing transcript {}", tx_abd.orig_tx_id);
-            let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
-
-            tableout.add_line(&mut line)?;
+            // let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
+            tx_abd_view.write_line_directly(&global_stats, &index_info, cli, &mut tableout)?;
+            // tableout.add_line(&mut line)?;
+            // tx_abd.write_line_directly( &global_stats, &dataset_info, &cli,&mut tableout)?;
             // info!("writen transcript {} done", tx_abd.orig_tx_id);
         }
     }

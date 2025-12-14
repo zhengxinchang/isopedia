@@ -6,14 +6,13 @@ use crate::{
     gtf::Transcript,
     isoform::MergedIsoform,
     isoformarchive::ArchiveCache,
-    myio::{Line, SampleChip},
+    results::TableOutput,
     tmpidx::MergedIsoformOffsetPtr,
     utils::{self, intersect_sorted, GetMemSize},
 };
 use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
-use memmap2::Mmap;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -21,7 +20,7 @@ use std::{
     cmp::Reverse,
     collections::BinaryHeap,
     fs::File,
-    io::{BufWriter, Write},
+    io::{BufReader, BufWriter, Read, Write},
     path::PathBuf,
 };
 pub struct ChromGroupedTxManager {
@@ -67,15 +66,6 @@ impl ChromGroupedTxManager {
 
         // push last
         merged_intervals.push(curr_mrg_tx);
-
-        // debug!(
-        //     "Chromosome {}: formed {} grouped transcripts from {} transcripts",
-        //     self.chrom,
-        //     merged_intervals.len(),
-        //     tx_v.len()
-        // );
-
-        // convert each merged group into GroupedTx
 
         for (idx, (_start, _end, txs)) in merged_intervals.iter().enumerate() {
             let mut grouped_tx =
@@ -148,16 +138,10 @@ impl ChromGroupedTxManager {
             chunk.par_iter_mut().for_each(|grouped_tx| {
                 grouped_tx.em(cli_arc.as_ref());
 
-                // debug!(
-                //     "EM grouped tx id {} , txabundance size: {}, msjc size: {} ",
-                //     grouped_tx.id,
-                //     grouped_tx.tx_abundances.len(),
-                //     grouped_tx.msjcs.len()
-                // );
                 grouped_tx.post_cleanup(cli);
             });
 
-            for grouped_tx in chunk.iter() {
+            for grouped_tx in chunk.iter_mut() {
                 for txbd in grouped_tx.tx_abundances.iter() {
                     global_stats.update_fsm_total(&txbd.fsm_abundance);
                     global_stats.update_em_total(&txbd.abundance_cur);
@@ -165,10 +149,10 @@ impl ChromGroupedTxManager {
                 tmp_tx_manager.dump_grouped_tx(grouped_tx);
             }
 
-            for grouped_tx in chunk.iter_mut() {
-                grouped_tx.tx_abundances.clear();
-                grouped_tx.tx_abundances.shrink_to_fit();
-            }
+            // for grouped_tx in chunk.iter_mut() {
+            //     grouped_tx.tx_abundances.clear();
+            //     grouped_tx.tx_abundances.shrink_to_fit();
+            // }
 
             let duration = start.elapsed();
 
@@ -219,9 +203,6 @@ impl GroupedTx {
 
         let mut positions: Vec<u64> = pos_set.into_iter().collect();
         positions.sort();
-
-        // let mut positions_mono_exonic: Vec<(u64, u64, usize)> = pos_set_mono_exonic.into_iter().collect();
-        // positions_mono_exonic.sort();
 
         let mut position_tx_abd_map = FxHashMap::default();
 
@@ -409,12 +390,7 @@ impl GroupedTx {
 
                 // add fsm misoforms
                 for fsm in fsm_msjc_offsets.into_iter() {
-                    // info!("adding fsm misoform offset {:?}", fsm);
                     let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
-
-                    // if tx_abd.orig_tx_id == "ENST00000352527.6" {
-                    //     println!("FSM{}:{:?}", tx_abd.orig_tx_id, fsm_msjc_rec);
-                    // }
 
                     tx_abd.add_fsm_misoform(&fsm_msjc_rec);
                 }
@@ -470,15 +446,6 @@ impl GroupedTx {
 
         for txabd in self.tx_abundances.iter_mut() {
             txabd.prepare_em(&self.msjcs, cli);
-
-            // info!(
-            //     "Transcript_id {},sjn: {} needs EM: {}, is_all_splice_covered_by_msjc: {:?} {}",
-            //     txabd.orig_tx_id,
-            //     txabd.sj_pairs.len(),
-            //     txabd.is_need_em,
-            //     txabd.covered_sj_bits,
-            //     txabd.is_all_sj_covered(cli)
-            // );
         }
 
         // clean up the position_tx_abd_map to save memory
@@ -513,14 +480,11 @@ impl GroupedTx {
 
             // M step
 
-            // info!("EM iteration {}: M step", i + 1);
             self.tx_abundances
                 .par_iter_mut()
                 .with_min_len(100)
                 .for_each(|tx_abd| {
                     tx_abd.m_step(&self.msjcs, cli);
-
-                    // dbg!(&tx_abd);
                 });
 
             let all_converged = self
@@ -654,7 +618,6 @@ impl TxAbundance {
             abundance_prev: vec![1.0; sample_size],
             sample_size,
             inv_pt: 1.0 / nsj as f32,
-            // is_ok: vec![true; sample_size],
             msjc_ids: Vec::new(),
             is_need_em: true,
             alive_samples_bitmap: vec![0; (sample_size + 7) / 8], // initialize all samples as alive
@@ -900,186 +863,131 @@ impl TxAbundance {
         is_converged
     }
 
-    pub fn encode(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        TxAbundanceView::encode(self)
+    }
+}
+
+pub struct TxAbundanceView {
+    _orig_idx: u32,
+    orig_tx_id: Vec<u8>,
+    orig_gene_id: Vec<u8>,
+    orig_tx_len: u32,
+    orig_n_exon: u32,
+    orig_chrom: Vec<u8>,
+    orig_start: u64,
+    orig_end: u64,
+    orig_attrs: Vec<u8>,
+    fsm_abundance: Vec<f32>,
+    em_abundance: Vec<f32>,
+}
+
+impl TxAbundanceView {
+    pub fn encode(txabd: &TxAbundance) -> Vec<u8> {
         let mut buf = Vec::new();
 
-        // 固定字段
-        buf.extend_from_slice(&(self.id as u32).to_le_bytes());
-        buf.extend_from_slice(&self.orig_idx.to_le_bytes());
-        buf.extend_from_slice(&self.orig_tx_len.to_le_bytes());
-        buf.extend_from_slice(&self.orig_n_exon.to_le_bytes());
-        buf.extend_from_slice(&self.orig_start.to_le_bytes());
-        buf.extend_from_slice(&self.orig_end.to_le_bytes());
-        buf.extend_from_slice(&self.inv_pt.to_le_bytes());
-        buf.push(self.is_need_em as u8);
-        buf.extend_from_slice(&(self.sample_size as u32).to_le_bytes());
+        buf.extend_from_slice(&txabd.orig_idx.to_le_bytes());
+        buf.extend_from_slice(&txabd.orig_tx_len.to_le_bytes());
+        buf.extend_from_slice(&txabd.orig_n_exon.to_le_bytes());
+        buf.extend_from_slice(&txabd.orig_start.to_le_bytes());
+        buf.extend_from_slice(&txabd.orig_end.to_le_bytes());
 
-        // 字符串：长度 + 内容
-        for s in [
-            &self.orig_tx_id,
-            &self.orig_gene_id,
-            &self.orig_chrom,
-            &self.orig_attrs,
-        ] {
-            buf.extend_from_slice(&(s.len() as u32).to_le_bytes());
-            buf.extend_from_slice(s.as_bytes());
-        }
+        // txid,geneid,chrom,attr
+        buf.extend_from_slice(&(txabd.orig_tx_id.len() as u32).to_le_bytes());
+        buf.extend_from_slice(txabd.orig_tx_id.as_bytes());
+        buf.extend_from_slice(&(txabd.orig_gene_id.len() as u32).to_le_bytes());
+        buf.extend_from_slice(txabd.orig_gene_id.as_bytes());
+        buf.extend_from_slice(&(txabd.orig_chrom.len() as u32).to_le_bytes());
+        buf.extend_from_slice(txabd.orig_chrom.as_bytes());
+        buf.extend_from_slice(&(txabd.orig_attrs.len() as u32).to_le_bytes());
+        buf.extend_from_slice(txabd.orig_attrs.as_bytes());
 
-        // sj_pairs
-        buf.extend_from_slice(&(self.sj_pairs.len() as u32).to_le_bytes());
-        for (a, b) in &self.sj_pairs {
-            buf.extend_from_slice(&a.to_le_bytes());
-            buf.extend_from_slice(&b.to_le_bytes());
-        }
+        // fsm_abundance,em_abundance
 
-        // f32 数组（直接写，长度由 sample_size 决定）
-        for v in &self.fsm_abundance {
-            buf.extend_from_slice(&v.to_le_bytes());
-        }
-        for v in &self.abundance_cur {
+        buf.extend_from_slice(&(txabd.fsm_abundance.len() as u32).to_le_bytes());
+        for &v in &txabd.fsm_abundance {
             buf.extend_from_slice(&v.to_le_bytes());
         }
 
-        // bitmap
-        buf.extend_from_slice(&self.alive_samples_bitmap);
-
+        buf.extend_from_slice(&(txabd.abundance_cur.len() as u32).to_le_bytes());
+        for &v in &txabd.abundance_cur {
+            buf.extend_from_slice(&v.to_le_bytes());
+        }
         buf
     }
 
-    pub fn decode_read<'a>(n: usize, pos: &'a mut usize, data: &'a [u8]) -> &'a [u8] {
-        let slice = &data[*pos..*pos + n];
-        *pos += n;
-        slice
-    }
-
-    pub fn decode_readstring<'a>(pos: &mut usize, data: &'a [u8]) -> String {
-        let len = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap()) as usize;
-        *pos += 4;
-        let s = String::from_utf8_lossy(&data[*pos..*pos + len]).into_owned();
-        *pos += len;
-        s
-    }
-
-    pub fn decode(data: &[u8]) -> Self {
+    pub fn from_bytes(data: &[u8]) -> Result<Self> {
         let mut pos = 0;
 
-        let id = u32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        ) as usize;
-        let orig_idx = u32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        );
-        let orig_tx_len = u32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        );
-        let orig_n_exon = u32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        );
-        let orig_start = u64::from_le_bytes(
-            TxAbundance::decode_read(8, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        );
-        let orig_end = u64::from_le_bytes(
-            TxAbundance::decode_read(8, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        );
-        let inv_pt = f32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        );
-        let is_need_em = TxAbundance::decode_read(1, &mut pos, data)[0] != 0;
-        let sample_size = u32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        ) as usize;
+        let orig_idx = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_tx_len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_n_exon = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_start = u64::from_le_bytes(data[pos..pos + 8].try_into()?);
+        pos += 8;
+        let orig_end = u64::from_le_bytes(data[pos..pos + 8].try_into()?);
+        pos += 8;
 
-        let orig_tx_id = TxAbundance::decode_readstring(&mut pos, data);
-        let orig_gene_id = TxAbundance::decode_readstring(&mut pos, data);
-        let orig_chrom = TxAbundance::decode_readstring(&mut pos, data);
-        let orig_attrs = TxAbundance::decode_readstring(&mut pos, data);
+        // txid,geneid,chrom,attr
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_tx_id = &data[pos..pos + len as usize];
+        pos += len as usize;
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_gene_id = &data[pos..pos + len as usize];
+        pos += len as usize;
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_chrom = &data[pos..pos + len as usize];
+        pos += len as usize;
 
-        // sj_pairs
-        let sj_len = u32::from_le_bytes(
-            TxAbundance::decode_read(4, &mut pos, data)
-                .try_into()
-                .unwrap(),
-        ) as usize;
-        let mut sj_pairs = Vec::with_capacity(sj_len);
-        for _ in 0..sj_len {
-            let a = u64::from_le_bytes(
-                TxAbundance::decode_read(8, &mut pos, data)
-                    .try_into()
-                    .unwrap(),
-            );
-            let b = u64::from_le_bytes(
-                TxAbundance::decode_read(8, &mut pos, data)
-                    .try_into()
-                    .unwrap(),
-            );
-            sj_pairs.push((a, b));
+        // attr
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        let orig_attrs = &data[pos..pos + len as usize];
+
+        pos += len as usize;
+
+        // fsm em abundance
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+
+        let mut fsm_abundance = Vec::new();
+        let mut em_abundance = Vec::new();
+
+        for _ in 0..len {
+            fsm_abundance.push(f32::from_le_bytes(data[pos..pos + 4].try_into()?));
+            pos += 4;
         }
 
-        // f32 数组
-        let mut fsm_abundance = Vec::with_capacity(sample_size);
-        let mut abundance_cur = Vec::with_capacity(sample_size);
-        for _ in 0..sample_size {
-            fsm_abundance.push(f32::from_le_bytes(
-                TxAbundance::decode_read(4, &mut pos, data)
-                    .try_into()
-                    .unwrap(),
-            ));
-        }
-        for _ in 0..sample_size {
-            abundance_cur.push(f32::from_le_bytes(
-                TxAbundance::decode_read(4, &mut pos, data)
-                    .try_into()
-                    .unwrap(),
-            ));
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
+        pos += 4;
+        for _ in 0..len {
+            em_abundance.push(f32::from_le_bytes(data[pos..pos + 4].try_into()?));
+            pos += 4;
         }
 
-        let bitmap_len = (sample_size + 7) / 8;
-        let alive_samples_bitmap = data[pos..pos + bitmap_len].to_vec();
-
-        TxAbundance {
-            id,
-            orig_idx,
-            orig_tx_id,
-            orig_gene_id,
+        Ok(TxAbundanceView {
+            _orig_idx: orig_idx,
+            orig_tx_id: orig_tx_id.to_vec(),
+            orig_gene_id: orig_gene_id.to_vec(),
             orig_tx_len,
             orig_n_exon,
-            orig_chrom,
+            orig_chrom: orig_chrom.to_vec(),
             orig_start,
             orig_end,
-            orig_attrs,
-            sj_pairs,
+            orig_attrs: orig_attrs.to_vec(),
             fsm_abundance,
-            abundance_cur,
-            abundance_prev: Vec::new(),
-            sample_size,
-            inv_pt,
-            msjc_ids: Vec::new(),
-            is_need_em,
-            alive_samples_bitmap,
-            is_mono_exonic: false, // place holder, not stored in encoded data
-            covered_sj_bits: Vec::new(), // place holder, not stored in encoded data
-        }
+            em_abundance,
+        })
     }
 
     pub fn get_positive_samples(&self, min_read: f32) -> usize {
         let mut count = 0;
-        for (abd1, abd2) in self.abundance_cur.iter().zip(&self.fsm_abundance) {
+        for (abd1, abd2) in self.em_abundance.iter().zip(&self.fsm_abundance) {
             let total = abd1 + abd2;
             if total >= min_read {
                 count += 1;
@@ -1088,56 +996,57 @@ impl TxAbundance {
         count
     }
 
-    pub fn to_output_line(
+    pub fn write_line_directly(
         &self,
         global_stats: &GlobalStats,
         dbinfo: &DatasetInfo,
         cli: &AnnIsoCli,
-    ) -> Line {
-        let mut out_line = Line::with_capacity(dbinfo.get_size());
-
-        out_line.add_field(&self.orig_chrom);
-        out_line.add_field(&self.orig_start.to_string());
-        out_line.add_field(&self.orig_end.to_string());
-        out_line.add_field(&self.orig_tx_len.to_string());
-        out_line.add_field(&self.orig_n_exon.to_string());
-        out_line.add_field(&self.orig_tx_id.to_string());
-        out_line.add_field(&self.orig_gene_id.to_string());
-
+        tableout: &mut TableOutput,
+    ) -> Result<()> {
+        tableout.write_bytes(&self.orig_chrom)?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(self.orig_start.to_string().as_bytes())?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(self.orig_end.to_string().as_bytes())?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(self.orig_tx_len.to_string().as_bytes())?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(self.orig_n_exon.to_string().as_bytes())?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(&self.orig_tx_id)?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(&self.orig_gene_id)?;
+        tableout.write_bytes(b"\t")?;
         // confidence scores
-
         let u32_arr = self
             .fsm_abundance
             .iter()
-            .zip(&self.abundance_cur)
+            .zip(&self.em_abundance)
             .map(|(&fsm, em)| fsm + em)
             .collect::<Vec<f32>>();
 
         let confscore =
             utils::calc_confidence_f32(&u32_arr, dbinfo.get_size(), &global_stats.fsm_em_total);
 
-        out_line.add_field(&confscore.to_string());
+        tableout.write_bytes(confscore.to_string().as_bytes())?;
+        tableout.write_bytes(b"\t")?;
 
         let positive_samples = self.get_positive_samples(cli.min_read as f32);
-
         if positive_samples != 0 {
-            out_line.add_field("yes");
+            tableout.write_bytes(b"yes")?;
         } else {
-            out_line.add_field("no");
+            tableout.write_bytes(b"no")?;
         }
-
-        out_line.add_field(&cli.min_read.to_string());
-
-        out_line.add_field(&format!("{}/{}", positive_samples, dbinfo.get_size()));
-
-        out_line.add_field(&self.orig_attrs);
-
-        // process each sample
-
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(cli.min_read.to_string().as_bytes())?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(format!("{}/{}", positive_samples, dbinfo.get_size()).as_bytes())?;
+        tableout.write_bytes(b"\t")?;
+        tableout.write_bytes(&self.orig_attrs)?;
         for sid in 0..dbinfo.get_size() {
             let fsm = self.fsm_abundance[sid];
-            let em = match self.abundance_cur[sid] >= cli.min_em_abundance {
-                true => self.abundance_cur[sid],
+            let em = match self.em_abundance[sid] >= cli.min_em_abundance {
+                true => self.em_abundance[sid],
                 false => 0.0,
             };
             // let em = self.abundance_cur[sid];
@@ -1148,24 +1057,37 @@ impl TxAbundance {
             let em_cpm = utils::calc_cpm_f32(&em, &total_cov);
             let total_cpm = utils::calc_cpm_f32(&total_abd, &total_cov);
 
-            let mut s: String = String::new();
-            s.push_str(&total_cpm.to_string());
-            s.push(':');
-            s.push_str(&total_abd.to_string());
-            s.push(':');
-            s.push_str(&fsm_cpm.to_string());
-            s.push(':');
-            s.push_str(&fsm.to_string());
-            s.push(':');
-            s.push_str(&em_cpm.to_string());
-            s.push(':');
-            s.push_str(&em.to_string());
+            // let mut s: String = String::new();
+            // s.push_str(&total_cpm.to_string());
+            // s.push(':');
+            // s.push_str(&total_abd.to_string());
+            // s.push(':');
+            // s.push_str(&fsm_cpm.to_string());
+            // s.push(':');
+            // s.push_str(&fsm.to_string());
+            // s.push(':');
+            // s.push_str(&em_cpm.to_string());
+            // s.push(':');
+            // s.push_str(&em.to_string());
+            tableout.write_bytes(b"\t")?;
+            tableout.write_bytes(total_cpm.to_string().as_bytes())?;
+            tableout.write_bytes(b":")?;
+            tableout.write_bytes(total_abd.to_string().as_bytes())?;
+            tableout.write_bytes(b":")?;
+            tableout.write_bytes(fsm_cpm.to_string().as_bytes())?;
+            tableout.write_bytes(b":")?;
+            tableout.write_bytes(fsm.to_string().as_bytes())?;
+            tableout.write_bytes(b":")?;
+            tableout.write_bytes(em_cpm.to_string().as_bytes())?;
+            tableout.write_bytes(b":")?;
+            tableout.write_bytes(em.to_string().as_bytes())?;
+            // let sample = SampleChip::new(Some(dbinfo.get_sample_names()[sid].clone()), s);
+            // tableout.write_bytes(dbinfo.get_sample_names()[sid].as_bytes())?;
 
-            let sample = SampleChip::new(Some(dbinfo.get_sample_names()[sid].clone()), s);
-            out_line.add_sample(sample);
+            // tableout.write_bytes(s.as_bytes())?;
         }
-
-        out_line
+        tableout.write_bytes(b"\n")?;
+        Ok(())
     }
 }
 
@@ -1501,28 +1423,30 @@ impl MSJC {
 }
 
 type OrigIdx = u32;
-type Offset = u64;
-type Length = u64;
+// type Offset = u64;
+// type Length = u64;
 
 /// write to temporary output manager with sharding,
 /// two files will be generated, one is the data file, another is the index file
 pub struct TmpOutputManager {
-    pub curr_offset: u64,
+    // pub curr_offset: u64,
     pub curr_processed_idx: usize,
-    pub shards_offsets_vec: Vec<Vec<(OrigIdx, Offset, Length)>>, // (orig_tx_idx, offset, length)
+    pub shards_offsets_vec: Vec<Vec<OrigIdx>>,
     pub records: Vec<TxAbundance>,
     pub file_base_path: PathBuf,
     pub curr_shard_idx: usize,
     pub shard_capacity: usize,
-    pub heap: BinaryHeap<Reverse<HeapEntry>>, // (orig_idx, shard_idx, offset, length)
-    pub data_readers: Vec<Mmap>,
+    pub heap: BinaryHeap<Reverse<HeapEntry>>, // (orig_idx, shard_idx)
+    pub data_readers: Vec<BufReader<File>>,
     pub shard_read_indices: Vec<usize>,
+    pub data_length: [u8; 8],
+    pub data_record: Vec<u8>,
 }
 
 impl TmpOutputManager {
     pub fn new(file_path: &PathBuf, cli: &AnnIsoCli) -> Self {
         TmpOutputManager {
-            curr_offset: 0,
+            // curr_offset: 0,
             curr_processed_idx: 0,
             shards_offsets_vec: Vec::new(),
             records: Vec::new(),
@@ -1532,16 +1456,22 @@ impl TmpOutputManager {
             heap: BinaryHeap::new(),
             data_readers: Vec::new(),
             shard_read_indices: Vec::new(),
+            data_length: [0; 8],
+            data_record: Vec::new(),
         }
     }
 
-    pub fn dump_grouped_tx(&mut self, grouped_tx: &GroupedTx) {
-        for tx_abd in grouped_tx.tx_abundances.iter() {
-            self.records.push(tx_abd.clone());
-        }
+    pub fn dump_grouped_tx(&mut self, grouped_tx: &mut GroupedTx) {
+        // for tx_abd in grouped_tx.tx_abundances.iter() {
+        //     // self.records.push(tx_abd.clone());
+
+        // }
+
+        let txs: Vec<TxAbundance> = std::mem::take(&mut grouped_tx.tx_abundances);
+        self.records.extend(txs);
 
         if self.records.len() >= self.shard_capacity {
-            self.curr_offset = 0;
+            // self.curr_offset = 0;
             // sort the records by orig_idx
             self.records.sort_by_key(|tx_abd| tx_abd.orig_idx);
             // write to file
@@ -1568,16 +1498,24 @@ impl TmpOutputManager {
             );
 
             for tx_abd in self.records.iter() {
-                let bytes = tx_abd.encode();
+                let bytes = tx_abd.to_bytes();
                 let length = bytes.len() as u64;
+                bufwriter
+                    .write_all(&length.to_le_bytes())
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Could not write byte lengthto temporary output file {}",
+                            shard_file_path.display()
+                        )
+                    });
                 bufwriter.write_all(&bytes).unwrap_or_else(|_| {
                     panic!(
-                        "Could not write to temporary output file {}",
+                        "Could not write to byte data temporary output file {}",
                         shard_file_path.display()
                     )
                 });
-                curr_shard_offsets.push((tx_abd.orig_idx, self.curr_offset, length));
-                self.curr_offset += length;
+                curr_shard_offsets.push(tx_abd.orig_idx);
+                // self.curr_offset += length + 8;
             }
 
             self.shards_offsets_vec.push(curr_shard_offsets);
@@ -1596,7 +1534,7 @@ impl TmpOutputManager {
         // write remaining records
 
         if self.records.len() > 0 {
-            self.curr_offset = 0;
+            // self.curr_offset = 0;
             // sort the records by orig_idx
             self.records.sort_by_key(|tx_abd| tx_abd.orig_idx);
             // write to file
@@ -1623,16 +1561,24 @@ impl TmpOutputManager {
             );
 
             for tx_abd in self.records.iter() {
-                let bytes = tx_abd.encode();
+                let bytes = tx_abd.to_bytes();
                 let length = bytes.len() as u64;
+                bufwriter
+                    .write_all(&length.to_le_bytes())
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "Could not write byte length to temporary output file {}",
+                            shard_file_path.display()
+                        )
+                    });
                 bufwriter.write_all(&bytes).unwrap_or_else(|_| {
                     panic!(
-                        "Could not write to temporary output file {}",
+                        "Could not write to byte data temporary output file {}",
                         shard_file_path.display()
                     )
                 });
-                curr_shard_offsets.push((tx_abd.orig_idx, self.curr_offset, length));
-                self.curr_offset += length;
+                curr_shard_offsets.push(tx_abd.orig_idx);
+                // self.curr_offset += length + 8;
             }
 
             self.shards_offsets_vec.push(curr_shard_offsets);
@@ -1661,10 +1607,9 @@ impl TmpOutputManager {
             //             info!(
             //     "xsafe 5"
             // );
-            let mmap = unsafe { Mmap::map(&file_h).expect("mmap failed") };
-            mmap.advise(memmap2::Advice::Sequential)
-                .expect("Can not set mmap advice");
-            self.data_readers.push(mmap);
+            // make bufreader for each shard
+            let bufreader = BufReader::new(file_h);
+            self.data_readers.push(bufreader);
         }
         // 初始化每个 shard 的读取索引
         self.shard_read_indices = vec![0; self.curr_shard_idx];
@@ -1672,12 +1617,10 @@ impl TmpOutputManager {
         // init the heap - 将每个 shard 的第一个元素加入堆
         for shard_idx in 0..self.curr_shard_idx {
             if !self.shards_offsets_vec[shard_idx].is_empty() {
-                let (orig_idx, offset, length) = self.shards_offsets_vec[shard_idx][0];
+                let orig_idx = self.shards_offsets_vec[shard_idx][0];
                 self.heap.push(Reverse(HeapEntry {
                     orig_idx,
                     shard_idx,
-                    offset,
-                    length,
                 }));
             }
         }
@@ -1706,41 +1649,43 @@ impl TmpOutputManager {
     }
 }
 
-impl Iterator for TmpOutputManager {
-    type Item = TxAbundance;
+impl<'a> Iterator for TmpOutputManager {
+    type Item = TxAbundanceView;
 
     fn next(&mut self) -> Option<Self::Item> {
         // 从堆中取出最小的元素
         let Reverse(entry) = self.heap.pop()?;
 
-        let HeapEntry {
-            shard_idx,
-            offset,
-            length,
-            ..
-        } = entry;
+        let HeapEntry { shard_idx, .. } = entry;
 
-        let mmap = &self.data_readers[shard_idx];
-        let start = offset as usize;
-        let end = start + length as usize;
-        let data = &mmap[start..end];
-        let tx_abd = TxAbundance::decode(data);
+        let bufreader = &mut self.data_readers[shard_idx];
+        // let mut data_length = vec![0u8; 8]; // u64
+        self.data_length.fill(0);
+        bufreader
+            .read_exact(&mut self.data_length)
+            .expect("Can't read length of tx_abd_view record");
+
+        self.data_record
+            .resize(u64::from_le_bytes(self.data_length) as usize, 0u8);
+        bufreader
+            .read_exact(&mut self.data_record)
+            .expect("Can not read tx_abd_view record");
+
+        let tx_abd_view =
+            TxAbundanceView::from_bytes(&self.data_record).expect("Can't read TxabundanceView");
 
         self.shard_read_indices[shard_idx] += 1;
         let next_idx = self.shard_read_indices[shard_idx];
 
         if next_idx < self.shards_offsets_vec[shard_idx].len() {
-            let (next_orig_idx, next_offset, next_length) =
-                self.shards_offsets_vec[shard_idx][next_idx];
+            let next_orig_idx = self.shards_offsets_vec[shard_idx][next_idx];
             self.heap.push(Reverse(HeapEntry {
                 orig_idx: next_orig_idx,
                 shard_idx,
-                offset: next_offset,
-                length: next_length,
             }));
         }
 
-        Some(tx_abd)
+        Some(tx_abd_view)
     }
 }
 
@@ -1748,8 +1693,8 @@ impl Iterator for TmpOutputManager {
 pub struct HeapEntry {
     orig_idx: OrigIdx,
     shard_idx: usize,
-    offset: Offset,
-    length: Length,
+    // offset: Offset,
+    // length: Length,
 }
 
 impl Ord for HeapEntry {

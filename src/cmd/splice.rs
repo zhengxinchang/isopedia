@@ -6,7 +6,7 @@ use crate::myio::{self, DBInfos, Line};
 use crate::results::TableOutput;
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
-use clap::{arg, Parser};
+use clap::Parser;
 use log::{error, info, warn};
 use serde::Serialize;
 use std::path::PathBuf;

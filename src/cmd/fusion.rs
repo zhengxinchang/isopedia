@@ -20,7 +20,7 @@ use crate::{
     utils,
 };
 use anyhow::{anyhow, Context, Result};
-use clap::{command, Parser};
+use clap::Parser;
 
 use log::{error, info, warn};
 use noodles_gtf::io::Reader as gtfReader;
