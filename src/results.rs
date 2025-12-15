@@ -13,7 +13,7 @@ pub struct TableOutput {
     db_infos: DBInfos,
     pub meta: Meta,
     lines: Vec<Line>,
-    format_str: String,
+    pub format_str: String,
     writer: Option<MyGzWriter>,
 }
 
@@ -153,6 +153,14 @@ impl TableOutput {
     pub fn write_bytes(&mut self, bytes: &[u8]) -> Result<()> {
         if let Some(w) = &mut self.writer {
             w.write_all_bytes(bytes)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn write_format_str(&mut self) -> Result<()> {
+        if let Some(w) = &mut self.writer {
+            w.write_all_bytes(self.format_str.as_bytes())?;
         }
 
         Ok(())

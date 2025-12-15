@@ -278,8 +278,6 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             );
 
             // init the output file
-            // let mut merged_file_name_pre = PathBuf::from(MERGED_FILE_NAME);
-            // merged_file_name_pre.set_extension("tmp");
 
             let mut isoform_archive_writer = IsoformArchiveWriter::create(
                 &isoform_archive_base.with_extension(format!("chunk{}", chunks)),

@@ -149,11 +149,6 @@ impl ChromGroupedTxManager {
                 tmp_tx_manager.dump_grouped_tx(grouped_tx);
             }
 
-            // for grouped_tx in chunk.iter_mut() {
-            //     grouped_tx.tx_abundances.clear();
-            //     grouped_tx.tx_abundances.shrink_to_fit();
-            // }
-
             let duration = start.elapsed();
 
             debug!(
@@ -441,7 +436,6 @@ impl GroupedTx {
         for msjc in self.msjcs.iter_mut() {
             msjc.prepare_em(self.tx_abundances.len());
             assert!(msjc.nonzero_count() > 0);
-            // debug!("msjc positive samples: {}", msjc.nonzero_count());
         }
 
         for txabd in self.tx_abundances.iter_mut() {
@@ -511,7 +505,6 @@ impl GroupedTx {
             );
         }
 
-        // dbg!(&self.tx_abundances);
     }
 }
 
@@ -520,7 +513,6 @@ pub fn quick_find_partial_msjc_exclude_read_st_end<'a>(
     b: &'a Vec<MergedIsoformOffsetPtr>,
     collection: &mut HashMap<u64, &'a MergedIsoformOffsetPtr>,
 ) {
-    // let mut res: Vec<MergedIsoformOffsetPtr> = Vec::new();
 
     let mut i = 0;
     let mut j = 0;
@@ -731,15 +723,13 @@ impl TxAbundance {
             if !self.is_all_sj_covered(cli) {
                 // dont need em
                 self.is_need_em = false;
-                // set abundance to zero?
+
                 unsafe {
                     std::ptr::write_bytes(self.abundance_cur.as_mut_ptr(), 0, self.sample_size);
                 }
             } else {
                 for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
-                    //             info!(
-                    //     "xsafe 6"
-                    // );
+
                     let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
                     for &sid in msjc.nonzero_sample_indices.iter() {
                         let byte_idx = sid / 8;
@@ -775,9 +765,7 @@ impl TxAbundance {
         }
 
         let sample_size = self.sample_size;
-        //         info!(
-        //     "xsafe 3"
-        // );
+
         unsafe {
             for sid in 0..sample_size {
                 *self.abundance_prev.get_unchecked_mut(sid) =
@@ -835,10 +823,6 @@ impl TxAbundance {
 
         // only check the alive samples
         let mut is_converged = true;
-        // debug!(
-        //     "Checking convergence for TxAbundance id {}, tx_id {:?}, alive samples bitmap: {:?}",
-        //     self.id, self.orig_tx_id, self.alive_samples_bitmap
-        // );
         for sid in 0..self.sample_size {
             let byte_idx = sid / 8;
             let bit_idx = sid % 8;
@@ -1043,13 +1027,17 @@ impl TxAbundanceView {
         tableout.write_bytes(format!("{}/{}", positive_samples, dbinfo.get_size()).as_bytes())?;
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(&self.orig_attrs)?;
+        tableout.write_bytes(b"\t")?;
+        // let format_str = tableout.format_str.clone();
+        // tableout.write_bytes(format_str.as_bytes())?;
+        tableout.write_format_str()?;
         for sid in 0..dbinfo.get_size() {
             let fsm = self.fsm_abundance[sid];
             let em = match self.em_abundance[sid] >= cli.min_em_abundance {
                 true => self.em_abundance[sid],
                 false => 0.0,
             };
-            // let em = self.abundance_cur[sid];
+
             let total_abd = fsm + em;
             let total_cov = global_stats.fsm_em_total[sid];
 
@@ -1057,18 +1045,6 @@ impl TxAbundanceView {
             let em_cpm = utils::calc_cpm_f32(&em, &total_cov);
             let total_cpm = utils::calc_cpm_f32(&total_abd, &total_cov);
 
-            // let mut s: String = String::new();
-            // s.push_str(&total_cpm.to_string());
-            // s.push(':');
-            // s.push_str(&total_abd.to_string());
-            // s.push(':');
-            // s.push_str(&fsm_cpm.to_string());
-            // s.push(':');
-            // s.push_str(&fsm.to_string());
-            // s.push(':');
-            // s.push_str(&em_cpm.to_string());
-            // s.push(':');
-            // s.push_str(&em.to_string());
             tableout.write_bytes(b"\t")?;
             tableout.write_bytes(total_cpm.to_string().as_bytes())?;
             tableout.write_bytes(b":")?;
@@ -1081,10 +1057,7 @@ impl TxAbundanceView {
             tableout.write_bytes(em_cpm.to_string().as_bytes())?;
             tableout.write_bytes(b":")?;
             tableout.write_bytes(em.to_string().as_bytes())?;
-            // let sample = SampleChip::new(Some(dbinfo.get_sample_names()[sid].clone()), s);
-            // tableout.write_bytes(dbinfo.get_sample_names()[sid].as_bytes())?;
 
-            // tableout.write_bytes(s.as_bytes())?;
         }
         tableout.write_bytes(b"\n")?;
         Ok(())
@@ -1234,20 +1207,13 @@ impl MSJC {
     fn e_step(&mut self, txabds: &Vec<TxAbundance>) {
         let k = self.nonzero_sample_indices.len();
         let txabds_slice = txabds.as_slice();
-        //         info!(
-        //     "xsafe 4"
-        // );
         unsafe {
-            // info!("step1");
             for i in 0..k {
                 *self.totals_buffer.get_unchecked_mut(i) = 0.0;
             }
 
-            // info!("step2");
             for &txid in self.txids.iter() {
-                // info!("step2 txid={}", txid);
                 let txabd = txabds_slice.get_unchecked(txid);
-                // let txabd = txabds.get(txid).unwrap();
 
                 if txabd.is_need_em == false {
                     continue;
@@ -1255,7 +1221,6 @@ impl MSJC {
 
                 let inv_pt = txabd.inv_pt;
                 let abd_slice = txabd.abundance_cur.as_slice();
-                // info!("step2 abd_slice len={}", abd_slice.len());
 
                 let mut i = 0;
                 let end = k & !3;
@@ -1269,12 +1234,6 @@ impl MSJC {
 
                     let sid3 = *self.nonzero_sample_indices.get_unchecked(i + 3);
 
-                    // debug but change to get()
-                    // let sid0 = *self.nonzero_sample_indices.get(i).unwrap();
-                    // let sid1 = *self.nonzero_sample_indices.get(i + 1).unwrap();
-                    // let sid2 = *self.nonzero_sample_indices.get(i + 2).unwrap();
-                    // let sid3 = *self.nonzero_sample_indices.get(i + 3).unwrap();
-
                     *self.totals_buffer.get_unchecked_mut(i) +=
                         *abd_slice.get_unchecked(sid0) * inv_pt;
 
@@ -1286,15 +1245,6 @@ impl MSJC {
 
                     *self.totals_buffer.get_unchecked_mut(i + 3) +=
                         *abd_slice.get_unchecked(sid3) * inv_pt;
-
-                    // *self.totals_buffer.get_mut(i).unwrap() +=
-                    //     *abd_slice.get(sid0).unwrap() * inv_pt;
-                    // *self.totals_buffer.get_mut(i + 1).unwrap() +=
-                    //     *abd_slice.get(sid1).unwrap() * inv_pt;
-                    // *self.totals_buffer.get_mut(i + 2).unwrap() +=
-                    //     *abd_slice.get(sid2).unwrap() * inv_pt;
-                    // *self.totals_buffer.get_mut(i + 3).unwrap() +=
-                    //     *abd_slice.get(sid3).unwrap() * inv_pt;
 
                     i += 4;
                 }
@@ -1645,11 +1595,12 @@ impl TmpOutputManager {
                 );
             }
         }
+        
         Ok(())
     }
 }
 
-impl<'a> Iterator for TmpOutputManager {
+impl Iterator for TmpOutputManager {
     type Item = TxAbundanceView;
 
     fn next(&mut self) -> Option<Self::Item> {

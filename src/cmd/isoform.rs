@@ -161,8 +161,6 @@ fn greetings(args: &AnnIsoCli) {
 }
 
 pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
-    // env::set_var("RUST_LOG", "info");
-    // env_logger::init();
 
     greetings(&cli);
     cli.validate();
@@ -180,7 +178,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     let gtfreader = open_gtf_reader(cli.gtf.to_str().unwrap())?;
 
     let mut gtf = TranscriptChunker::new(gtfreader);
-    // let gtf_vec = gtf.get_all_transcripts_vec();
 
     let gtf_by_chrom = gtf.get_all_transcripts_by_chrom();
 
@@ -301,10 +298,12 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         }
     }
     info!("Writing final output table");
-    tableout.finish()?;
+    
 
     info!("Cleaning up temporary files");
     tmp_tx_manger.clean_up()?;
+
+    tableout.finish()?;
 
     info!("Finished!");
     Ok(())
