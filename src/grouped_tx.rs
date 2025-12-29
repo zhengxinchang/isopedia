@@ -14,6 +14,7 @@ use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
 use rayon::prelude::*;
+use rust_htslib::htslib::hts_verbose;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -22,6 +23,7 @@ use std::{
     fs::File,
     io::{BufReader, BufWriter, Read, Write},
     path::PathBuf,
+    rc::Rc,
 };
 pub struct ChromGroupedTxManager {
     pub chrom: String,
@@ -103,22 +105,59 @@ impl ChromGroupedTxManager {
 
                 let queries = grouped_tx.get_quieries(&self.chrom);
 
+                if cli.verbose {
+                    info!("queries (len={}): {:?}", queries.len(), &queries);
+                }
+
                 let mut all_res = bpforest.all_candidate_match_search_flank(
                     &queries,
                     cli.flank,
                     cli.cached_nodes,
                 );
 
+                if cli.verbose {
+                    let mut total_res_count = 0;
+                    for x in all_res.iter() {
+                        total_res_count += x.len();
+                    }
+                    info!("total returns ptr: {}", total_res_count);
+                }
+
                 for res_vec in all_res.iter_mut() {
                     res_vec.sort_by_key(|x| x.offset);
                 }
 
-                let all_res_mono_exonic = bpforest.search_mono_exons(
+                let mono_queries = grouped_tx.get_quieries_mono_exon();
+
+                if cli.verbose {
+                    info!(
+                        "mono exon queries (len={}): {:?}",
+                        mono_queries.len(),
+                        &mono_queries
+                    );
+                }
+
+                // let all_res_mono_exonic = bpforest.search_mono_exons(
+                //     &self.chrom,
+                //     &mono_queries,
+                //     cli.flank,
+                //     cli.cached_nodes,
+                // );
+                let all_res_mono_exonic = bpforest.search_mono_exons_rc_ptr(
                     &self.chrom,
-                    &grouped_tx.get_quieries_mono_exon(),
+                    &mono_queries,
                     cli.flank,
                     cli.cached_nodes,
+                    &cli,
                 );
+
+                if cli.verbose {
+                    let mut total_res_count = 0;
+                    for x in all_res_mono_exonic.iter() {
+                        total_res_count += x.len();
+                    }
+                    info!("total mono-exon returns ptr: {}", total_res_count);
+                }
 
                 match &all_res_mono_exonic {
                     Some(res) => {
@@ -264,11 +303,15 @@ impl GroupedTx {
     pub fn update_results(
         &mut self,
         all_res: &Vec<Vec<MergedIsoformOffsetPtr>>,
-        all_res_mono_exonic: &Vec<Vec<MergedIsoformOffsetPtr>>,
+        all_res_mono_exonic: &Vec<Vec<Rc<MergedIsoformOffsetPtr>>>,
         archive_cache: &mut ArchiveCache,
         dbinfo: &DatasetInfo,
         cli: &AnnIsoCli,
     ) {
+        if cli.verbose {
+            info!("updating searched results...")
+        }
+
         if all_res.len() != self.positions.len() {
             panic!("Number of results does not match number of positions");
         }
@@ -281,16 +324,18 @@ impl GroupedTx {
 
         if cli.verbose {
             info!(
-                "Updating results for grouped tx with {} transcripts and {} positions",
+                "Updating results for grouped tx with {} transcripts, {} positions for multi-exon tx, {} positions for mono-exon tx, total MSJC {}",
                 self.tx_abundances.len(),
-                self.positions.len()
+                self.positions.len(),
+                self.positions_mono_exonic.len(),
+                self.msjcs.len()
             );
         }
 
         // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
         let mut local_mono_exonic_idx = 0;
         for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
-            // mono exonic need special query
+            // mono exonic need a special process
             if tx_abd.is_mono_exonic {
                 let res_vec = &all_res_mono_exonic[local_mono_exonic_idx];
 
@@ -429,9 +474,16 @@ impl GroupedTx {
         }
 
         // self.msjcs = msjc_map_global;
+        if cli.verbose {
+            info!("update results... finished.")
+        }
     }
 
     pub fn prepare_em(&mut self, cli: &AnnIsoCli) {
+        if cli.verbose {
+            info!("preparing em...")
+        }
+
         for msjc in self.msjcs.iter_mut() {
             msjc.prepare_em(self.tx_abundances.len());
             assert!(msjc.nonzero_count() > 0);
@@ -444,6 +496,10 @@ impl GroupedTx {
         // clean up the position_tx_abd_map to save memory
         self.position_tx_abd_map.clear();
         self.position_tx_abd_map.shrink_to_fit();
+
+        if cli.verbose {
+            info!("preparing em... finished")
+        }
     }
 
     pub fn em(&mut self, cli: &AnnIsoCli) {
@@ -1136,6 +1192,7 @@ impl MSJC {
         self.totals_buffer = vec![0.0; k];
     }
 
+    /// check if current MSJC is a FSM for given Tx
     pub fn check_mono_exon_fsm(&self, txabd: &TxAbundance, cli: &AnnIsoCli) -> bool {
         if self.splice_junctions_vec.is_empty() {
             return false;
@@ -1367,9 +1424,13 @@ impl MSJC {
     }
 }
 
+// pub struct MJSCCache{
+//     msjc_cache:Vec<MSJC>,
+//     cache_size:u32,
+//     cache_fh:
+// }
+
 type OrigIdx = u32;
-// type Offset = u64;
-// type Length = u64;
 
 /// write to temporary output manager with sharding,
 /// two files will be generated, one is the data file, another is the index file

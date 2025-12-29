@@ -123,11 +123,20 @@ tbench13:build
 	 -o test/test.em.chr13.output.gz 
 
 tpb:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd2/isopedia_wk/isopedia_index  -c 10\
+	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index  -c 10\
 	 -g test/gencode49_and_chess313_classcodeU.sorted.gtf \
 	 -o test/test.em.output.tpb.gz
 
+tpbchrm:build
+	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
+	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF  \
+	 -o test/test.em.output.tpb.chrm.gz --verbose
 
+tpbhg002chrm:build
+	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
+	 -o test/test.em.output.tpb.chrm.gz --verbose -g ./test/pbhg002.chrm.gtf
+
+	# -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.chrM.gtf \
 tsamd:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g test/lrgasp_sim_ont.SAMD11.gtf  \

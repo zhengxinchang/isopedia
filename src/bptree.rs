@@ -1,5 +1,6 @@
 /// B+ tree implementation for genomic data indexing
 use crate::chromosome::ChromMapping;
+use crate::cmd::isoform::AnnIsoCli;
 use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
 use crate::tmpidx::MergedIsoformOffsetGroup;
@@ -9,19 +10,25 @@ use crate::tmpidx::Tmpindex;
 use crate::utils::intersect_sorted;
 use crate::utils::GetMemSize;
 use ahash::HashSet;
+use ahash::HashSetExt;
 use anyhow::Result;
+use log::info;
 // use itertools::Itertools;
 use lru::LruCache;
-use nix::libc::OPEN_TREE_CLOEXEC;
+
+use rayon::result;
 // use memmap2::Mmap;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
 use std::num::NonZeroUsize;
 use std::os::unix::fs::FileExt;
+use std::os::unix::process;
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::{
     fs::File,
@@ -1154,6 +1161,122 @@ impl BPForest {
         }
         Some(results)
     }
+
+    /// search mono-exon quries, but returns
+    /// ```
+    /// Option<
+    ///     Vec<Vec<Rc<MergedIsoformOffsetPtr>>>
+    /// >
+    /// ```
+    ///
+    pub fn search_mono_exons_rc_ptr(
+        &mut self,
+        chrom: &str,
+        positions: &Vec<(u64, u64)>,
+        flank: u64,
+        lru_size: usize,
+        cli: &AnnIsoCli,
+    ) -> Option<Vec<Vec<Rc<MergedIsoformOffsetPtr>>>> {
+        let tree_id = &self.chrom_mapping.get_chrom_idx(chrom);
+        let tree_id = match tree_id {
+            Some(x) => x,
+            None => return None,
+        };
+
+        let tree = match self.trees_by_chrom.get_mut(tree_id) {
+            Some(t) => t,
+            None => {
+                // load the tree
+                self.trees_by_chrom.clear();
+                self.trees_by_chrom.shrink_to_fit();
+                self.trees_by_chrom.insert(
+                    self.chrom_mapping
+                        .get_chrom_idx(chrom)
+                        .expect("Error getting chrom id"),
+                    BPTree::from_disk(
+                        &self.index_dir,
+                        self.chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                        lru_size,
+                    ),
+                );
+                self.trees_by_chrom
+                    .get_mut(
+                        &self
+                            .chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                    )
+                    .expect("Error getting tree")
+            }
+        };
+
+        let mut results = Vec::new();
+        let mut map: std::collections::HashMap<
+            u64,
+            Rc<MergedIsoformOffsetPtr>,
+            rustc_hash::FxBuildHasher,
+        > = FxHashMap::default();
+
+        let mut processed = 0;
+
+        for (start, end) in positions {
+            let mut res =
+                tree.search_start_end(start.saturating_sub(flank), end.saturating_add(flank));
+
+            res.sort_unstable();
+            res.dedup();
+            res.retain(|s| s.n_splice_sites > 0);
+
+            let mut res2: Vec<Rc<MergedIsoformOffsetPtr>> = Vec::new();
+
+            // {
+            //     for ptr in res {
+            //         let found = map.contains_key(&ptr.offset);
+            //         if !found {
+            //             map.insert(ptr.offset, Rc::new(ptr));
+            //         };
+            //     }
+            // }
+
+            // for ptr in res {
+            //     res2.push(map.get(&ptr.offset).unwrap());
+            // }
+
+            for ptr in res {
+                let found = map.contains_key(&ptr.offset);
+                let offset = ptr.offset;
+
+                if found {
+                    // map.insert(offset, c.clone());
+                    res2.push(map.get(&offset).unwrap().clone())
+                } else {
+                    let c = Rc::new(ptr);
+                    res2.push(c.clone());
+                    map.insert(offset, c);
+                };
+            }
+
+            results.push(res2.clone());
+
+            processed += 1;
+            if cli.verbose {
+                info!("searched and processed {} mono exon quries", processed);
+            }
+        }
+        Some(results)
+    }
+}
+
+/// Iterator for mono exon search results
+/// instead of return all Vec<Vec<Ptr>>, this is a itertor,
+/// Especially designed for a chrM iosforms that has a bunch of mono-exon isoform quries that overlap wtih each other.
+pub struct MonoExonSearchIter<'a> {
+    tree: &'a mut BPTree,
+    positions: std::vec::IntoIter<(u64, u64)>,
+    flank: u64,
+    position_idx: usize,
 }
 
 /// find the common elements in the vecs, if one element
