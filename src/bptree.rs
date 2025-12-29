@@ -12,7 +12,6 @@ use ahash::HashSet;
 use anyhow::Result;
 // use itertools::Itertools;
 use lru::LruCache;
-use nix::libc::OPEN_TREE_CLOEXEC;
 // use memmap2::Mmap;
 use rustc_hash::FxHashMap;
 use std;
