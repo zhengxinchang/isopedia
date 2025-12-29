@@ -122,10 +122,10 @@ tbench13:build
 	 -g test/bench_chr13.gtf  \
 	 -o test/test.em.chr13.output.gz 
 
-tchrm:build
+tpb:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd2/isopedia_wk/isopedia_index  -c 10\
-	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF \
-	 -o test/test.em.output2.gz
+	 -g test/gencode49_and_chess313_classcodeU.sorted.gtf \
+	 -o test/test.em.output.tpb.gz
 
 
 tsamd:build

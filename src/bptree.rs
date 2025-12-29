@@ -12,6 +12,7 @@ use ahash::HashSet;
 use anyhow::Result;
 // use itertools::Itertools;
 use lru::LruCache;
+use nix::libc::OPEN_TREE_CLOEXEC;
 // use memmap2::Mmap;
 use rustc_hash::FxHashMap;
 use std;
@@ -1105,13 +1106,14 @@ impl BPForest {
         positions: &Vec<(u64, u64)>,
         flank: u64,
         lru_size: usize,
-    ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
-        let tree = match self.trees_by_chrom.get_mut(
-            &self
-                .chrom_mapping
-                .get_chrom_idx(chrom)
-                .expect("search_mono_exons: Can not find chrom id"),
-        ) {
+    ) -> Option<Vec<Vec<MergedIsoformOffsetPtr>>> {
+        let tree_id = &self.chrom_mapping.get_chrom_idx(chrom);
+        let tree_id = match tree_id {
+            Some(x) => x,
+            None => return None,
+        };
+
+        let tree = match self.trees_by_chrom.get_mut(tree_id) {
             Some(t) => t,
             None => {
                 // load the tree
@@ -1150,7 +1152,7 @@ impl BPForest {
             res.retain(|s| s.n_splice_sites > 0);
             results.push(res);
         }
-        results
+        Some(results)
     }
 }
 

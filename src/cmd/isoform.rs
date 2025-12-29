@@ -161,7 +161,6 @@ fn greetings(args: &AnnIsoCli) {
 }
 
 pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
-
     greetings(&cli);
     cli.validate();
 
@@ -298,7 +297,6 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         }
     }
     info!("Writing final output table");
-    
 
     info!("Cleaning up temporary files");
     tmp_tx_manger.clean_up()?;

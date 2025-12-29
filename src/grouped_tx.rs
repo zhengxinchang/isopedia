@@ -120,15 +120,14 @@ impl ChromGroupedTxManager {
                     cli.cached_nodes,
                 );
 
+                match &all_res_mono_exonic {
+                    Some(res) => {
+                        grouped_tx.update_results(&all_res, &res, archive_cache, dbinfo, cli);
+                    }
+                    None => {}
+                }
                 // info!("{:?}",all_res_mono_exonic);
 
-                grouped_tx.update_results(
-                    &all_res,
-                    &all_res_mono_exonic,
-                    archive_cache,
-                    dbinfo,
-                    cli,
-                );
                 drop(all_res);
                 drop(all_res_mono_exonic);
 
@@ -504,7 +503,6 @@ impl GroupedTx {
                 duration
             );
         }
-
     }
 }
 
@@ -513,7 +511,6 @@ pub fn quick_find_partial_msjc_exclude_read_st_end<'a>(
     b: &'a Vec<MergedIsoformOffsetPtr>,
     collection: &mut HashMap<u64, &'a MergedIsoformOffsetPtr>,
 ) {
-
     let mut i = 0;
     let mut j = 0;
 
@@ -729,7 +726,6 @@ impl TxAbundance {
                 }
             } else {
                 for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
-
                     let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
                     for &sid in msjc.nonzero_sample_indices.iter() {
                         let byte_idx = sid / 8;
@@ -1057,7 +1053,6 @@ impl TxAbundanceView {
             tableout.write_bytes(em_cpm.to_string().as_bytes())?;
             tableout.write_bytes(b":")?;
             tableout.write_bytes(em.to_string().as_bytes())?;
-
         }
         tableout.write_bytes(b"\n")?;
         Ok(())
@@ -1595,7 +1590,7 @@ impl TmpOutputManager {
                 );
             }
         }
-        
+
         Ok(())
     }
 }
