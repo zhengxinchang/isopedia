@@ -1,5 +1,6 @@
 /// B+ tree implementation for genomic data indexing
 use crate::chromosome::ChromMapping;
+use crate::cmd::isoform::AnnIsoCli;
 use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
 use crate::tmpidx::MergedIsoformOffsetGroup;
@@ -9,18 +10,24 @@ use crate::tmpidx::Tmpindex;
 use crate::utils::intersect_sorted;
 use crate::utils::GetMemSize;
 use ahash::HashSet;
+// use ahash::HashSetExt;
 use anyhow::Result;
+use log::info;
 // use itertools::Itertools;
 use lru::LruCache;
 // use memmap2::Mmap;
 use rustc_hash::FxHashMap;
+// use rustc_hash::FxHashSet;
 use std;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
 use std::num::NonZeroUsize;
 use std::os::unix::fs::FileExt;
+// use std::os::unix::process;
+use crate::utils::partition_intervals;
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::{
     fs::File,
@@ -1152,6 +1159,186 @@ impl BPForest {
             results.push(res);
         }
         Some(results)
+    }
+
+    pub fn search_mono_exons_rc_ptr(
+        &mut self,
+        chrom: &str,
+        positions: &Vec<(u64, u64)>,
+        flank: u64,
+        lru_size: usize,
+        cli: &AnnIsoCli,
+    ) -> Option<Vec<Vec<Rc<MergedIsoformOffsetPtr>>>> {
+        let tree_id = &self.chrom_mapping.get_chrom_idx(chrom);
+        let tree_id = match tree_id {
+            Some(x) => x,
+            None => return None,
+        };
+
+        let tree = match self.trees_by_chrom.get_mut(tree_id) {
+            Some(t) => t,
+            None => {
+                // load the tree
+                self.trees_by_chrom.clear();
+                self.trees_by_chrom.shrink_to_fit();
+                self.trees_by_chrom.insert(
+                    self.chrom_mapping
+                        .get_chrom_idx(chrom)
+                        .expect("Error getting chrom id"),
+                    BPTree::from_disk(
+                        &self.index_dir,
+                        self.chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                        lru_size,
+                    ),
+                );
+                self.trees_by_chrom
+                    .get_mut(
+                        &self
+                            .chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                    )
+                    .expect("Error getting tree")
+            }
+        };
+
+        let mut results = Vec::new();
+        let mut map: std::collections::HashMap<
+            u64,
+            Rc<MergedIsoformOffsetPtr>,
+            rustc_hash::FxBuildHasher,
+        > = FxHashMap::default();
+
+        let mut processed = 0;
+
+        for (start, end) in positions {
+            let mut res =
+                tree.search_start_end(start.saturating_sub(flank), end.saturating_add(flank));
+
+            res.sort_unstable();
+            res.dedup();
+            res.retain(|s| s.n_splice_sites > 0);
+
+            let mut res2: Vec<Rc<MergedIsoformOffsetPtr>> = Vec::new();
+
+            for ptr in res {
+                let found = map.contains_key(&ptr.offset);
+                let offset = ptr.offset;
+
+                if found {
+                    // map.insert(offset, c.clone());
+                    res2.push(map.get(&offset).unwrap().clone())
+                } else {
+                    let c = Rc::new(ptr);
+                    res2.push(c.clone());
+                    map.insert(offset, c);
+                };
+            }
+
+            results.push(res2.clone());
+
+            processed += 1;
+            if cli.verbose {
+                info!("searched and processed {} mono exon quries", processed);
+            }
+        }
+        Some(results)
+    }
+
+    /// partition the mono exon search by the positions and the mono exon transcript indices
+    /// return the segmented search results
+    /// Note that the MergedIsoformOffsetPtr in the ptrs field may contain isoform reads that not mono-exon.
+    /// Further filteratoin may be needed
+    pub fn search_mono_exons_partition(
+        &mut self,
+        chrom: &str,
+        positions: &Vec<(u64, u64)>,
+        mono_exon_tx_indices: &Vec<usize>, // the indices of the mono exon transcripts in the Grouped_tx
+        flank: u64,
+        lru_size: usize,
+        cli: &AnnIsoCli,
+    ) -> Option<Vec<SegmentedMonoExonSearchResult>> // return the start, end, mono_exon_tx_indices, ptrs
+    {
+        let partitions = partition_intervals(positions, mono_exon_tx_indices);
+
+        let tree_id = &self.chrom_mapping.get_chrom_idx(chrom);
+        let tree_id = match tree_id {
+            Some(x) => x,
+            None => return None,
+        };
+
+        let tree = match self.trees_by_chrom.get_mut(tree_id) {
+            Some(t) => t,
+            None => {
+                // load the tree
+                self.trees_by_chrom.clear();
+                self.trees_by_chrom.shrink_to_fit();
+                self.trees_by_chrom.insert(
+                    self.chrom_mapping
+                        .get_chrom_idx(chrom)
+                        .expect("Error getting chrom id"),
+                    BPTree::from_disk(
+                        &self.index_dir,
+                        self.chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                        lru_size,
+                    ),
+                );
+                self.trees_by_chrom
+                    .get_mut(
+                        &self
+                            .chrom_mapping
+                            .get_chrom_idx(chrom)
+                            .expect("Error getting chrom id"),
+                    )
+                    .expect("Error getting tree")
+            }
+        };
+
+        let mut out = Vec::new();
+        let mut cnt = 0;
+        for part in partitions {
+            let mut res =
+                tree.search_start_end(part.0.saturating_sub(flank), part.1.saturating_add(flank));
+
+            res.sort_unstable();
+            res.dedup();
+            res.retain(|s| s.n_splice_sites > 0);
+
+            let mut segmented_result = SegmentedMonoExonSearchResult::from_partition(&part);
+            segmented_result.add_records(res);
+            out.push(segmented_result);
+            cnt += 1;
+            if cli.verbose {
+                info!("searched and processed {} mono exon partitions, with {} associated transcripts", cnt, part.2.len());
+            }
+        }
+
+        Some(out)
+    }
+}
+
+pub struct SegmentedMonoExonSearchResult {
+    pub start: u64,
+    pub end: u64,
+    pub ptrs: Vec<MergedIsoformOffsetPtr>,
+    pub mono_exon_tx_indices: Vec<usize>,
+}
+
+impl SegmentedMonoExonSearchResult {
+    pub fn from_partition(par: &(u64, u64, Vec<usize>)) -> Self {
+        SegmentedMonoExonSearchResult {
+            start: par.0,
+            end: par.1,
+            ptrs: Vec::new(),
+            mono_exon_tx_indices: par.2.clone(),
+        }
+    }
+    pub fn add_records(&mut self, new_ptrs: Vec<MergedIsoformOffsetPtr>) {
+        self.ptrs.extend(new_ptrs);
     }
 }
 

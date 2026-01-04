@@ -3,7 +3,7 @@ use anyhow::Result;
 use log::error;
 use std::fs;
 use std::path::PathBuf;
-use std::{fs::File, hash::Hash, io::Read, path::Path};
+use std::{fs::File, hash::Hash, path::Path};
 
 use crate::constants::*;
 
@@ -74,30 +74,6 @@ pub fn calc_cpm_f32(val_f32: &f32, total_f32: &f32) -> f64 {
     }
 
     (*val_f32 as f64 / *total_f32 as f64) * 1_000_000.0
-}
-
-/// Warming up the archive file by reading a portion of the file.
-/// Current function only read the first max_bytes, but can be improved by
-/// reading the file with imputation strategies
-pub fn warmup(path: &Path, max_bytes: usize) -> Result<()> {
-    if max_bytes == 0 {
-        return Ok(());
-    }
-
-    let mut f = File::open(path)?;
-    // let file_size = get_file_size(path)?;
-
-    let mut buf = [0u8; 8 * 1024];
-    let mut total_read = 0usize;
-
-    while total_read < max_bytes {
-        let n = f.read(&mut buf)?;
-        if n == 0 {
-            break; // EOF
-        }
-        total_read += n;
-    }
-    Ok(())
 }
 
 pub fn get_total_memory_bytes() -> Option<u64> {
@@ -436,4 +412,86 @@ pub fn intersect_sorted<T: Ord + Clone>(a: &[T], b: &[T]) -> Vec<T> {
 
 pub trait GetMemSize {
     fn get_mem_size(&self) -> usize;
+}
+
+pub type IntvSegment = (u64, u64, Vec<usize>);
+pub type IntvEvent = (u64, bool, usize); // bool: true for start, false for end
+
+/// Partition intervals into segments based on overlapping intervals.
+/// # Arguments
+/// * `intervals` - A vector of tuples representing the intervals (start, end).
+/// * `mono_exon_tx_indices` - A vector mapping interval indices to mono exon transcript
+/// indices.
+/// # Returns
+/// A vector of segments, each represented as a tuple (start, end, mono_exon_tx_indices).
+/// Each segment contains the start and end positions, along with the list of mono exon
+/// transcript indices that overlap with that segment.
+pub fn partition_intervals(
+    intervals: &Vec<(u64, u64)>,
+    mono_exon_tx_indices: &Vec<usize>,
+) -> Vec<IntvSegment> {
+    let mut events: Vec<IntvEvent> = Vec::new();
+    for (i, &(start, end)) in intervals.iter().enumerate() {
+        events.push((start, true, i)); // start event
+        events.push((end, false, i)); // end event
+    }
+
+    // Sort events by position, with start events before end events at the same position
+    events.sort_by(|a, b| {
+        if a.0 == b.0 {
+            b.1.cmp(&a.1) // start before end
+        } else {
+            a.0.cmp(&b.0)
+        }
+    });
+
+    let mut active_intervals: Vec<usize> = Vec::new();
+    let mut segments: Vec<IntvSegment> = Vec::new();
+    let mut prev_pos: Option<u64> = None;
+
+    for (pos, is_start, idx) in events {
+        if let Some(prev) = prev_pos {
+            if prev != pos && !active_intervals.is_empty() {
+                segments.push((prev, pos, active_intervals.clone()));
+            }
+        }
+
+        if is_start {
+            active_intervals.push(idx);
+        } else {
+            active_intervals.retain(|&x| x != idx);
+        }
+
+        prev_pos = Some(pos);
+    }
+
+    segments.iter_mut().for_each(|seg| {
+        let mut mono_indices: Vec<usize> = Vec::new();
+        for &interval_idx in &seg.2 {
+            mono_indices.push(mono_exon_tx_indices[interval_idx]);
+        }
+        seg.2 = mono_indices;
+    });
+
+    segments
+}
+
+#[cfg(test)]
+mod interval_tests {
+    use super::*;
+    #[test]
+    fn test_partition_intervals() {
+        let intervals = vec![(1, 5), (3, 7), (1, 10)];
+        let mono_exon_tx_indices = vec![0, 1, 2];
+        let segments = partition_intervals(&intervals, &mono_exon_tx_indices);
+        for seg in segments {
+            println!("{:?}", seg);
+        }
+        // Expected output:
+        // (1, 3, [0])
+        // (3, 5, [0, 1])
+        // (5, 6, [1])
+        // (6, 7, [1, 2])
+        // (7, 10, [2])
+    }
 }
