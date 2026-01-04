@@ -1,5 +1,5 @@
 use crate::{
-    bptree::BPForest,
+    bptree::{BPForest, SegmentedMonoExonSearchResult},
     cmd::isoform::AnnIsoCli,
     dataset_info::DatasetInfo,
     global_stats::GlobalStats,
@@ -14,7 +14,7 @@ use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
 use rayon::prelude::*;
-use rust_htslib::htslib::hts_verbose;
+// use rust_htslib::htslib::hts_verbose;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -143,9 +143,10 @@ impl ChromGroupedTxManager {
                 //     cli.flank,
                 //     cli.cached_nodes,
                 // );
-                let all_res_mono_exonic = bpforest.search_mono_exons_rc_ptr(
+                let all_res_mono_exonic = bpforest.search_mono_exons_partition(
                     &self.chrom,
                     &mono_queries,
+                    &grouped_tx.mono_exonic_tx_indices,
                     cli.flank,
                     cli.cached_nodes,
                     &cli,
@@ -204,6 +205,7 @@ pub struct GroupedTx {
     pub id: u32,
     pub positions: Vec<u64>, // deduped positions sort by genomic coordinate
     pub positions_mono_exonic: Vec<(u64, u64)>, //  positions for mono exonic transcripts
+    pub mono_exonic_tx_indices: Vec<usize>, // mono exon tx index in the tx_abundances
     pub position_tx_abd_map: FxHashMap<u64, usize>, // position -> tx_abundance ids
     pub tx_abundances: Vec<TxAbundance>,
     pub msjcs: Vec<MSJC>,
@@ -219,10 +221,12 @@ impl GroupedTx {
         let mut pos_set_mono_exonic = Vec::new();
 
         let mut tx_abundances = Vec::new();
+        let mut mono_exonic_tx_indices = Vec::new();
         for (i, tx) in txs.iter().enumerate() {
             if tx.is_mono_exonic {
                 // add logic for mono exonic transcripts
                 pos_set_mono_exonic.push((tx.start, tx.end));
+                mono_exonic_tx_indices.push(i);
             } else {
                 for sj in tx.get_splice_junction_pairs().iter() {
                     pos_set.insert(sj.0);
@@ -248,6 +252,7 @@ impl GroupedTx {
             positions,
             positions_mono_exonic: pos_set_mono_exonic,
             position_tx_abd_map: position_tx_abd_map,
+            mono_exonic_tx_indices: mono_exonic_tx_indices,
             tx_abundances: tx_abundances,
             msjcs: Vec::new(),
         }
@@ -303,6 +308,213 @@ impl GroupedTx {
     pub fn update_results(
         &mut self,
         all_res: &Vec<Vec<MergedIsoformOffsetPtr>>,
+        all_res_mono_exonic: &Vec<SegmentedMonoExonSearchResult>,
+        archive_cache: &mut ArchiveCache,
+        dbinfo: &DatasetInfo,
+        cli: &AnnIsoCli,
+    ) {
+        if cli.verbose {
+            info!("updating searched results...")
+        }
+
+        if all_res.len() != self.positions.len() {
+            panic!("Number of results does not match number of positions");
+        }
+
+        // if all_res_mono_exonic.len() != self.positions_mono_exonic.len() {
+        //     panic!("Number of mono exonic results does not match number of mono exonic positions");
+        // }
+
+        let mut msjc_map_global: HashMap<u64, usize> = HashMap::default();
+
+        if cli.verbose {
+            info!(
+                "Updating results for grouped tx with {} transcripts, {} positions for multi-exon tx, {} positions for mono-exon tx, total MSJC {}",
+                self.tx_abundances.len(),
+                self.positions.len(),
+                self.positions_mono_exonic.len(),
+                self.msjcs.len()
+            );
+        }
+
+        // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
+        // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
+        // however, the order of those idx in mono exonic results is the same as the order in tx_abundances
+        for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
+            // mono exonic need a special process
+            if !tx_abd.is_mono_exonic {
+                let mut fsm_misoforms_candidates: Vec<&Vec<MergedIsoformOffsetPtr>> = Vec::new();
+                // at least mapping with one sj to be considered as msjc
+                let mut partial_msjc_map: HashMap<u64, &MergedIsoformOffsetPtr> =
+                    HashMap::default();
+
+                for sj_pair in tx_abd.sj_pairs.iter() {
+                    let sj_start_idx = self
+                        .position_tx_abd_map
+                        .get(&sj_pair.0)
+                        .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.0));
+                    let sj_end_idx = self
+                        .position_tx_abd_map
+                        .get(&sj_pair.1)
+                        .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.1));
+
+                    fsm_misoforms_candidates.push(&all_res[*sj_start_idx]);
+                    fsm_misoforms_candidates.push(&all_res[*sj_end_idx]);
+                    quick_find_partial_msjc_exclude_read_st_end(
+                        &all_res[*sj_start_idx],
+                        &all_res[*sj_end_idx],
+                        &mut partial_msjc_map,
+                    );
+                }
+
+                let fsm_msjc_offsets = find_fsm(fsm_misoforms_candidates, tx_abd.sj_pairs.len());
+
+                // remove fsm offsets from msjc_map
+                for fsm in fsm_msjc_offsets.iter() {
+                    partial_msjc_map.remove(&fsm.offset);
+                }
+
+                if cli.verbose {
+                    info!(
+                        "Transcript {}: found {} FSM misoforms and {} MSJC misoforms",
+                        tx_idx,
+                        fsm_msjc_offsets.len(),
+                        partial_msjc_map.len()
+                    );
+                }
+
+                // add fsm misoforms
+                for fsm in fsm_msjc_offsets.into_iter() {
+                    let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
+
+                    tx_abd.add_fsm_evidence_count(&fsm_msjc_rec);
+                }
+
+                // add msjcs
+
+                for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
+                    let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
+                        msjc_idx
+                    } else {
+                        let msjc = MSJC::new(
+                            // offset,
+                            dbinfo.get_size(),
+                            &archive_cache.read_bytes(&msjc_ptr),
+                        );
+                        self.msjcs.push(msjc);
+                        let grouped_tx_msjc_idx = self.msjcs.len() - 1;
+                        msjc_map_global.insert(offset, grouped_tx_msjc_idx);
+                        grouped_tx_msjc_idx
+                    };
+
+                    let msjc = &mut self.msjcs[msjc_idx];
+                    let (is_all_matched, first_match_pos, matched_count) =
+                        msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+
+                    // consider adjust the match logic here and compare the correlations with ground truth
+                    if is_all_matched {
+                        if msjc.splice_junctions_vec.len() >= 1 {
+                            if matched_count >= 1 {
+                                let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+                                tx_abd.add_msjc(
+                                    msjc_map_global[&offset],
+                                    tx_local_id_in_this_msjc,
+                                    first_match_pos as usize,
+                                    matched_count,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        drop(msjc_map_global);
+
+        if cli.verbose {
+            info!("Processing mono exonic transcripts results...");
+        }
+
+        let mut cnt = 0;
+        // process mono exonic transcripts results
+        for mono_exon_result in all_res_mono_exonic.iter() {
+            cnt += 1;
+            if cli.verbose {
+                info!(
+                    "Processing mono exon partition {} with {} associated transcripts",
+                    cnt,
+                    mono_exon_result.mono_exon_tx_indices.len()
+                );
+            }
+
+            let res_vec = &mono_exon_result.ptrs;
+
+            if res_vec.is_empty() {
+                continue;
+            }
+
+            // this variable is a vec of merged_msjc
+            // it has same length of all txs in the grouped tx
+            let mut mrgd_msjc_vec = vec![
+                MSJC::new_mono_exon_merged(dbinfo.get_size());
+                // self.tx_abundances.len()
+                mono_exon_result.mono_exon_tx_indices.len()
+            ];
+
+            for ptr in &mono_exon_result.ptrs {
+                let misoform = archive_cache.read_bytes(&ptr);
+
+                let msjc = MSJC::new(
+                    // ptr.offset,
+                    dbinfo.get_size(),
+                    &misoform,
+                );
+
+                // ignore non-mono-exonic misoforms
+                if misoform.is_mono_exonic() {
+                    // iterately through all transcripts in the grouped tx
+                    for (mrgd_msjc_vec_idx, tx_idx) in
+                        mono_exon_result.mono_exon_tx_indices.iter().enumerate()
+                    {
+                        let tx_abd = &self.tx_abundances[*tx_idx];
+
+                        if msjc.check_mono_exon_fsm(&tx_abd, cli) {
+                            self.tx_abundances[*tx_idx].add_fsm_evidence_count(&misoform);
+                        } else {
+                            if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
+                                // add to the merged msjc for this transcript
+                                mrgd_msjc_vec[mrgd_msjc_vec_idx].add_mono_exon_msjc(&msjc);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // add all merged msjc to the grouped tx msjc list and update the tx_abundance records
+            for (mrgd_msjc_vec_idx, tx_idx) in
+                mono_exon_result.mono_exon_tx_indices.iter().enumerate()
+            {
+                let mrgd_msjc = &mrgd_msjc_vec[mrgd_msjc_vec_idx];
+
+                if mrgd_msjc.nonzero_sample_indices.len() > 0 {
+                    self.msjcs.push(mrgd_msjc.clone());
+                    let msjc_idx = self.msjcs.len() - 1;
+                    let tx_abd = &mut self.tx_abundances[*tx_idx];
+                    let tx_local_id_in_this_msjc = self.msjcs[msjc_idx].add_txabundance(tx_abd);
+                    tx_abd.add_msjc_mono_exonic(msjc_idx, tx_local_id_in_this_msjc);
+                }
+            }
+        }
+
+        // self.msjcs = msjc_map_global;
+        if cli.verbose {
+            info!("update results... finished.")
+        }
+    }
+
+    pub fn update_results2(
+        &mut self,
+        all_res: &Vec<Vec<MergedIsoformOffsetPtr>>,
         all_res_mono_exonic: &Vec<Vec<Rc<MergedIsoformOffsetPtr>>>,
         archive_cache: &mut ArchiveCache,
         dbinfo: &DatasetInfo,
@@ -334,6 +546,8 @@ impl GroupedTx {
 
         // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
         let mut local_mono_exonic_idx = 0;
+        // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
+        // however, the order of those idx in mono exonic results is the same as the order in tx_abundances
         for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
             // mono exonic need a special process
             if tx_abd.is_mono_exonic {
@@ -355,7 +569,7 @@ impl GroupedTx {
                             idx
                         } else {
                             let msjc = MSJC::new(
-                                misoform_ptr.offset,
+                                // misoform_ptr.offset,
                                 dbinfo.get_size(),
                                 &archive_cache.read_bytes(&misoform_ptr),
                             );
@@ -372,7 +586,7 @@ impl GroupedTx {
                         let msjc = &self.msjcs[msjc_idx];
 
                         if msjc.check_mono_exon_fsm(&tx_abd, cli) {
-                            tx_abd.add_fsm_misoform(&misoform);
+                            tx_abd.add_fsm_evidence_count(&misoform);
                         } else {
                             if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
                                 let tx_local_id_in_this_msjc =
@@ -431,7 +645,7 @@ impl GroupedTx {
                 for fsm in fsm_msjc_offsets.into_iter() {
                     let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
 
-                    tx_abd.add_fsm_misoform(&fsm_msjc_rec);
+                    tx_abd.add_fsm_evidence_count(&fsm_msjc_rec);
                 }
 
                 // add msjcs
@@ -441,7 +655,7 @@ impl GroupedTx {
                         msjc_idx
                     } else {
                         let msjc = MSJC::new(
-                            offset,
+                            // offset,
                             dbinfo.get_size(),
                             &archive_cache.read_bytes(&msjc_ptr),
                         );
@@ -671,7 +885,7 @@ impl TxAbundance {
         }
     }
 
-    pub fn add_fsm_misoform(&mut self, misoform: &MergedIsoform) {
+    pub fn add_fsm_evidence_count(&mut self, misoform: &MergedIsoform) {
         for sid in 0..self.sample_size {
             self.fsm_abundance[sid] += misoform.sample_evidence_arr[sid] as f32;
         }
@@ -780,15 +994,17 @@ impl TxAbundance {
                 unsafe {
                     std::ptr::write_bytes(self.abundance_cur.as_mut_ptr(), 0, self.sample_size);
                 }
-            } else {
-                for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
-                    let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
-                    for &sid in msjc.nonzero_sample_indices.iter() {
-                        let byte_idx = sid / 8;
-                        let bit_idx = sid % 8;
-                        self.alive_samples_bitmap[byte_idx] |= 1 << bit_idx;
-                    }
-                }
+
+                return;
+            }
+        }
+
+        for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
+            let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
+            for &sid in msjc.nonzero_sample_indices.iter() {
+                let byte_idx = sid / 8;
+                let bit_idx = sid % 8;
+                self.alive_samples_bitmap[byte_idx] |= 1 << bit_idx;
             }
         }
     }
@@ -1115,10 +1331,19 @@ impl TxAbundanceView {
     }
 }
 
+/// This is the core representation of a Merged Splice Junction Count (MSJC) object
+/// used in the EM algorithm for transcript abundance estimation.
+/// In mono-exonic case, one MJSC is merged repreesentation of multiple MSJCs, this is
+/// memory efficient for large number overlapped mono-exonic quries such as txs from ChrM.
+///
+/// the specific attrs are:
+///     mono_exon_total_length: total length of mono-exonic regions across all samples
+///     mono_exon_merged_cnt: number of merged mono-exonic regions
+/// corresponded functions are also implemented to add
 #[derive(Clone, Debug)]
 pub struct MSJC {
-    #[allow(unused)]
-    id: u64,
+    // #[allow(unused)]
+    // id: u64,
     #[allow(unused)]
     sample_size: usize,
 
@@ -1136,10 +1361,13 @@ pub struct MSJC {
     totals_buffer: Vec<f32>, // lenghth: K
 
     splice_junctions_vec: Vec<(u64, u64)>,
+    is_mono_exon_merged: bool,
+    mono_exon_total_length: u64,
+    mono_exon_merged_cnt: u64,
 }
 
 impl MSJC {
-    pub fn new(id: u64, sample_size: usize, misoform: &MergedIsoform) -> MSJC {
+    pub fn new(sample_size: usize, misoform: &MergedIsoform) -> MSJC {
         let mut nonzero_indices = Vec::new();
         let mut cov_vec = Vec::new();
 
@@ -1151,7 +1379,7 @@ impl MSJC {
         }
 
         MSJC {
-            id,
+            // id,
             sample_size,
             nonzero_sample_indices: nonzero_indices,
             cov_vec,
@@ -1159,7 +1387,47 @@ impl MSJC {
             gamma_data: Vec::new(),
             totals_buffer: Vec::new(),
             splice_junctions_vec: misoform.splice_junctions_vec.clone(),
+            is_mono_exon_merged: false,
+            mono_exon_total_length: 0,
+            mono_exon_merged_cnt: 0,
         }
+    }
+
+    pub fn new_mono_exon_merged(sample_size: usize) -> MSJC {
+        MSJC {
+            // id: id,
+            sample_size: sample_size,
+            nonzero_sample_indices: Vec::new(),
+            cov_vec: Vec::new(),
+            txids: Vec::new(),
+            gamma_data: Vec::new(),
+            totals_buffer: Vec::new(),
+            splice_junctions_vec: Vec::new(),
+            is_mono_exon_merged: true,
+            mono_exon_total_length: 0,
+            mono_exon_merged_cnt: 0,
+        }
+    }
+
+    pub fn add_mono_exon_msjc(&mut self, msjc: &MSJC) {
+        // merge the splice junctions
+
+        // update nonzero sample indices and cov_vec
+        for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
+            if let Some(pos) = self.nonzero_sample_indices.iter().position(|&x| x == sid) {
+                // already exists, update cov_vec
+                self.cov_vec[pos] += msjc.cov_vec[i];
+            } else {
+                // new sample index
+                self.nonzero_sample_indices.push(sid);
+                self.cov_vec.push(msjc.cov_vec[i]);
+            }
+        }
+
+        // update mono exon total length and count
+        let length = msjc.get_inner_span();
+        self.mono_exon_total_length += length;
+        self.mono_exon_merged_cnt += 1;
     }
 
     pub fn add_txabundance(&mut self, txabd: &TxAbundance) -> usize {
@@ -1167,8 +1435,7 @@ impl MSJC {
         self.txids.len() - 1
     }
 
-    pub fn get_effective_length(&self) -> u32 {
-        // start -end
+    pub fn get_inner_span(&self) -> u64 {
         if self.splice_junctions_vec.is_empty() {
             0
         } else {
@@ -1182,7 +1449,20 @@ impl MSJC {
                 .last()
                 .expect("MSJC can not get end of splice junction vec")
                 .1;
-            (end - start) as u32
+            end - start
+        }
+    }
+
+    pub fn get_effective_length(&self) -> u32 {
+        // start -end
+        if self.is_mono_exon_merged {
+            if self.mono_exon_merged_cnt == 0 {
+                0
+            } else {
+                (self.mono_exon_total_length / self.mono_exon_merged_cnt) as u32
+            }
+        } else {
+            self.get_inner_span() as u32
         }
     }
 

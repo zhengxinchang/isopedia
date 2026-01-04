@@ -134,15 +134,19 @@ tpbchrm:build
 
 tpbhg002chrm:build
 	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
-	 -o test/test.em.output.tpb.chrm.gz --verbose -g ./test/pbhg002.chrm.gtf
+	 -o test/test.em.output.tpb.chrm.gz --verbose -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.chrM.gtf
 
 	# -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.chrM.gtf \
+	# ./test/pbhg002.chrm.gtf
 tsamd:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g test/lrgasp_sim_ont.SAMD11.gtf  \
 	 -o test/test.em.output3.gz --verbose
 
-
+tpbhg002:build
+	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
+	 -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.gtf \
+	 -o test/test.em.output.tpb.hg002.gz 
 
 tfusion:build
 	target/release/isopedia fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz
