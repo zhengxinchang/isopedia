@@ -14,7 +14,6 @@ use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
 use rayon::prelude::*;
-// use rust_htslib::htslib::hts_verbose;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{

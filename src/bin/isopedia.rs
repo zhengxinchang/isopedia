@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+use isopedia::cmd::download;
 use isopedia::cmd::fusion::run_anno_fusion;
 use isopedia::cmd::fusion::AnnFusionCli;
 use isopedia::cmd::index::run_idx;
@@ -13,7 +14,6 @@ use isopedia::cmd::profile::ProfileCli;
 use isopedia::cmd::splice::run_anno_splice;
 use isopedia::cmd::splice::AnnSpliceCli;
 use isopedia::logger::init_logger;
-
 #[derive(Parser)]
 #[command(
     name = "isopedia",
