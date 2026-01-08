@@ -10,6 +10,7 @@ use crate::{
     myio::GeneralOutputIO,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
+    utils::greetings2,
 };
 use anyhow::Result;
 use clap::Parser;
@@ -96,14 +97,6 @@ impl MergeCli {
     }
 }
 
-fn greetings(args: &MergeCli) {
-    // eprintln!("\nIsopedia: [Aggregate multiple samples]\n");
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-}
-
 #[derive(Debug)]
 struct HeapItem<T> {
     rec: T,
@@ -145,7 +138,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 
     let mut dataset_info = DatasetInfo::parse_manifest(&cli.input)?;

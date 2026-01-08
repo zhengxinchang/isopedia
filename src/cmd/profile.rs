@@ -14,6 +14,7 @@ use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
     myio::MyGzWriter,
     reads::{AggrRead, SingleRead},
+    utils::greetings2,
 };
 use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
@@ -193,21 +194,13 @@ impl ProfileCli {
     }
 }
 
-fn greetings(args: &ProfileCli) {
-    // eprintln!("\nIsopedia: [Profile isoform signals from BAM/CRAM or GTF]\n");
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-}
-
 pub fn run_profile(cli: &ProfileCli) -> Result<()> {
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
     // let cli = ExtrCli::parse();
 
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 
     let mut chrom_set: IndexSet<String> = IndexSet::new();

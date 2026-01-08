@@ -12,6 +12,7 @@ use crate::{
     meta::Meta,
     myio::{DBInfos, Header},
     results::TableOutput,
+    utils::greetings2,
 };
 use anyhow::Result;
 use clap::Parser;
@@ -152,16 +153,8 @@ impl AnnIsoCli {
     }
 }
 
-fn greetings(args: &AnnIsoCli) {
-    // eprintln!("\nCommand: isoform = \n");
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-}
-
 pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 
     ThreadPoolBuilder::new()

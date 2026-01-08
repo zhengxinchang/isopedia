@@ -1,6 +1,7 @@
 use ahash::RandomState;
 use anyhow::Result;
 use log::error;
+use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::{fs::File, hash::Hash, path::Path};
@@ -474,6 +475,13 @@ pub fn partition_intervals(
     });
 
     segments
+}
+
+pub fn greetings2<T: Serialize>(msg: &T) {
+    match serde_json::to_string_pretty(&msg) {
+        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
+        Err(e) => eprintln!("Failed to print arguments: {}", e),
+    }
 }
 
 #[cfg(test)]

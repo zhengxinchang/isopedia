@@ -17,7 +17,7 @@ use crate::{
     meta::Meta,
     myio::*,
     results::TableOutput,
-    utils,
+    utils::{self, greetings2},
 };
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -201,14 +201,6 @@ fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64))>
     Ok((breakpoints[0].clone(), breakpoints[1].clone()))
 }
 
-fn greetings(args: &AnnFusionCli) {
-    // eprintln!("\nIsopedia: [Search provided gene fusion]\n");
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-}
-
 type BreakpointType = ((String, u64), (String, u64), String);
 
 fn anno_single_fusion(
@@ -346,7 +338,7 @@ fn parse_bed(line: &str) -> Result<BreakpointType> {
 }
 
 pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 
     let mut forest = BPForest::init(&cli.idxdir);

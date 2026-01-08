@@ -7,6 +7,8 @@ use log::error;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::utils::greetings2;
+
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia download")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
@@ -61,18 +63,11 @@ impl DownloadCli {
     }
 }
 
-fn greetings(args: &DownloadCli) {
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-}
-
 pub fn run_download() {
     println!("Downloading index files...");
 
     let cli = DownloadCli::parse();
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 }
 

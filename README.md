@@ -83,19 +83,23 @@ The workflow of Isopedia involves several key steps, including isoform profiling
 
 Isopedia comes with pre-built indexes from hundreds of publicly available long-read RNA-seq datasets, which can be used directly for isoform and fusion gene annotation.
 
-
-[place holder for index download link]
-
 |Name|Organism|Reference|Link|Sample Size|Index size(compressed size)|Minimal required Memory for querying | Description |
 |----|----|-----------|-----|------| -----|-----|-----|
-|isopedia_index_hs_v1.0| Homo sapiens| GRCh38|[Download](#)|1,007|462G(109G)|64Gb|107 ENCODE samples + 900 SRA samples|
+|isopedia_index_hs_v1.0| Homo sapiens| GRCh38|[Download](ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz),[MD5SUM](ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz.md5)|1,007|462G(109G)|64Gb|107 ENCODE samples + 900 SRA samples|
 
+
+**Unpack the index**
+
+The index file was compressed by xz to achieve the heighest compression rate, it can be decompressed by:
+
+```
+tar zJvf index.tar.xz 
+```
 
 # Build your own index
 
 Isopedia supports building local index in your own datasets. prerequests are listed below:
 
-1. Latest isopedia binaries
 2. A set of mapped bam files(sorted bam are not required)
 3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format. 
 
@@ -593,21 +597,10 @@ Example to use ORF annotate
 <place holder>
 ```
 
-<!-- 
-# Quick Q&A:
 
-**Q1: What gap does Isopedia aim to fill?**
-A: Long-read RNA sequencing often reveals a large number of novel isoforms. However, evaluating whether these novel isoforms are biologically meaningful—or simply artifacts caused by RNA degradation or sequencing errors—is challenging. Understanding both the existence and population frequency of a novel isoform is essential for downstream analyses, yet current approaches are limited in scalability and robustness.
+# Development Roadmap
 
-**Q2: How does Isopedia address this problem?**
-A: Rather than relying on model-based classification or paired sequencing datasets from the same sample, Isopedia takes a different approach. It searches for supporting evidence of novel isoforms across large-scale long-read transcriptome datasets, leveraging population-level data to distinguish true biological isoforms from noise.
-
-**Q3: How does Isopedia manage large datasets and provide a practical solution for isoform assessment?**
-A: Isopedia introduces several innovations for scalable and efficient isoform evaluation. It uses a B+ tree–based data structure to rapidly index and compare isoform-related genomic positions. In addition, it employs a read-level signal extraction algorithm to build a compact yet informative index of transcriptome data. When assessing a query isoform, Isopedia integrates evidence from splicing junctions and alignment quality to ensure a robust evaluation. The entire tool is implemented in Rust, offering high performance and a user-friendly interface.
-
-**Q4: What is the best use case for Isopedia?**
-A: Isopedia is designed to be integrated into standard long-read transcriptome analysis pipelines. After isoforms are identified using tools like IsoQuant, FLAMES, TALON, or others, their output GTF files can be passed to Isopedia. It then evaluates the isoforms against a background index constructed from hundreds of publicly available long-read transcriptome datasets, providing a scalable and population-aware assessment.
- -->
+- Builtin download for remote indexes
 
 # Contact
 

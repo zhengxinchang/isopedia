@@ -4,8 +4,6 @@ SHELL := /bin/bash
 VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
 
 
-
-
 build:
 	cargo build --release
 	
@@ -138,6 +136,7 @@ tpbhg002chrm:build
 
 	# -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.chrM.gtf \
 	# ./test/pbhg002.chrm.gtf
+
 tsamd:build
 	/usr/bin/time -v  target/release/isopedia isoform --asm  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
 	 -g test/lrgasp_sim_ont.SAMD11.gtf  \

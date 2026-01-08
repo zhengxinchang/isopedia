@@ -4,6 +4,7 @@ use crate::dataset_info::DatasetInfo;
 use crate::isoform::MergedIsoform;
 use crate::myio::{self, DBInfos, Line};
 use crate::results::TableOutput;
+use crate::utils::greetings2;
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
 use clap::Parser;
@@ -121,18 +122,8 @@ impl AnnSpliceCli {
     }
 }
 
-fn greetings(args: &AnnSpliceCli) {
-    // eprintln!("\nIsopedia: [Annotate provided gtf file]\n");
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-
-    eprintln!("Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.");
-}
-
 pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 
     info!("loading indexes");

@@ -8,6 +8,7 @@ use crate::{
     meta::Meta,
     myio::GeneralOutputIO,
     tmpidx::Tmpindex,
+    utils::greetings2,
 };
 use anyhow::Result;
 use clap::Parser;
@@ -94,19 +95,11 @@ impl IndexCli {
     }
 }
 
-fn greetings(args: &IndexCli) {
-    // eprintln!("\nIsopedia: [Indexing merged isoform signals]\n");
-    match serde_json::to_string_pretty(&args) {
-        Ok(json) => eprintln!("Parsed arguments:\n{}", json),
-        Err(e) => eprintln!("Failed to print arguments: {}", e),
-    }
-}
-
 pub fn run_idx(cli: &IndexCli) -> Result<()> {
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
-    greetings(&cli);
+    greetings2(&cli);
     cli.validate();
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
