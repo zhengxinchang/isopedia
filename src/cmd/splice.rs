@@ -139,7 +139,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
         cli.cached_chunk_number,                // number of chunks
     );
 
-    const SPLICE_FORMAT: &str = "COUNT:CPM:START,END,STRAND";
+    const SPLICE_FORMAT: &str = "COUNT:CPM:START|END|STRAND";
 
     let mut out_header = myio::Header::new();
     out_header.add_column("id")?;
