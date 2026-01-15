@@ -534,7 +534,7 @@ The output is a gzip-compressed file containing detailed information about the s
 | end_pos_right       | Rightmost ending position of isoform                                        |
 | splice_junctions    | List of splice junctions in the isoform                                     |
 | format              | Format of record                                                            |
-| ENCSR***            | Per-sample evidence (columns for each dataset, e.g., ENCODE accessions)     |
+| SAMPLE columns      | Per-sample evidence, the format is: support_read:CPM:[read_start|read_end|strand,]*N   |
 
 
 

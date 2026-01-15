@@ -615,7 +615,7 @@ impl MergedIsoform {
         let mut sample_vec = Vec::with_capacity(dbinfo.get_size());
         let mut sample_idx = 0usize;
 
-        for (offset, length) in self
+        for (offset, read_count) in self
             .sample_offset_arr
             .iter()
             .zip(self.sample_evidence_arr.iter())
@@ -623,10 +623,10 @@ impl MergedIsoform {
             // for a particular sample, do:
             let mut sample_chip = SampleChip::default(None);
 
-            if *length > 0 {
+            if *read_count > 0 {
                 let sub = &self.isoform_reads_slim_vec
-                    [*offset as usize..(*offset as usize + *length as usize)];
-                let mut sample_read_sub = Vec::with_capacity(*length as usize);
+                    [*offset as usize..(*offset as usize + *read_count as usize)];
+                let mut sample_read_sub = Vec::with_capacity(*read_count as usize);
                 for read in sub {
                     starts.push(read.left);
                     ends.push(read.right);
@@ -637,13 +637,13 @@ impl MergedIsoform {
                 // sample_chip
 
                 let cpm = calc_cpm(
-                    length,
+                    read_count,
                     &(dbinfo.sample_total_evidence_vec[sample_idx] as u32),
                 );
 
-                sample_vec.push(format!("{}:{}:{}", &length, cpm, sample_read_sub));
+                sample_vec.push(format!("{}:{}:{}", &read_count, cpm, sample_read_sub));
 
-                sample_chip.add_item(&length.to_string());
+                sample_chip.add_item(&read_count.to_string());
                 sample_chip.add_item(&cpm.to_string());
                 sample_chip.add_item(&sample_read_sub);
             } else {
