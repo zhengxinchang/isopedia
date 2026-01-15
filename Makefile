@@ -151,7 +151,11 @@ tfusion:build
 	target/release/isopedia fusion -i test/HG002_idx/ -p chr1:181130,chr1:201853853 -f 200 -o test/fusion.output.gz
 
 tfusion2:build
-	target/release/isopedia-anno-fusion -i ../stix-isoform-experiment/stage/fusion_idx/ -f 200 -P test/fusion.bed  -o test/fusion.output.gz
+	target/release/isopedia fusion -i ../stix-isoform-experiment/stage/fusion_idx/  -P test/fusion.bed  -o test/fusion.output.gz
+
+
+tfusion22:build
+	target/release/isopedia fusion -i /ssd2/isopedia_wk/isopedia_index  -P test/fusion.bed  -o test/fusion.output.gz
 
 
 tfusion3:build

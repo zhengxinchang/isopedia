@@ -85,7 +85,7 @@ Isopedia comes with pre-built indexes from hundreds of publicly available long-r
 
 |Name|Organism|Reference|Link|Sample Size|Index size(compressed size)|Minimal required Memory for querying | Description |
 |----|----|-----------|-----|------| -----|-----|-----|
-|isopedia_index_hs_v1.0| Homo sapiens| GRCh38|[Download](ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz),[MD5SUM](ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz.md5)|1,007|462G(109G)|64Gb|107 ENCODE samples + 900 SRA samples|
+|isopedia_index_hs_v1.0| Homo sapiens| GRCh38| Download ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz MD5SUM: ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz.md5|1,007|462G(109G)|64Gb|107 ENCODE samples + 900 SRA samples|
 
 
 **Unpack the index**

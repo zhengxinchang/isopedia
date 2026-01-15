@@ -248,6 +248,9 @@ fn anno_single_fusion(
 
     let mut fusion_evidence_vec = vec![0u32; dbinfo.get_size()];
 
+    let mut left_isoform_count = 0;
+    let mut right_isoform_count = 0;
+
     // process the left targets
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
@@ -258,7 +261,10 @@ fn anno_single_fusion(
             cli.flank,
             &dbinfo,
         );
-        // dbg!(&evidence_vec);
+
+        if evidence_vec.iter().sum::<u32>() > 0 {
+            left_isoform_count += 1;
+        }
 
         fusion_evidence_vec = fusion_evidence_vec
             .iter()
@@ -277,6 +283,10 @@ fn anno_single_fusion(
             cli.flank,
             &dbinfo,
         );
+
+        if evidence_vec.iter().sum::<u32>() > 0 {
+            right_isoform_count += 1;
+        }
 
         fusion_evidence_vec = fusion_evidence_vec
             .iter()
@@ -301,6 +311,9 @@ fn anno_single_fusion(
             .to_string(),
         dbinfo.get_size()
     ));
+
+    out_line.add_field(&left_isoform_count.to_string());
+    out_line.add_field(&right_isoform_count.to_string());
 
     for idx in 0..dbinfo.get_size() {
         // record_parts.push(fusion_evidence_vec[idx].to_string());
@@ -363,6 +376,8 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         out_header.add_column(&"id")?;
         out_header.add_column(&"min_read")?;
         out_header.add_column(&"positive/sample_size")?;
+        out_header.add_column(&"left_isoforms")?;
+        out_header.add_column(&"right_isoforms")?;
         let sample_name = dataset_info.get_sample_names();
         for name in sample_name {
             out_header.add_sample_name(&name)?;
