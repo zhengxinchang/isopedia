@@ -458,10 +458,11 @@ pub fn anno_single_fusion_detail(
     out_header.add_column(&"chr2")?;
     out_header.add_column(&"start2")?;
     out_header.add_column(&"end2")?;
-    out_header.add_column(&"exon_count1")?;
-    out_header.add_column(&"exon_count2")?;
-    out_header.add_column(&"left_isoforms")?;
-    out_header.add_column(&"right_isoforms")?;
+    out_header.add_column(&"main_exon_count1")?;
+    out_header.add_column(&"supp_segment_count2")?;
+    out_header.add_column(&"query_part")?;
+    out_header.add_column(&"main_isoforms")?;
+    out_header.add_column(&"supp_aln_regions")?;
     out_header.add_column(&"sample_name")?;
 
     // let sample_name = dbinfo.get_sample_names();
@@ -486,11 +487,13 @@ pub fn anno_single_fusion_detail(
     // the query is different to the exact breakpoints
 
     info!(
-        "Searching fusion in regions: {}:{}-{}:{}",
+        "Searching fusion in regions: {}:{}-{},{}:{}-{}",
         breakpoints.left_chr,
         breakpoints.left_start,
+        breakpoints.left_end,
         breakpoints.right_chr,
-        breakpoints.right_start
+        breakpoints.right_start,
+        breakpoints.right_end
     );
 
     let (q_l_chr, q_l_pos, q_l_flank, q_r_chr, q_r_pos, q_r_flank) =
@@ -543,6 +546,7 @@ pub fn anno_single_fusion_detail(
             q_r_flank,
             dbinfo,
             &breakpoints,
+            "left".to_string(),
         );
         total_fusion_records.extend(fusion_read_records);
     }
@@ -556,6 +560,7 @@ pub fn anno_single_fusion_detail(
             q_l_flank,
             dbinfo,
             &breakpoints,
+            "right".to_string(),
         );
         total_fusion_records.extend(fusion_read_records);
     }

@@ -177,14 +177,14 @@ tfusion6:build
 	-o test/hg002_fusion_discovery_cancer.output.all.gz &> aa.log
 
 tfusion7:build
-	target/release/isopedia fusion  -i /ssd2/isopedia_wk/isopedia_index \
-	-r chr22:23289517-23290413,chr9:130854064-130855096 \
+	target/release/isopedia fusion  -i ../stix-isoform-experiment/stage/fusion_idx/  \
+	-r chr8:92017266-92017466,chr21:34859374-34859574  \
 	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz --verbose
 
 tfusion8:build
 	target/release/isopedia fusion  -i /ssd2/isopedia_wk/isopedia_index \
-	-r chr22:23289621-23290339,chr9:130854237-130854801 \
-	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz --verbose
+	-r chr22:23289517-23290413,chr9:130713043-130854237 \
+	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz 
 
 #-r chr9:23289621-23290339,chr22:130854237-130854801 \
 # chr17   HAVANA  exon    7675994 7676272 .       -       .       gene_id "ENSG00000141510.19"; transcript_id "ENST00000413465.6"; gene_type "protein_coding"; gene_name "TP53"; transcript_t>

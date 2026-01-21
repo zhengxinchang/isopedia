@@ -432,6 +432,7 @@ impl MergedIsoform {
         flank: u64,
         dbinfo: &DatasetInfo,
         breakpoints: &FusionBreakPointPair,
+        query_type: String,
     ) -> Vec<FusionRecord> {
         let mut fusion_records: Vec<FusionRecord> = Vec::new();
 
@@ -448,95 +449,57 @@ impl MergedIsoform {
                 let start = *offset as usize;
                 let end = start + *size as usize;
                 let one_sample_reads = &self.isoform_reads_slim_vec[start..end];
-
+                // dbg!("========");
                 for single_read in one_sample_reads {
                     // skip reads with no supp segments
                     if single_read.supp_seg_vec_length == 0 {
                         continue; // skip reads with no supp segments
                     }
 
+                    // dbg!(single_read.supp_seg_vec_offset as usize);
+
                     let supp_seg_vec = &self.supp_segs_vec[single_read.supp_seg_vec_offset as usize
                         ..(single_read.supp_seg_vec_offset + single_read.supp_seg_vec_length)
                             as usize];
 
-                    let mut is_ok = false;
+                    // let mut is_ok = false;
 
-                    dbg!(single_read.supp_seg_vec_length);
-
-                    if single_read.supp_seg_vec_length == 1 {
-                        let seg = &supp_seg_vec[0];
+                    // check all segments,
+                    // each segment is not exon or splice junction, its the entire alignment region
+                    // the left and right positions can be brekpoints of fusion
+                    for seg in supp_seg_vec {
                         if seg.chrom == chrom
                             && (
                                 // sig start in the region
-                                (seg.start <= pos + flank && seg.start >= pos.saturating_sub(flank))
-                                    ||
-                                    // sig end in the region
-                                    (seg.end <= pos + flank && seg.end >= pos.saturating_sub(flank))
-                            )
-                        {
-                            // report the fusion record
-                            is_ok = true;
-                        }
-                    } else {
-                        // let first_seg = &supp_seg_vec[0];
-                        // let last_seg = &supp_seg_vec[supp_seg_vec.len() - 1];
-
-                        // if first_seg.chrom == chrom
-                        //     && (
-                        //         // sig start in the region
-                        //         (first_seg.start <= pos + flank && first_seg.start >= pos.saturating_sub(flank))
-                        //             ||
-                        //             // sig end in the region
-                        //             (first_seg.end <= pos + flank && first_seg.end >= pos.saturating_sub(flank))
-                        //     )
-                        // {
-                        //     is_ok = true;
-                        // } else if last_seg.chrom == chrom
-                        //     && (
-                        //         // sig start in the region
-                        //         (last_seg.start <= pos + flank && last_seg.start >= pos.saturating_sub(flank))
-                        //             ||
-                        //             // sig end in the region
-                        //             (last_seg.end <= pos + flank && last_seg.end >= pos.saturating_sub(flank))
-                        //     )
-                        // {
-                        //     is_ok = true;
-                        // }
-
-                        // check all segments
-                        for seg in supp_seg_vec {
-                            if seg.chrom == chrom
-                                && (
-                                    // sig start in the region
-                                    (seg.start <= pos + flank
+                                (seg.start <= pos + flank
                                         && seg.start >= pos.saturating_sub(flank))
                                         ||
                                         // sig end in the region
                                         (seg.end <= pos + flank
                                             && seg.end >= pos.saturating_sub(flank))
-                                )
-                            {
-                                // report the fusion record
-                                is_ok = true;
-                                break;
-                            }
+                            )
+                        {
+                            // report the fusion record
+                            let sample_name = dbinfo.get_sample_names()[sample_idx].clone();
+                            let fusion_record = FusionRecord::new(
+                                breakpoints,
+                                single_read,
+                                &seg,
+                                self,
+                                sample_name,
+                                &query_type,
+                            );
+                            // dbg!(&fusion_record);
+                            fusion_records.push(fusion_record);
+                            break;
                         }
                     }
+                    // }
 
-                    if is_ok {
-                        dbg!(supp_seg_vec);
+                    // if is_ok {
+                    //     dbg!(supp_seg_vec);
 
-                        let sample_name = dbinfo.get_sample_names()[sample_idx].clone();
-                        let fusion_record = FusionRecord::new(
-                            breakpoints,
-                            single_read,
-                            &supp_seg_vec,
-                            self,
-                            sample_name,
-                        );
-                        // dbg!(&fusion_record);
-                        fusion_records.push(fusion_record);
-                    }
+                    // }
                 }
             }
         }
@@ -772,20 +735,22 @@ pub struct FusionRecord {
     pub left_exons_junctions: Vec<u64>, // exon positions on the left side not splice junctions
     pub right_exons_junctions: Vec<u64>, // exon positions on the right side not splice junctions
     pub sample_name: String,
+    pub query_type: String,
 }
 
 impl FusionRecord {
     pub fn new(
         breakpoints: &FusionBreakPointPair, // query breakpoint info
         read_diff: &ReadDiffSlim,           // read start/end
-        supp_segs: &[Segment],              // supplementary segments of the read
+        supp_segs: &Segment,                // supplementary segments of the read
         misoform: &MergedIsoform,           // common splice junction isoform
         sample_name: String,
+        query_type: &str,
     ) -> FusionRecord {
         // let left_sj_vec = misoform.splice_junctions_vec;
         // let mut all_sj_vec = Vec::new();
         let mut left_exons = Vec::new();
-        let mut right_exons = Vec::new();
+        let mut right_aln_regions = Vec::new();
         // cat left sj and right sj
         left_exons.push(read_diff.left);
         for &(l, r) in misoform.splice_junctions_vec.iter() {
@@ -796,22 +761,16 @@ impl FusionRecord {
         }
         left_exons.push(read_diff.right);
 
-        if supp_segs.len() == 1 {
-            // mono-exon fusion read
-            right_exons.push(supp_segs[0].start);
-            right_exons.push(supp_segs[0].end);
-            // all_sj_vec.push(supp_segs[0].start);
-            // all_sj_vec.push(supp_segs[0].end);
-        } else {
-            // multi-exon fusion read
-            // right_exons.push(supp_segs[0].start);
-            for sg in supp_segs.iter() {
-                right_exons.push(sg.start);
-                right_exons.push(sg.end);
-                // all_sj_vec.push(sg.start);
-                // all_sj_vec.push(sg.end);
-            }
-        }
+        // if supp_segs.len() == 1 {
+        //     // mono-exon fusion read
+        //     right_aln_regions.push(supp_segs[0].start);
+        //     right_aln_regions.push(supp_segs[0].end);
+        //     // all_sj_vec.push(supp_segs[0].start);
+        //     // all_sj_vec.push(supp_segs[0].end);
+        // } else {
+
+        right_aln_regions.push(supp_segs.start);
+        right_aln_regions.push(supp_segs.end);
 
         // let fusion_hash = utils::hash_vec(&all_sj_vec);
 
@@ -824,8 +783,9 @@ impl FusionRecord {
             right_start: breakpoints.right_start,
             right_end: breakpoints.right_end,
             left_exons_junctions: left_exons,
-            right_exons_junctions: right_exons,
+            right_exons_junctions: right_aln_regions,
             sample_name: sample_name,
+            query_type: query_type.to_string(),
         }
     }
 
@@ -846,6 +806,8 @@ impl FusionRecord {
         out.push_str(&(self.left_exons_junctions.len() / 2).to_string());
         out.push('\t');
         out.push_str(&(self.right_exons_junctions.len() / 2).to_string());
+        out.push('\t');
+        out.push_str(&self.query_type);
         out.push('\t');
 
         let left_exons_str = self
