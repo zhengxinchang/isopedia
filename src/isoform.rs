@@ -2,7 +2,8 @@ use std::{io::Read, vec};
 
 use crate::{
     // constants::MAX_SAMPLE_SIZE,
-    breakpoints::BreakPointPair,
+    breakpoints::SpliceBreakPointPair,
+    cmd::fusion::FusionBreakPointPair,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     myio::SampleChip,
@@ -372,7 +373,9 @@ impl MergedIsoform {
         is_mono_exonic
     }
 
-    pub fn find_fusion_by_breakpoints(
+    /// Find fusion evidence based on breakpoints
+    /// first search one part of the breakpoint, then check the supporting segments to see if they cover the other part of the breakpoint
+    pub fn check_fusion_mate_breakpoint(
         &self,
         chrom: &str,
         pos: u64,
@@ -397,6 +400,8 @@ impl MergedIsoform {
                 for diff in diffs {
                     let supp_vec = &self.supp_segs_vec[diff.supp_seg_vec_offset as usize
                         ..(diff.supp_seg_vec_offset + diff.supp_seg_vec_length) as usize];
+                    // TODO:
+                    // optmize to only check the fisrt and last segment
                     for seg in supp_vec {
                         // dbg!(seg);
                         // let chrom = utils::pad_chrom_prefix(chrom);
@@ -414,58 +419,130 @@ impl MergedIsoform {
         fusion_evidence_vec
     }
 
-    // make sure the all splice junctions from this isoform can match with the query splice juncitons(no need to cover all query SJs)
-    // return the first matched position index, -1 means no match
-    // pub fn match_splice_junctions(
-    //     &self,
-    //     reference_sjs: &Vec<(u64, u64)>,
-    //     flank: u64,
-    // ) -> (bool, i32, u32) {
-    //     let mut matched_count = 0;
-    //     let mut first_match_pos = -1i32;
-    //     let mut is_all_matched = true;
+    /// Cast the isoform to fusion records based on the breakpoints
+    /// format
+    /// #1.  #2.    #3.   #4. #5.    #6.  #7.                                   #8.    
+    /// chr1,start1,end1,chr2,start2,end2,left_splice_junctions(start-end,...),right_splice_junctions(start-end,...),
+    /// #9.              #10...
+    /// total_evidence, sample1_evidence,sample2_evidence,...
+    pub fn cast_to_fusion_records(
+        &self,
+        chrom: &str,
+        pos: u64,
+        flank: u64,
+        dbinfo: &DatasetInfo,
+        breakpoints: &FusionBreakPointPair,
+    ) -> Vec<FusionRecord> {
+        let mut fusion_records: Vec<FusionRecord> = Vec::new();
 
-    //     if self.splice_junctions_vec.len() > reference_sjs.len() {
-    //         is_all_matched = false;
-    //         return (is_all_matched, first_match_pos, matched_count);
-    //     }
+        // for each sampple
+        for (sample_idx, (offset, size)) in self
+            .sample_offset_arr
+            .iter()
+            .zip(self.sample_evidence_arr.iter())
+            .enumerate()
+        {
+            // collect the suppvec of each read
+            if *size > 0 {
+                // dbg!(sample_idx, offset, size);
+                let start = *offset as usize;
+                let end = start + *size as usize;
+                let one_sample_reads = &self.isoform_reads_slim_vec[start..end];
 
-    //     let mut qidx = 0;
-    //     let mut sidx = 0;
+                for single_read in one_sample_reads {
+                    // skip reads with no supp segments
+                    if single_read.supp_seg_vec_length == 0 {
+                        continue; // skip reads with no supp segments
+                    }
 
-    //     loop {
-    //         if qidx >= reference_sjs.len() || sidx >= self.splice_junctions_vec.len() {
-    //             if sidx < self.splice_junctions_vec.len() {
-    //                 is_all_matched = false;
-    //             }
-    //             break;
-    //         }
+                    let supp_seg_vec = &self.supp_segs_vec[single_read.supp_seg_vec_offset as usize
+                        ..(single_read.supp_seg_vec_offset + single_read.supp_seg_vec_length)
+                            as usize];
 
-    //         let query_sj = &reference_sjs[qidx];
-    //         let isoform_sj = &self.splice_junctions_vec[sidx];
+                    let mut is_ok = false;
 
-    //         if (isoform_sj.0.abs_diff(query_sj.0) <= flank)
-    //             && (isoform_sj.1.abs_diff(query_sj.1) <= flank)
-    //         {
-    //             matched_count += 1;
-    //             if first_match_pos == -1 {
-    //                 first_match_pos = qidx as i32;
-    //             }
-    //             qidx += 1;
-    //             sidx += 1;
-    //         } else {
-    //             if first_match_pos == -1 {
-    //                 qidx += 1;
-    //             } else {
-    //                 // skip sjs
-    //                 is_all_matched = false;
-    //                 break;
-    //             }
-    //         }
-    //     }
+                    dbg!(single_read.supp_seg_vec_length);
 
-    //     (is_all_matched, first_match_pos, matched_count)
-    // }
+                    if single_read.supp_seg_vec_length == 1 {
+                        let seg = &supp_seg_vec[0];
+                        if seg.chrom == chrom
+                            && (
+                                // sig start in the region
+                                (seg.start <= pos + flank && seg.start >= pos.saturating_sub(flank))
+                                    ||
+                                    // sig end in the region
+                                    (seg.end <= pos + flank && seg.end >= pos.saturating_sub(flank))
+                            )
+                        {
+                            // report the fusion record
+                            is_ok = true;
+                        }
+                    } else {
+                        // let first_seg = &supp_seg_vec[0];
+                        // let last_seg = &supp_seg_vec[supp_seg_vec.len() - 1];
+
+                        // if first_seg.chrom == chrom
+                        //     && (
+                        //         // sig start in the region
+                        //         (first_seg.start <= pos + flank && first_seg.start >= pos.saturating_sub(flank))
+                        //             ||
+                        //             // sig end in the region
+                        //             (first_seg.end <= pos + flank && first_seg.end >= pos.saturating_sub(flank))
+                        //     )
+                        // {
+                        //     is_ok = true;
+                        // } else if last_seg.chrom == chrom
+                        //     && (
+                        //         // sig start in the region
+                        //         (last_seg.start <= pos + flank && last_seg.start >= pos.saturating_sub(flank))
+                        //             ||
+                        //             // sig end in the region
+                        //             (last_seg.end <= pos + flank && last_seg.end >= pos.saturating_sub(flank))
+                        //     )
+                        // {
+                        //     is_ok = true;
+                        // }
+
+                        // check all segments
+                        for seg in supp_seg_vec {
+                            if seg.chrom == chrom
+                                && (
+                                    // sig start in the region
+                                    (seg.start <= pos + flank
+                                        && seg.start >= pos.saturating_sub(flank))
+                                        ||
+                                        // sig end in the region
+                                        (seg.end <= pos + flank
+                                            && seg.end >= pos.saturating_sub(flank))
+                                )
+                            {
+                                // report the fusion record
+                                is_ok = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if is_ok {
+                        dbg!(supp_seg_vec);
+
+                        let sample_name = dbinfo.get_sample_names()[sample_idx].clone();
+                        let fusion_record = FusionRecord::new(
+                            breakpoints,
+                            single_read,
+                            &supp_seg_vec,
+                            self,
+                            sample_name,
+                        );
+                        // dbg!(&fusion_record);
+                        fusion_records.push(fusion_record);
+                    }
+                }
+            }
+        }
+
+        fusion_records
+    }
 
     /// Each isoform will be re-scattered at read level, and regrouped by their fusion hash.
     pub fn to_fusion_candidates(&self) -> Option<Vec<FusionAggrReads>> {
@@ -553,7 +630,7 @@ impl MergedIsoform {
     /// get partial report for splice junction searching
     pub fn get_splice_report(
         &self,
-        bpp: &BreakPointPair,
+        bpp: &SpliceBreakPointPair,
         flank: u64,
         dbinfo: &DatasetInfo,
     ) -> Option<(Vec<String>, Vec<SampleChip>)> {
@@ -678,6 +755,118 @@ impl MergedIsoform {
         // result_buffer.extend_from_slice(&sample_vec);
 
         Some((result_buffer, sample_chip_vec))
+    }
+}
+
+/// Fusion record for query two regions for example BCR exon 13 and ABL1 exon 2
+/// this record is represent a single read fusion evidence
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FusionRecord {
+    pub fusion_hash: u64,
+    pub left_chrom: String,
+    pub left_start: u64,
+    pub left_end: u64,
+    pub right_chrom: String,
+    pub right_start: u64,
+    pub right_end: u64,
+    pub left_exons_junctions: Vec<u64>, // exon positions on the left side not splice junctions
+    pub right_exons_junctions: Vec<u64>, // exon positions on the right side not splice junctions
+    pub sample_name: String,
+}
+
+impl FusionRecord {
+    pub fn new(
+        breakpoints: &FusionBreakPointPair, // query breakpoint info
+        read_diff: &ReadDiffSlim,           // read start/end
+        supp_segs: &[Segment],              // supplementary segments of the read
+        misoform: &MergedIsoform,           // common splice junction isoform
+        sample_name: String,
+    ) -> FusionRecord {
+        // let left_sj_vec = misoform.splice_junctions_vec;
+        // let mut all_sj_vec = Vec::new();
+        let mut left_exons = Vec::new();
+        let mut right_exons = Vec::new();
+        // cat left sj and right sj
+        left_exons.push(read_diff.left);
+        for &(l, r) in misoform.splice_junctions_vec.iter() {
+            // all_sj_vec.push(l);
+            // all_sj_vec.push(r);
+            left_exons.push(l);
+            left_exons.push(r);
+        }
+        left_exons.push(read_diff.right);
+
+        if supp_segs.len() == 1 {
+            // mono-exon fusion read
+            right_exons.push(supp_segs[0].start);
+            right_exons.push(supp_segs[0].end);
+            // all_sj_vec.push(supp_segs[0].start);
+            // all_sj_vec.push(supp_segs[0].end);
+        } else {
+            // multi-exon fusion read
+            // right_exons.push(supp_segs[0].start);
+            for sg in supp_segs.iter() {
+                right_exons.push(sg.start);
+                right_exons.push(sg.end);
+                // all_sj_vec.push(sg.start);
+                // all_sj_vec.push(sg.end);
+            }
+        }
+
+        // let fusion_hash = utils::hash_vec(&all_sj_vec);
+
+        FusionRecord {
+            fusion_hash: 0,
+            left_chrom: breakpoints.left_chr.clone(),
+            left_start: breakpoints.left_start,
+            left_end: breakpoints.left_end,
+            right_chrom: breakpoints.right_chr.clone(),
+            right_start: breakpoints.right_start,
+            right_end: breakpoints.right_end,
+            left_exons_junctions: left_exons,
+            right_exons_junctions: right_exons,
+            sample_name: sample_name,
+        }
+    }
+
+    pub fn get_string(&self) -> String {
+        let mut out = String::new();
+        out.push_str(&self.left_chrom);
+        out.push('\t');
+        out.push_str(&self.left_start.to_string());
+        out.push('\t');
+        out.push_str(&self.left_end.to_string());
+        out.push('\t');
+        out.push_str(&self.right_chrom);
+        out.push('\t');
+        out.push_str(&self.right_start.to_string());
+        out.push('\t');
+        out.push_str(&self.right_end.to_string());
+        out.push('\t');
+        out.push_str(&(self.left_exons_junctions.len() / 2).to_string());
+        out.push('\t');
+        out.push_str(&(self.right_exons_junctions.len() / 2).to_string());
+        out.push('\t');
+
+        let left_exons_str = self
+            .left_exons_junctions
+            .chunks(2)
+            .map(|w| format!("{}-{}", w[0], w[1]))
+            .collect::<Vec<String>>()
+            .join(",");
+        out.push_str(&left_exons_str);
+        out.push('\t');
+        let right_exons_str = self
+            .right_exons_junctions
+            .chunks(2)
+            .map(|w| format!("{}-{}", w[0], w[1]))
+            .collect::<Vec<String>>()
+            .join(",");
+        out.push_str(&right_exons_str);
+        out.push('\t');
+        out.push_str(&self.sample_name);
+        out.push_str("\n");
+        out
     }
 }
 

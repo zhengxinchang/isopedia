@@ -340,7 +340,10 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
                             .for_each(|s| {
                                 let sa_vec: Vec<&str> = s.split(',').collect();
                                 let chrom2 = sa_vec[0].to_string();
-                                let mut left = sa_vec[1].parse::<u64>().unwrap();
+                                // let mut left = sa_vec[1].parse::<u64>().unwrap();
+                                // SA tag POS is 1-based (SAM spec); convert to 0-based to match
+                                // record.pos() and internal coordinate handling.
+                                let mut left = sa_vec[1].parse::<u64>().unwrap().saturating_sub(1);
                                 let mut right = left;
                                 let strand = sa_vec[2].to_string();
                                 let mut tmp_num_string = String::new();

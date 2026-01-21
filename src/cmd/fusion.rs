@@ -8,6 +8,7 @@ use std::{
 
 use crate::{
     bptree::BPForest,
+    breakpoints,
     constants::*,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionCluster},
@@ -43,7 +44,7 @@ isopedia fusion --idxdir /path/to/index --pos chr1:1000,chr2:2000 -o out.txt
 isopedia fusion --idxdir /path/to/index --pos-bed /path/to/fusion_breakpoints.bed -o out.txt
 
 Format of fusion_breakpoints.bed:
-chr2 \t 50795173 \t chr17 \t 61368325 \t BCAS4:BCAS3,UHR(optional)
+chr2 \t 50795173 \t 50795273 \t chr17 \t 61368325 \t 61368425 \t BCAS4:BCAS3,UHR(optional)
 
 # Discover any potential fusions using a GTF file
 isopedia fusion --idxdir /path/to/index --gene-gtf /path/to/gene.gtf -o out.txt
@@ -58,9 +59,13 @@ pub struct AnnFusionCli {
     #[arg(short, long)]
     pub pos: Option<String>,
 
-    /// bed file that has the breakpoints for gene fusions. First four columns are chr1, pos1, chr2, pos2, and starts from the fifth column is the fusion id.
+    /// bed file that has the breakpoints for gene fusions. First six columns are chr1, start, end, chr2, start, end, and starts from the seventh column is the fusion id.
     #[arg(short = 'P', long)]
     pub pos_bed: Option<PathBuf>,
+
+    /// query two regions for possible gene fusions, return any reads that has breakpoints within the two regions. Format: chr1:start-end,chr2:start-end
+    #[arg(short, long)]
+    pub region: Option<String>,
 
     /// bed file that has the start-end positions of the genes, used to find any possible gene fusions within the provided gene regions.
     #[arg(short = 'G', long)]
@@ -124,13 +129,17 @@ impl AnnFusionCli {
             is_ok = false;
         }
 
-        if self.pos.is_none() && self.pos_bed.is_none() && self.gene_gtf.is_none() {
-            error!("Please provide either --pos or --pos-bed");
+        if self.pos.is_none()
+            && self.pos_bed.is_none()
+            && self.gene_gtf.is_none()
+            && self.region.is_none()
+        {
+            error!("Please provide either --pos or --pos-bed or --region or --gene-gtf");
             is_ok = false;
         }
 
         if let Some(pos) = &self.pos {
-            match process_fusion_positions(pos) {
+            match FusionBreakPointPair::from_pos_str(pos) {
                 Ok(_) => (),
                 Err(e) => {
                     error!("Error parsing --pos: {}", e);
@@ -170,41 +179,118 @@ impl AnnFusionCli {
     }
 }
 
-fn process_fusion_positions(pos: &str) -> Result<((String, u64), (String, u64))> {
-    let parts: Vec<&str> = pos.split(',').collect();
+pub struct FusionBreakPointPair {
+    pub left_chr: String,
+    pub left_start: u64,
+    pub left_end: u64,
+    pub right_chr: String,
+    pub right_start: u64,
+    pub right_end: u64,
+    pub idstring: String,
+}
 
-    if parts.len() != 2 {
-        return Err(anyhow::anyhow!(
-            "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2"
-        ));
-    }
-    let mut breakpoints = Vec::new();
-    for part in parts {
-        let subparts: Vec<&str> = part.split(':').collect();
-        if subparts.len() != 2 {
+impl FusionBreakPointPair {
+    pub fn from_pos_str(pos: &str) -> Result<Self> {
+        let parts: Vec<&str> = pos.split(',').collect();
+
+        if parts.len() != 2 {
             return Err(anyhow::anyhow!(
                 "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2"
             ));
         }
-        let chr = subparts[0].to_string();
-        let chr = utils::trim_chr_prefix_to_upper(&chr);
-
-        let pos = match subparts[1].parse::<u64>() {
-            Ok(p) => p,
-            Err(_) => {
-                return Err(anyhow::anyhow!("Position must be a valid integer"));
+        let mut breakpoints = Vec::new();
+        for part in parts {
+            let subparts: Vec<&str> = part.split(':').collect();
+            if subparts.len() != 2 {
+                return Err(anyhow::anyhow!(
+                    "Invalid format for --pos. Expected format: chr1:pos1,chr2:pos2"
+                ));
             }
-        };
-        breakpoints.push((chr, pos));
+            let chr = subparts[0].to_string();
+            let chr = utils::trim_chr_prefix_to_upper(&chr);
+
+            let pos = match subparts[1].parse::<u64>() {
+                Ok(p) => p,
+                Err(_) => {
+                    return Err(anyhow::anyhow!("Position must be a valid integer"));
+                }
+            };
+            breakpoints.push((chr, pos));
+        }
+
+        Ok(FusionBreakPointPair {
+            left_chr: breakpoints[0].0.clone(),
+            left_start: breakpoints[0].1,
+            left_end: breakpoints[0].1,
+            right_chr: breakpoints[1].0.clone(),
+            right_start: breakpoints[1].1,
+            right_end: breakpoints[1].1,
+            idstring: String::from("SingleQuery"),
+        })
     }
 
-    Ok((breakpoints[0].clone(), breakpoints[1].clone()))
+    pub fn from_region_str(region: &str) -> Result<Self> {
+        let parts = region.split(',').collect::<Vec<&str>>();
+        if parts.len() != 2 {
+            panic!("Invalid format for --region. Expected format: chr1:start-end,chr2:start-end");
+        }
+        let l_parts = parts[0].split(':').collect::<Vec<&str>>();
+        let left_chr = l_parts[0].to_string();
+        let left_chr = utils::trim_chr_prefix_to_upper(&left_chr);
+        let left_start = l_parts[1].split('-').collect::<Vec<&str>>()[0]
+            .parse::<u64>()
+            .expect("Invalid left region start position");
+        let left_end = l_parts[1].split('-').collect::<Vec<&str>>()[1]
+            .parse::<u64>()
+            .expect("Invalid left region end position");
+        let r_parts = parts[1].split(':').collect::<Vec<&str>>();
+        let right_chr = r_parts[0].to_string();
+        let right_chr = utils::trim_chr_prefix_to_upper(&right_chr);
+        let right_start = r_parts[1].split('-').collect::<Vec<&str>>()[0]
+            .parse::<u64>()
+            .expect("Invalid right region start position");
+        let right_end = r_parts[1].split('-').collect::<Vec<&str>>()[1]
+            .parse::<u64>()
+            .expect("Invalid right region end position");
+        Ok(FusionBreakPointPair {
+            left_chr,
+            left_start,
+            left_end,
+            right_chr,
+            right_start,
+            right_end,
+            idstring: String::from("RegionQuery"),
+        })
+    }
+
+    pub fn is_single_bp(&self) -> bool {
+        self.left_start == self.left_end && self.right_start == self.right_end
+    }
+
+    // cacluate the query position and flank bp by region
+    // for example:
+    // chr1:100-200 --> chr1,150,50
+    // the query position is the center position, and flank is half of the region size
+    pub fn get_region_query_positions(&self) -> (String, u64, u64, String, u64, u64) {
+        let left_center = (self.left_start + self.left_end) / 2;
+        let left_flank = (self.left_end - self.left_start) / 2;
+
+        let right_center = (self.right_start + self.right_end) / 2;
+        let right_flank = (self.right_end - self.right_start) / 2;
+
+        (
+            self.left_chr.clone(),
+            left_center,
+            left_flank,
+            self.right_chr.clone(),
+            right_center,
+            right_flank,
+        )
+    }
 }
 
-type BreakpointType = ((String, u64), (String, u64), String);
-
 fn anno_single_fusion(
-    breakpoints: BreakpointType,
+    breakpoints: FusionBreakPointPair,
     // mywriter: &mut MyGzWriter,
     fusionbrkpt_out: &mut TableOutput,
     cli: &AnnFusionCli,
@@ -214,17 +300,20 @@ fn anno_single_fusion(
 ) -> Result<()> {
     info!(
         "Processing breakpoints: {}:{}-{}:{}",
-        breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
+        breakpoints.left_chr,
+        breakpoints.left_start,
+        breakpoints.right_chr,
+        breakpoints.right_start
     );
     let left_target = forest.base_single_search_flank(
-        &breakpoints.0 .0,
-        breakpoints.0 .1,
+        &breakpoints.left_chr,
+        breakpoints.left_start,
         cli.flank,
         cli.lru_size,
     );
     let right_target = forest.base_single_search_flank(
-        &breakpoints.1 .0,
-        breakpoints.1 .1,
+        &breakpoints.right_chr,
+        breakpoints.right_start,
         cli.flank,
         cli.lru_size,
     );
@@ -233,7 +322,10 @@ fn anno_single_fusion(
         if cli.verbose {
             error!(
                 "No candidates found for breakpoints: {}:{}-{}:{}",
-                breakpoints.0 .0, breakpoints.0 .1, breakpoints.1 .0, breakpoints.1 .1
+                breakpoints.left_chr,
+                breakpoints.left_start,
+                breakpoints.right_chr,
+                breakpoints.right_start
             );
         }
         return Ok(());
@@ -252,12 +344,13 @@ fn anno_single_fusion(
     let mut right_isoform_count = 0;
 
     // process the left targets
+    // check if the right portion is supported
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
         let merged_isoform = archive_cache.read_bytes(&target);
-        let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
-            &breakpoints.1 .0,
-            breakpoints.1 .1,
+        let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
+            &breakpoints.right_chr,
+            breakpoints.right_start,
             cli.flank,
             &dbinfo,
         );
@@ -274,12 +367,13 @@ fn anno_single_fusion(
     }
 
     // process the right targets
+    // check if the left portion is supported
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
         let merged_isoform: MergedIsoform = archive_cache.read_bytes(&target);
-        let evidence_vec = merged_isoform.find_fusion_by_breakpoints(
-            &breakpoints.0 .0,
-            breakpoints.0 .1,
+        let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
+            &breakpoints.left_chr,
+            breakpoints.left_start,
             cli.flank,
             &dbinfo,
         );
@@ -296,11 +390,11 @@ fn anno_single_fusion(
     }
 
     let mut out_line = Line::with_capacity(dbinfo.get_size());
-    out_line.add_field(&breakpoints.0 .0.to_string());
-    out_line.add_field(&breakpoints.0 .1.to_string());
-    out_line.add_field(&breakpoints.1 .0.to_string());
-    out_line.add_field(&breakpoints.1 .1.to_string());
-    out_line.add_field(&breakpoints.2.to_string());
+    out_line.add_field(&breakpoints.left_chr.to_string());
+    out_line.add_field(&breakpoints.left_start.to_string());
+    out_line.add_field(&breakpoints.right_chr.to_string());
+    out_line.add_field(&breakpoints.right_start.to_string());
+    out_line.add_field(&breakpoints.idstring);
     out_line.add_field(&cli.min_read.to_string());
     out_line.add_field(&format!(
         "{}/{}",
@@ -326,7 +420,161 @@ fn anno_single_fusion(
     Ok(())
 }
 
-fn parse_bed(line: &str) -> Result<BreakpointType> {
+/// Annotate a single fusion breakpoint but with each raw read deails
+/// it generate a different output format as anno_single_fusion
+/// breakpoints is not a single bp but two regions for each side,
+/// this allows to find all combiantion for two regions, this is useful when query
+/// all possible fusions withint the regions(eg. intron) from each gene
+pub fn anno_single_fusion_detail(
+    breakpoints: FusionBreakPointPair,
+    // mywriter: &mut MyGzWriter,
+    // fusionbrkpt_out: &mut TableOutput,
+    cli: &AnnFusionCli,
+    forest: &mut BPForest,
+    archive_cache: &mut ArchiveCache,
+    meta: &Meta,
+    dbinfo: &DatasetInfo,
+) -> Result<()> {
+    // const FUSION_BRKPT_FORMAT_STR: &str = "COUNT";
+
+    /*
+
+        pub fusion_hash: u64,
+        pub left_chrom: String,
+        pub left_start: u64,
+        pub left_end: u64,
+        pub right_chrom: String,
+        pub right_start: u64,
+        pub right_end: u64,
+        pub left_exons_junctions: Vec<u64>, // exon positions on the left side not splice junctions
+        pub right_exons_junctions: Vec<u64>, // exon positions on the right side not splice junctions
+        pub sample_name: String,
+    */
+
+    let mut out_header = Header::new();
+    out_header.add_column(&"chr1")?;
+    out_header.add_column(&"start1")?;
+    out_header.add_column(&"end1")?;
+    out_header.add_column(&"chr2")?;
+    out_header.add_column(&"start2")?;
+    out_header.add_column(&"end2")?;
+    out_header.add_column(&"exon_count1")?;
+    out_header.add_column(&"exon_count2")?;
+    out_header.add_column(&"left_isoforms")?;
+    out_header.add_column(&"right_isoforms")?;
+    out_header.add_column(&"sample_name")?;
+
+    // let sample_name = dbinfo.get_sample_names();
+    // for name in sample_name {
+    //     out_header.add_sample_name(&name)?;
+    // }
+
+    let mut dbinfo2 = DBInfos::new();
+    for (name, evidence) in dbinfo.get_sample_evidence_pair_vec() {
+        dbinfo2.add_sample_evidence(&name, evidence);
+    }
+
+    let mut fusionbrkpt_out = TableOutput::new(
+        cli.output.clone(),
+        out_header,
+        dbinfo2,
+        meta.clone(),
+        "".to_string(),
+    );
+
+    // sart to query the breakpoints
+    // the query is different to the exact breakpoints
+
+    info!(
+        "Searching fusion in regions: {}:{}-{}:{}",
+        breakpoints.left_chr,
+        breakpoints.left_start,
+        breakpoints.right_chr,
+        breakpoints.right_start
+    );
+
+    let (q_l_chr, q_l_pos, q_l_flank, q_r_chr, q_r_pos, q_r_flank) =
+        breakpoints.get_region_query_positions();
+
+    if cli.verbose {
+        info!(
+            "Query left region: {}:{} +/- {}, right region: {}:{} +/- {}",
+            q_l_chr, q_l_pos, q_l_flank, q_r_chr, q_r_pos, q_r_flank
+        );
+    }
+
+    let left_target = forest.base_single_search_flank(&q_l_chr, q_l_pos, q_l_flank, cli.lru_size);
+    let right_target = forest.base_single_search_flank(&q_r_chr, q_r_pos, q_r_flank, cli.lru_size);
+
+    if left_target.is_empty() || right_target.is_empty() {
+        if cli.verbose {
+            error!(
+                "No candidates found for regions: {}:{}-{},{}:{}-{}",
+                q_l_chr,
+                q_l_pos - q_l_flank,
+                q_l_pos + q_l_flank,
+                q_r_chr,
+                q_r_pos - q_r_flank,
+                q_r_pos + q_r_flank
+            );
+        }
+        return Ok(());
+    }
+
+    // check the mate support for each side
+    if cli.verbose {
+        info!(
+            "Found {} candidates",
+            left_target.len() + right_target.len()
+        );
+    }
+
+    let mut total_fusion_records = Vec::new();
+
+    // process the left targets
+    // check if the right portion is supported
+    let unique_left = left_target.into_iter().collect::<HashSet<_>>();
+    for target in unique_left {
+        let merged_isoform = archive_cache.read_bytes(&target);
+
+        let fusion_read_records = merged_isoform.cast_to_fusion_records(
+            &q_r_chr,
+            q_r_pos,
+            q_r_flank,
+            dbinfo,
+            &breakpoints,
+        );
+        total_fusion_records.extend(fusion_read_records);
+    }
+
+    for target_right in right_target {
+        let merged_isoform: MergedIsoform = archive_cache.read_bytes(&target_right);
+
+        let fusion_read_records = merged_isoform.cast_to_fusion_records(
+            &q_l_chr,
+            q_l_pos,
+            q_l_flank,
+            dbinfo,
+            &breakpoints,
+        );
+        total_fusion_records.extend(fusion_read_records);
+    }
+
+    info!(
+        "Total {} fusion read records found for the provided regions.",
+        total_fusion_records.len()
+    );
+
+    // generate output for each fusion read record
+    for record in total_fusion_records {
+        fusionbrkpt_out.write_bytes(&record.get_string().as_bytes())?;
+    }
+    fusionbrkpt_out.finish()?;
+
+    Ok(())
+}
+
+fn parse_bed2(line: &str) -> Result<FusionBreakPointPair> {
     let fields: Vec<&str> = line.split('\t').collect();
     if fields.len() < 5 {
         return Err(anyhow!(
@@ -335,19 +583,31 @@ fn parse_bed(line: &str) -> Result<BreakpointType> {
         ));
     }
     // trim the chr prefix and convert to uppercase
-    let chr1 = fields[0].to_string();
-    let chr1 = utils::trim_chr_prefix_to_upper(&chr1);
-    let pos1 = fields[1]
+    let left_chr = fields[0].to_string();
+    let left_chr = utils::trim_chr_prefix_to_upper(&left_chr);
+    let left_start = fields[1]
         .parse::<u64>()
         .map_err(|_| anyhow!("Invalid position"))?;
-    let chr2 = fields[2].to_string();
-    let chr2 = utils::trim_chr_prefix_to_upper(&chr2);
-    let pos2 = fields[3]
+    let right_chr = fields[2].to_string();
+    let right_chr = utils::trim_chr_prefix_to_upper(&right_chr);
+    let right_start = fields[3]
         .parse::<u64>()
         .map_err(|_| anyhow!("Invalid position"))?;
-    let fusion_id = fields[4].to_string();
+    let id = if fields.len() >= 5 {
+        fields[4].to_string()
+    } else {
+        "NA".to_string()
+    };
 
-    Ok(((chr1, pos1), (chr2, pos2), fusion_id))
+    Ok(FusionBreakPointPair {
+        left_chr,
+        left_start,
+        left_end: left_start,
+        right_chr,
+        right_start,
+        right_end: right_start,
+        idstring: id.clone(),
+    })
 }
 
 pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
@@ -398,13 +658,9 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
         if cli.pos.is_some() {
             let pos = &cli.pos.clone().unwrap();
-            let breakpoints: BreakpointType = match process_fusion_positions(pos) {
-                Ok(bp) => (bp.0, bp.1, "SingleQuery".to_string()),
-                Err(e) => {
-                    error!("Error parsing --pos: {}", e);
-                    std::process::exit(1);
-                }
-            };
+            // let breakpoints: BreakPointPair =  take_from_cli(pos)?;
+
+            let breakpoints = FusionBreakPointPair::from_pos_str(pos)?;
 
             anno_single_fusion(
                 breakpoints,
@@ -426,7 +682,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
             for line in reader.lines() {
                 let line = line.context("Failed to read line from bed file")?;
-                let breakpoints: BreakpointType = parse_bed(&line)?;
+                let breakpoints: FusionBreakPointPair = parse_bed2(&line)?;
 
                 anno_single_fusion(
                     breakpoints,
@@ -547,7 +803,22 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         info!("Total skipped genes: {}", skipped_genes);
         info!("Total processed samples: {}", dataset_info.get_size());
         fusiondiscovery_out.finish()?;
+    } else if cli.region.is_some() {
+        let pos = &cli.region.clone().unwrap();
+        let breakpoints = FusionBreakPointPair::from_region_str(pos)?;
+
+        anno_single_fusion_detail(
+            breakpoints,
+            // &mut mywriter,
+            // &mut fusionbrkpt_out,
+            &cli,
+            &mut forest,
+            &mut archive_cache,
+            &meta,
+            &dataset_info,
+        )?;
     }
+
     info!("Finished!");
     Ok(())
 }

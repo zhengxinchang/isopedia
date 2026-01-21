@@ -1,5 +1,5 @@
 use crate::bptree::BPForest;
-use crate::breakpoints::{self, BreakPointPair};
+use crate::breakpoints::{self, SpliceBreakPointPair};
 use crate::dataset_info::DatasetInfo;
 use crate::isoform::MergedIsoform;
 use crate::myio::{self, DBInfos, Line};
@@ -158,11 +158,11 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
     out_header.add_column("end_pos_right")?;
     out_header.add_column("splice_junctions")?;
 
-    let queries: Vec<BreakPointPair> = if cli.splice.is_some() {
+    let queries: Vec<SpliceBreakPointPair> = if cli.splice.is_some() {
         info!("parse breakpoints pair from command line...");
         let splice_str = cli.splice.clone().unwrap();
-        let bp =
-            BreakPointPair::parse_string(&splice_str).expect("Can not parse splice junction...");
+        let bp = SpliceBreakPointPair::parse_string(&splice_str)
+            .expect("Can not parse splice junction...");
         vec![bp]
     } else if cli.splice_bed.is_some() {
         let splice_bed_path = cli.splice_bed.clone().unwrap();

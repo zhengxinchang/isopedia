@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::utils::{self, trim_chr_prefix_to_upper};
 #[derive(Debug, Clone)]
-pub struct BreakPointPair {
+pub struct SpliceBreakPointPair {
     pub left_chr: String,
     pub left_pos: u64,
     pub right_chr: String,
@@ -14,7 +14,7 @@ pub struct BreakPointPair {
     pub rest_info: String,
 }
 
-impl BreakPointPair {
+impl SpliceBreakPointPair {
     pub fn parse_bed_line(s: &str) -> Result<Self> {
         let mut parts = s.split('\t');
         let left_chr = parts
@@ -99,17 +99,17 @@ impl BreakPointPair {
     }
 }
 
-pub fn bed2breakpointsvec<P: AsRef<Path>>(p: P) -> Result<Vec<BreakPointPair>> {
+pub fn bed2breakpointsvec<P: AsRef<Path>>(p: P) -> Result<Vec<SpliceBreakPointPair>> {
     let file = File::open(p)?;
     let reader = BufReader::new(file);
-    let mut breakpoints: Vec<BreakPointPair> = Vec::new();
+    let mut breakpoints: Vec<SpliceBreakPointPair> = Vec::new();
 
     for line in reader.lines() {
         let line = line?;
         if line.trim().is_empty() || line.starts_with('#') {
             continue; // Skip empty lines and comments
         }
-        let mut bp = BreakPointPair::parse_bed_line(&line)?;
+        let mut bp = SpliceBreakPointPair::parse_bed_line(&line)?;
         bp.sort();
         breakpoints.push(bp);
     }

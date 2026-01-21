@@ -162,22 +162,31 @@ tfusion3:build
 	target/release/isopedia fusion -i test/HG002_idx/ -f 200 -G test/gencode.v47.basic.annotation.gtf  -o test/fusion_discovery.output.gz
 
 tfusion4:build
-	target/release/isopedia-anno-fusion --verbose -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
+	target/release/isopedia fusion --verbose -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
 	-G test/gencode.v47.basic.annotation.RUNX1RUNX1T1.gtf  \
 	-o test/fusion_discovery_cancer.output.gz &> aa.log
 
 tfusion5:build
-	target/release/isopedia-anno-fusion -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
+	target/release/isopedia fusion -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/fusion_idx/ \
 	-G /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  \
 	-o test/fusion_discovery_cancer.output.all.gz &> aa.log
 
-
-
 tfusion6:build
-	target/release/isopedia-anno-fusion  -i /ssd1/stix-iso-devspace/isopedia-dev/test/HG002_idx \
+	target/release/isopedia fusion  -i /ssd1/stix-iso-devspace/isopedia-dev/test/HG002_idx \
 	-G /ssd1/stix-iso-devspace/stix-isoform-experiment/ref/gencode.v47.basic.annotation.gtf  \
 	-o test/hg002_fusion_discovery_cancer.output.all.gz &> aa.log
 
+tfusion7:build
+	target/release/isopedia fusion  -i /ssd2/isopedia_wk/isopedia_index \
+	-r chr22:23289517-23290413,chr9:130854064-130855096 \
+	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz --verbose
+
+tfusion8:build
+	target/release/isopedia fusion  -i /ssd2/isopedia_wk/isopedia_index \
+	-r chr22:23289621-23290339,chr9:130854237-130854801 \
+	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz --verbose
+
+#-r chr9:23289621-23290339,chr22:130854237-130854801 \
 # chr17   HAVANA  exon    7675994 7676272 .       -       .       gene_id "ENSG00000141510.19"; transcript_id "ENST00000413465.6"; gene_type "protein_coding"; gene_name "TP53"; transcript_t>
 # chr17   HAVANA  CDS     7675994 7676272 .       -       0       gene_id "ENSG00000141510.19"; transcript_id "ENST00000413465.6"; gene_type "protein_coding"; gene_name "TP53"; transcript_t>
 # chr17   HAVANA  exon    7675053 7675236 .       -       .       gene_id "ENSG00000141510.19"; transcript_id "ENST00000413465.6"; gene_type "protein_coding"; gene_name "TP53"; transcript_t>
