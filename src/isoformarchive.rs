@@ -109,7 +109,7 @@ impl ArchiveCache {
         Ok(arc_buf)
     }
 
-    pub fn read_bytes(&mut self, offset: &MergedIsoformOffsetPtr) -> MergedIsoform {
+    pub fn load_from_disk(&mut self, offset: &MergedIsoformOffsetPtr) -> MergedIsoform {
         // info!("Reading record at offset: {:?}", offset);
         if self.buf.len() > 100 * 1024 * 1024 {
             // if buffer larger than 100MB, reset it

@@ -237,7 +237,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
 
                 out_line.update_format_str(SPLICE_FORMAT);
 
-                let record: MergedIsoform = archive_cache.read_bytes(&offset);
+                let record: MergedIsoform = archive_cache.load_from_disk(&offset);
                 // read_record_from_mmap(&archive_mmap, &offset, &mut archive_buf);
                 if cli.verbose {
                     dbg!(&record);

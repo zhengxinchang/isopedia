@@ -347,7 +347,7 @@ fn anno_single_fusion(
     // check if the right portion is supported
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
-        let merged_isoform = archive_cache.read_bytes(&target);
+        let merged_isoform = archive_cache.load_from_disk(&target);
         let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
             &breakpoints.right_chr,
             breakpoints.right_start,
@@ -370,7 +370,7 @@ fn anno_single_fusion(
     // check if the left portion is supported
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform: MergedIsoform = archive_cache.read_bytes(&target);
+        let merged_isoform: MergedIsoform = archive_cache.load_from_disk(&target);
         let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
             &breakpoints.left_chr,
             breakpoints.left_start,
@@ -538,7 +538,7 @@ pub fn anno_single_fusion_detail(
     // check if the right portion is supported
     let unique_left = left_target.into_iter().collect::<HashSet<_>>();
     for target in unique_left {
-        let merged_isoform = archive_cache.read_bytes(&target);
+        let merged_isoform = archive_cache.load_from_disk(&target);
 
         let fusion_read_records = merged_isoform.cast_to_fusion_records(
             &q_r_chr,
@@ -552,7 +552,7 @@ pub fn anno_single_fusion_detail(
     }
 
     for target_right in right_target {
-        let merged_isoform: MergedIsoform = archive_cache.read_bytes(&target_right);
+        let merged_isoform: MergedIsoform = archive_cache.load_from_disk(&target_right);
 
         let fusion_read_records = merged_isoform.cast_to_fusion_records(
             &q_l_chr,
@@ -776,7 +776,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                 }
 
                 for rec_ptr in targets {
-                    let isoform: MergedIsoform = archive_cache.read_bytes(&rec_ptr);
+                    let isoform: MergedIsoform = archive_cache.load_from_disk(&rec_ptr);
 
                     let candidates = isoform.to_fusion_candidates();
 

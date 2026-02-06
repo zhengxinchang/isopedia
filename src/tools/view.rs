@@ -138,7 +138,7 @@ pub fn view_archive(cli: &ViewArgs) {
             for ptr in &leaf.data.merge_isoform_offset_vec {
                 // let rec = read_record_from_mmap(&archive_mmap, &ptr, &mut archive_buf);
 
-                let rec = archive.read_bytes(ptr);
+                let rec = archive.load_from_disk(ptr);
                 if processed_signautres.contains(&rec.signature) {
                     continue;
                 }

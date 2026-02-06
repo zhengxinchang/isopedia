@@ -336,6 +336,7 @@ impl GroupedTx {
                 self.msjcs.len()
             );
         }
+        let mut overall_fsm_ptrs = HashSet::new();
 
         // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
         // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
@@ -345,7 +346,8 @@ impl GroupedTx {
             if !tx_abd.is_mono_exonic {
                 let mut fsm_misoforms_candidates: Vec<&Vec<MergedIsoformOffsetPtr>> = Vec::new();
                 // at least mapping with one sj to be considered as msjc
-                let mut partial_msjc_map: HashMap<u64, &MergedIsoformOffsetPtr> =
+                // key offset value offsetptr
+                let mut per_abd_partial_msjc_map: HashMap<u64, &MergedIsoformOffsetPtr> =
                     HashMap::default();
 
                 for sj_pair in tx_abd.sj_pairs.iter() {
@@ -363,7 +365,7 @@ impl GroupedTx {
                     quick_find_partial_msjc_exclude_read_st_end(
                         &all_res[*sj_start_idx],
                         &all_res[*sj_end_idx],
-                        &mut partial_msjc_map,
+                        &mut per_abd_partial_msjc_map,
                     );
                 }
 
@@ -371,7 +373,7 @@ impl GroupedTx {
 
                 // remove fsm offsets from msjc_map
                 for fsm in fsm_msjc_offsets.iter() {
-                    partial_msjc_map.remove(&fsm.offset);
+                    per_abd_partial_msjc_map.remove(&fsm.offset);
                 }
 
                 if cli.verbose {
@@ -379,27 +381,34 @@ impl GroupedTx {
                         "Transcript {}: found {} FSM misoforms and {} MSJC misoforms",
                         tx_idx,
                         fsm_msjc_offsets.len(),
-                        partial_msjc_map.len()
+                        per_abd_partial_msjc_map.len()
                     );
                 }
 
-                // add fsm misoforms
+                // process fsm misoforms
                 for fsm in fsm_msjc_offsets.into_iter() {
-                    let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
+                    let fsm_msjc_rec = archive_cache.load_from_disk(&fsm);
 
                     tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
+                    overall_fsm_ptrs.insert(fsm.offset);
                 }
 
-                // add msjcs
+                // process partial msjc misoforms
 
-                for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
+                for (offset, msjc_ptr) in per_abd_partial_msjc_map.into_iter() {
+
+                    // skip the fsm ptrs that are already processed
+                    if overall_fsm_ptrs.contains(&offset) {
+                        continue;
+                    }
+
                     let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
                         msjc_idx
                     } else {
                         let msjc = MSJC::new(
                             // offset,
                             dbinfo.get_size(),
-                            &archive_cache.read_bytes(&msjc_ptr),
+                            &archive_cache.load_from_disk(&msjc_ptr),
                         );
                         self.msjcs.push(msjc);
                         let grouped_tx_msjc_idx = self.msjcs.len() - 1;
@@ -435,6 +444,17 @@ impl GroupedTx {
             info!("Processing mono exonic transcripts results...");
         }
 
+        // self.tx_abundances.iter().for_each(|txabd|{
+        //     // print msjcs for this txabd
+        //     println!("tx_idx: {}, is_mono_exonic: {}, sj_pairs: {:?}, msjc_ids: {:?}", txabd.id, txabd.is_mono_exonic, txabd.sj_pairs, txabd.msjc_ids.len());
+
+        //     for (msjc_id,_) in txabd.msjc_ids.iter() {
+        //         let msjc = &self.msjcs[*msjc_id];
+        //         println!("  msjc_id: {}, splice_junctions_vec: {:?}",
+        //             msjc_id, msjc.splice_junctions_vec);
+        //     }
+        // });
+
         let mut cnt = 0;
         // process mono exonic transcripts results
         for mono_exon_result in all_res_mono_exonic.iter() {
@@ -462,7 +482,7 @@ impl GroupedTx {
             ];
 
             for ptr in &mono_exon_result.ptrs {
-                let misoform = archive_cache.read_bytes(&ptr);
+                let misoform = archive_cache.load_from_disk(&ptr);
 
                 let msjc = MSJC::new(
                     // ptr.offset,
@@ -513,194 +533,194 @@ impl GroupedTx {
         }
     }
 
-    pub fn update_results2(
-        &mut self,
-        all_res: &Vec<Vec<MergedIsoformOffsetPtr>>,
-        all_res_mono_exonic: &Vec<Vec<Rc<MergedIsoformOffsetPtr>>>,
-        archive_cache: &mut ArchiveCache,
-        dbinfo: &DatasetInfo,
-        cli: &AnnIsoCli,
-    ) {
-        if cli.verbose {
-            info!("updating searched results...")
-        }
+    // pub fn update_results2(
+    //     &mut self,
+    //     all_res: &Vec<Vec<MergedIsoformOffsetPtr>>,
+    //     all_res_mono_exonic: &Vec<Vec<Rc<MergedIsoformOffsetPtr>>>,
+    //     archive_cache: &mut ArchiveCache,
+    //     dbinfo: &DatasetInfo,
+    //     cli: &AnnIsoCli,
+    // ) {
+    //     if cli.verbose {
+    //         info!("updating searched results...")
+    //     }
 
-        if all_res.len() != self.sj_pooled_positions_multi_exonic.len() {
-            panic!("Number of results does not match number of positions");
-        }
+    //     if all_res.len() != self.sj_pooled_positions_multi_exonic.len() {
+    //         panic!("Number of results does not match number of positions");
+    //     }
 
-        if all_res_mono_exonic.len() != self.sj_positions_mono_exonic.len() {
-            panic!("Number of mono exonic results does not match number of mono exonic positions");
-        }
+    //     if all_res_mono_exonic.len() != self.sj_positions_mono_exonic.len() {
+    //         panic!("Number of mono exonic results does not match number of mono exonic positions");
+    //     }
 
-        let mut msjc_map_global: HashMap<u64, usize> = HashMap::default();
+    //     let mut msjc_map_global: HashMap<u64, usize> = HashMap::default();
 
-        if cli.verbose {
-            info!(
-                "Updating results for grouped tx with {} transcripts, {} positions for multi-exon tx, {} positions for mono-exon tx, total MSJC {}",
-                self.tx_abundances.len(),
-                self.sj_pooled_positions_multi_exonic.len(),
-                self.sj_positions_mono_exonic.len(),
-                self.msjcs.len()
-            );
-        }
+    //     if cli.verbose {
+    //         info!(
+    //             "Updating results for grouped tx with {} transcripts, {} positions for multi-exon tx, {} positions for mono-exon tx, total MSJC {}",
+    //             self.tx_abundances.len(),
+    //             self.sj_pooled_positions_multi_exonic.len(),
+    //             self.sj_positions_mono_exonic.len(),
+    //             self.msjcs.len()
+    //         );
+    //     }
 
-        let mut overall_fsm_ptrs = HashSet::new();
+    //     let mut overall_fsm_ptrs = HashSet::new();
 
-        // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
-        let mut local_mono_exonic_idx = 0;
-        // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
-        // however, the order of those idx in mono exonic results is the same as the order in tx_abundances
-        for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
-            // mono exonic need a special process
-            if tx_abd.is_mono_exonic {
-                let res_vec = &all_res_mono_exonic[local_mono_exonic_idx];
+    //     // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
+    //     let mut local_mono_exonic_idx = 0;
+    //     // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
+    //     // however, the order of those idx in mono exonic results is the same as the order in tx_abundances
+    //     for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
+    //         // mono exonic need a special process
+    //         if tx_abd.is_mono_exonic {
+    //             let res_vec = &all_res_mono_exonic[local_mono_exonic_idx];
 
-                if res_vec.is_empty() {
-                    local_mono_exonic_idx += 1;
-                    continue;
-                }
+    //             if res_vec.is_empty() {
+    //                 local_mono_exonic_idx += 1;
+    //                 continue;
+    //             }
 
-                for misoform_ptr in res_vec.iter() {
-                    let misoform = archive_cache.read_bytes(&misoform_ptr);
+    //             for misoform_ptr in res_vec.iter() {
+    //                 let misoform = archive_cache.read_bytes(&misoform_ptr);
 
-                    if misoform.is_mono_exonic() {
-                        // only consider mono exonic misoforms records here
+    //                 if misoform.is_mono_exonic() {
+    //                     // only consider mono exonic misoforms records here
 
-                        let msjc_idx = if let Some(&idx) = msjc_map_global.get(&misoform_ptr.offset)
-                        {
-                            idx
-                        } else {
-                            let msjc = MSJC::new(
-                                // misoform_ptr.offset,
-                                dbinfo.get_size(),
-                                &archive_cache.read_bytes(&misoform_ptr),
-                            );
-                            self.msjcs.push(msjc);
-                            let new_idx = self.msjcs.len() - 1;
-                            msjc_map_global.insert(misoform_ptr.offset, new_idx);
-                            new_idx
-                        };
+    //                     let msjc_idx = if let Some(&idx) = msjc_map_global.get(&misoform_ptr.offset)
+    //                     {
+    //                         idx
+    //                     } else {
+    //                         let msjc = MSJC::new(
+    //                             // misoform_ptr.offset,
+    //                             dbinfo.get_size(),
+    //                             &archive_cache.read_bytes(&misoform_ptr),
+    //                         );
+    //                         self.msjcs.push(msjc);
+    //                         let new_idx = self.msjcs.len() - 1;
+    //                         msjc_map_global.insert(misoform_ptr.offset, new_idx);
+    //                         new_idx
+    //                     };
 
-                        assert!(msjc_idx < self.msjcs.len());
+    //                     assert!(msjc_idx < self.msjcs.len());
 
-                        // check if fsm
+    //                     // check if fsm
 
-                        let msjc = &self.msjcs[msjc_idx];
+    //                     let msjc = &self.msjcs[msjc_idx];
 
-                        if msjc.check_mono_exon_fsm(&tx_abd, cli) {
-                            tx_abd.update_fsm_evidence_count(&misoform, cli);
-                            overall_fsm_ptrs.insert(misoform_ptr.offset);
-                        } else {
-                            if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
-                                let tx_local_id_in_this_msjc =
-                                    self.msjcs[msjc_idx].add_txabundance(tx_abd);
-                                tx_abd.add_msjc_mono_exonic(msjc_idx, tx_local_id_in_this_msjc);
-                            }
-                        }
-                    } else {
-                        continue;
-                    }
-                }
+    //                     if msjc.check_mono_exon_fsm(&tx_abd, cli) {
+    //                         tx_abd.update_fsm_evidence_count(&misoform, cli);
+    //                         overall_fsm_ptrs.insert(misoform_ptr.offset);
+    //                     } else {
+    //                         if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
+    //                             let tx_local_id_in_this_msjc =
+    //                                 self.msjcs[msjc_idx].add_txabundance(tx_abd);
+    //                             tx_abd.add_msjc_mono_exonic(msjc_idx, tx_local_id_in_this_msjc);
+    //                         }
+    //                     }
+    //                 } else {
+    //                     continue;
+    //                 }
+    //             }
 
-                local_mono_exonic_idx += 1;
-            } else {
-                let mut fsm_misoforms_candidates: Vec<&Vec<MergedIsoformOffsetPtr>> = Vec::new();
-                // at least mapping with one sj to be considered as msjc
-                let mut partial_msjc_map: HashMap<u64, &MergedIsoformOffsetPtr> =
-                    HashMap::default();
+    //             local_mono_exonic_idx += 1;
+    //         } else {
+    //             let mut fsm_misoforms_candidates: Vec<&Vec<MergedIsoformOffsetPtr>> = Vec::new();
+    //             // at least mapping with one sj to be considered as msjc
+    //             let mut partial_msjc_map: HashMap<u64, &MergedIsoformOffsetPtr> =
+    //                 HashMap::default();
 
-                for sj_pair in tx_abd.sj_pairs.iter() {
-                    let sj_start_idx = self
-                        .sj_pooled_position_to_tx_abundance_map
-                        .get(&sj_pair.0)
-                        .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.0));
-                    let sj_end_idx = self
-                        .sj_pooled_position_to_tx_abundance_map
-                        .get(&sj_pair.1)
-                        .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.1));
+    //             for sj_pair in tx_abd.sj_pairs.iter() {
+    //                 let sj_start_idx = self
+    //                     .sj_pooled_position_to_tx_abundance_map
+    //                     .get(&sj_pair.0)
+    //                     .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.0));
+    //                 let sj_end_idx = self
+    //                     .sj_pooled_position_to_tx_abundance_map
+    //                     .get(&sj_pair.1)
+    //                     .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.1));
 
-                    fsm_misoforms_candidates.push(&all_res[*sj_start_idx]);
-                    fsm_misoforms_candidates.push(&all_res[*sj_end_idx]);
-                    quick_find_partial_msjc_exclude_read_st_end(
-                        &all_res[*sj_start_idx],
-                        &all_res[*sj_end_idx],
-                        &mut partial_msjc_map,
-                    );
-                }
+    //                 fsm_misoforms_candidates.push(&all_res[*sj_start_idx]);
+    //                 fsm_misoforms_candidates.push(&all_res[*sj_end_idx]);
+    //                 quick_find_partial_msjc_exclude_read_st_end(
+    //                     &all_res[*sj_start_idx],
+    //                     &all_res[*sj_end_idx],
+    //                     &mut partial_msjc_map,
+    //                 );
+    //             }
 
-                let fsm_msjc_offsets = find_fsm(fsm_misoforms_candidates, tx_abd.sj_pairs.len());
+    //             let fsm_msjc_offsets = find_fsm(fsm_misoforms_candidates, tx_abd.sj_pairs.len());
 
-                // remove fsm offsets from msjc_map
-                for fsm in fsm_msjc_offsets.iter() {
-                    partial_msjc_map.remove(&fsm.offset);
-                }
+    //             // remove fsm offsets from msjc_map
+    //             for fsm in fsm_msjc_offsets.iter() {
+    //                 partial_msjc_map.remove(&fsm.offset);
+    //             }
 
-                if cli.verbose {
-                    info!(
-                        "Transcript {}: found {} FSM misoforms and {} MSJC misoforms",
-                        tx_idx,
-                        fsm_msjc_offsets.len(),
-                        partial_msjc_map.len()
-                    );
-                }
+    //             if cli.verbose {
+    //                 info!(
+    //                     "Transcript {}: found {} FSM misoforms and {} MSJC misoforms",
+    //                     tx_idx,
+    //                     fsm_msjc_offsets.len(),
+    //                     partial_msjc_map.len()
+    //                 );
+    //             }
 
-                // add fsm misoforms
-                for fsm in fsm_msjc_offsets.into_iter() {
-                    let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
+    //             // add fsm misoforms
+    //             for fsm in fsm_msjc_offsets.into_iter() {
+    //                 let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
 
-                    tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
-                    overall_fsm_ptrs.insert(fsm.offset);
-                }
+    //                 tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
+    //                 overall_fsm_ptrs.insert(fsm.offset);
+    //             }
 
-                // add msjcs
+    //             // add msjcs
 
-                for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
-                    if overall_fsm_ptrs.contains(&offset) {
-                        continue;
-                    }
+    //             for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
+    //                 if overall_fsm_ptrs.contains(&offset) {
+    //                     continue;
+    //                 }
 
-                    let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
-                        msjc_idx
-                    } else {
-                        let msjc = MSJC::new(
-                            // offset,
-                            dbinfo.get_size(),
-                            &archive_cache.read_bytes(&msjc_ptr),
-                        );
-                        self.msjcs.push(msjc);
-                        let grouped_tx_msjc_idx = self.msjcs.len() - 1;
-                        msjc_map_global.insert(offset, grouped_tx_msjc_idx);
-                        grouped_tx_msjc_idx
-                    };
+    //                 let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
+    //                     msjc_idx
+    //                 } else {
+    //                     let msjc = MSJC::new(
+    //                         // offset,
+    //                         dbinfo.get_size(),
+    //                         &archive_cache.read_bytes(&msjc_ptr),
+    //                     );
+    //                     self.msjcs.push(msjc);
+    //                     let grouped_tx_msjc_idx = self.msjcs.len() - 1;
+    //                     msjc_map_global.insert(offset, grouped_tx_msjc_idx);
+    //                     grouped_tx_msjc_idx
+    //                 };
 
-                    let msjc = &mut self.msjcs[msjc_idx];
-                    let (is_all_matched, first_match_pos, matched_count) =
-                        msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+    //                 let msjc = &mut self.msjcs[msjc_idx];
+    //                 let (is_all_matched, first_match_pos, matched_count) =
+    //                     msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
 
-                    // consider adjust the match logic here and compare the correlations with ground truth
-                    if is_all_matched {
-                        if msjc.splice_junctions_vec.len() >= 1 {
-                            if matched_count >= 1 {
-                                let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
-                                tx_abd.add_msjc(
-                                    msjc_map_global[&offset],
-                                    tx_local_id_in_this_msjc,
-                                    first_match_pos as usize,
-                                    matched_count,
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    //                 // consider adjust the match logic here and compare the correlations with ground truth
+    //                 if is_all_matched {
+    //                     if msjc.splice_junctions_vec.len() >= 1 {
+    //                         if matched_count >= 1 {
+    //                             let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+    //                             tx_abd.add_msjc(
+    //                                 msjc_map_global[&offset],
+    //                                 tx_local_id_in_this_msjc,
+    //                                 first_match_pos as usize,
+    //                                 matched_count,
+    //                             );
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        // self.msjcs = msjc_map_global;
-        if cli.verbose {
-            info!("update results... finished.")
-        }
-    }
+    //     // self.msjcs = msjc_map_global;
+    //     if cli.verbose {
+    //         info!("update results... finished.")
+    //     }
+    // }
 
     pub fn prepare_em(&mut self, cli: &AnnIsoCli) {
         if cli.verbose {
@@ -953,71 +973,6 @@ impl TxAbundance {
 
                 self.fsm_abundance[sample_idx] += count;
             }
-
-            // misoform
-            //     .get_sample_offset_arr()
-            //     .iter()
-            //     .zip(misoform.get_sample_evidence_arr().iter())
-            //     .for_each(|(offset, evidence)| {
-            //         if *evidence > 0 {
-            //             for ridx in *offset..(*offset + *evidence) {
-            //                 let rdiff = &misoform.isoform_reads_slim_vec[ridx as usize];
-            //                 // println!(
-            //                 //     "read diff: left {}, right {}, tx start {}, tx end {}",
-            //                 //     rdiff.left, rdiff.right, self.orig_start, self.orig_end
-            //                 // );
-            //                 if self.orig_is_plus_strand {
-
-            //                     let cond1 = tx_start_flank_left <= rdiff.left;
-            //                     let cond2 = rdiff.left <= tx_start_flank_right;
-            //                     let cond3 = tx_end_flank_left <= rdiff.right;
-            //                     let cond4 = rdiff.right <= tx_end_flank_right;
-
-            //                     // println!(
-            //                     //     "cond1={} cond2={} cond3={} cond4={}",
-            //                     //     cond1, cond2, cond3, cond4
-            //                     // );
-
-            //                     if cond1 && cond2 && cond3 && cond4 {
-            //                         // println!("added plus strand!");
-            //                         new_evidence_vec[sample_idx] += 1.0;
-            //                     }
-            //                 } else {
-            //                     // minus strand, then read if plus stranded, then left is tes and right is tss
-
-            //                     let tx_start_flank_left =
-            //                         self.orig_start.saturating_sub(cli.flank_bp_check_tes);
-            //                     let tx_start_flank_right = self.orig_start + cli.flank_bp_check_tes;
-            //                     let tx_end_flank_left =
-            //                         self.orig_end.saturating_sub(cli.flank_bp_check_tss);
-            //                     let tx_end_flank_right = self.orig_end + cli.flank_bp_check_tss;
-            //                     let cond1 = tx_start_flank_left <= rdiff.left;
-            //                     let cond2 = rdiff.left <= tx_start_flank_right;
-            //                     let cond3 = tx_end_flank_left <= rdiff.right;
-            //                     let cond4 = rdiff.right <= tx_end_flank_right;
-
-            //                     // println!(
-            //                     //     "cond1={} cond2={} cond3={} cond4={}",
-            //                     //     cond1, cond2, cond3, cond4
-            //                     // );
-
-            //                     if cond1 && cond2 && cond3 && cond4 {
-            //                         // println!("added minus strand!");
-            //                         new_evidence_vec[sample_idx] += 1.0;
-            //                     }
-            //                 }
-            //             }
-            //         }
-
-            //         sample_idx += 1;
-            //     });
-            // // println!("new evidence vec: {:?}", new_evidence_vec);
-            // self.fsm_abundance
-            //     .iter_mut()
-            //     .zip(new_evidence_vec.iter())
-            //     .for_each(|(a, new_evidence)| {
-            //         *a += *new_evidence;
-            //     });
         }
     }
 
