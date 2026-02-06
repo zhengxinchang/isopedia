@@ -108,4 +108,12 @@ impl DatasetInfo {
         }
         v
     }
+
+    pub fn get_sample_idx_by_name(&self, name: &str) -> Option<String> {
+        if let Some(idx) = self.name2idx.get(name) {
+            Some(idx.to_string())
+        } else {
+            None
+        }
+    }
 }

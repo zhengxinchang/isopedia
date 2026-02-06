@@ -181,8 +181,8 @@ impl ChromGroupedTxManager {
 
             for grouped_tx in chunk.iter_mut() {
                 for txbd in grouped_tx.tx_abundances.iter() {
-                    global_stats.update_fsm_total(&txbd.fsm_abundance);
-                    global_stats.update_em_total(&txbd.abundance_cur);
+                    global_stats.update_fsm_tx_abd_total(&txbd.fsm_abundance);
+                    global_stats.update_em_tx_abd_total(&txbd.abundance_cur);
                 }
                 tmp_tx_manager.dump_grouped_tx(grouped_tx);
             }
@@ -1129,8 +1129,8 @@ pub struct TxAbundanceView {
     orig_start: u64,
     orig_end: u64,
     orig_attrs: Vec<u8>,
-    fsm_abundance: Vec<f32>,
-    em_abundance: Vec<f32>,
+    pub fsm_abundance: Vec<f32>,
+    pub em_abundance: Vec<f32>,
 }
 
 impl TxAbundanceView {
@@ -1236,7 +1236,9 @@ impl TxAbundanceView {
         })
     }
 
-    pub fn get_positive_samples(&self, min_read: f32) -> usize {
+    /// count number of samples with (fsm_abundance + em_abundance) >= min_read
+    /// this is the overall threadshold for both em and fsm
+    pub fn get_positive_samples_fsm_em(&self, min_read: f32) -> usize {
         let mut count = 0;
         for (abd1, abd2) in self.em_abundance.iter().zip(&self.fsm_abundance) {
             let total = abd1 + abd2;
@@ -1247,9 +1249,29 @@ impl TxAbundanceView {
         count
     }
 
+    pub fn get_positive_samples_fsm_only(&self, min_read: f32) -> usize {
+        let mut count = 0;
+        for abd in &self.fsm_abundance {
+            if *abd >= min_read {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    pub fn get_positive_samples_em_only(&self, min_read: f32) -> usize {
+        let mut count = 0;
+        for abd in &self.em_abundance {
+            if *abd >= min_read {
+                count += 1;
+            }
+        }
+        count
+    }
+
     pub fn write_line_directly(
         &self,
-        global_stats: &GlobalStats,
+        global_stats: &mut GlobalStats,
         dbinfo: &DatasetInfo,
         cli: &AnnIsoCli,
         tableout: &mut TableOutput,
@@ -1276,14 +1298,34 @@ impl TxAbundanceView {
             .map(|(&fsm, em)| fsm + em)
             .collect::<Vec<f32>>();
 
-        let confscore =
-            utils::calc_confidence_f32(&u32_arr, dbinfo.get_size(), &global_stats.fsm_em_total);
+        let confscore = utils::calc_confidence_f32(
+            &u32_arr,
+            dbinfo.get_size(),
+            &global_stats.fsm_em_tx_abd_total,
+        );
 
         tableout.write_bytes(confscore.to_string().as_bytes())?;
         tableout.write_bytes(b"\t")?;
 
-        let positive_samples = self.get_positive_samples(cli.min_read as f32);
-        if positive_samples != 0 {
+        global_stats.update_sample_level_stats(&self, cli);
+
+        let positive_samples_all = self.get_positive_samples_fsm_em(cli.min_read as f32);
+        let positive_samples_fsm = self.get_positive_samples_fsm_only(cli.min_read as f32);
+        let positive_samples_em = self.get_positive_samples_em_only(cli.min_read as f32);
+
+        if positive_samples_all != 0 {
+            tableout.write_bytes(b"yes")?;
+        } else {
+            tableout.write_bytes(b"no")?;
+        }
+        tableout.write_bytes(b":")?;
+        if positive_samples_fsm != 0 {
+            tableout.write_bytes(b"yes")?;
+        } else {
+            tableout.write_bytes(b"no")?;
+        }
+        tableout.write_bytes(b":")?;
+        if positive_samples_em != 0 {
             tableout.write_bytes(b"yes")?;
         } else {
             tableout.write_bytes(b"no")?;
@@ -1291,7 +1333,16 @@ impl TxAbundanceView {
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(cli.min_read.to_string().as_bytes())?;
         tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(format!("{}/{}", positive_samples, dbinfo.get_size()).as_bytes())?;
+        tableout.write_bytes(
+            format!(
+                "{}:{}:{}/{}",
+                positive_samples_all,
+                positive_samples_fsm,
+                positive_samples_em,
+                dbinfo.get_size()
+            )
+            .as_bytes(),
+        )?;
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(&self.orig_attrs)?;
         tableout.write_bytes(b"\t")?;
@@ -1306,7 +1357,7 @@ impl TxAbundanceView {
             };
 
             let total_abd = fsm + em;
-            let total_cov = global_stats.fsm_em_total[sid];
+            let total_cov = global_stats.fsm_em_tx_abd_total[sid];
 
             let fsm_cpm = utils::calc_cpm_f32(&fsm, &total_cov);
             let em_cpm = utils::calc_cpm_f32(&em, &total_cov);

@@ -1,6 +1,4 @@
 use clap::{Parser, Subcommand};
-
-use isopedia::cmd::download;
 use isopedia::cmd::fusion::run_anno_fusion;
 use isopedia::cmd::fusion::AnnFusionCli;
 use isopedia::cmd::index::run_idx;

@@ -81,7 +81,7 @@ t41:build
 
 t42:build
 	target/release/isopedia isoform  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \
-	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
+	 -g test/gencode.v47.basic.annotation.gtf \
 	 -o test/test.assembled.output.gz
 
 #grep -w -F 'ENST00000670780.1' /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf  > test/simulated_R9_missing.gtf

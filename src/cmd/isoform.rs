@@ -283,7 +283,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
         while let Some(tx_abd_view) = tmp_tx_manger.next() {
             // info!("writeing transcript {}", tx_abd.orig_tx_id);
             // let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
-            tx_abd_view.write_line_directly(&global_stats, &index_info, cli, &mut tableout)?;
+            tx_abd_view.write_line_directly(&mut global_stats, &index_info, cli, &mut tableout)?;
             // tableout.add_line(&mut line)?;
             // tx_abd.write_line_directly( &global_stats, &dataset_info, &cli,&mut tableout)?;
             // info!("writen transcript {} done", tx_abd.orig_tx_id);
@@ -295,6 +295,30 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     tmp_tx_manger.clean_up()?;
 
     tableout.finish()?;
+
+    // output global stats each sample is a row, columns are  sample name, fsm_total(pct), em_total(pct), fsm_em_total(pct)
+    info!("> Stats summary:");
+    info!("> Sample FSM(CPT) EM(CPT) FSM+EM(CPT)");
+    for sample_name in index_info.get_sample_names() {
+        let sample_idx = index_info
+            .get_sample_idx_by_name(&sample_name)
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
+        let fsm_count = global_stats.sample_posi_tx_count_fsm[sample_idx];
+        let em_count = global_stats.sample_posi_tx_count_em[sample_idx];
+        let fsm_em_count = global_stats.sample_posi_tx_count_fsm_em[sample_idx];
+        let total_tx = gtf.trans_count as f32;
+        let fsm_pct = (fsm_count as f32 / total_tx) * 100.0;
+        let em_pct = (em_count as f32 / total_tx) * 100.0;
+        let fsm_em_pct = (fsm_em_count as f32 / total_tx) * 100.0;
+
+        info!(
+            "> {}\t{}({:.2}%)\t{}({:.2}%)\t{}({:.2}%)",
+            sample_name, fsm_count, fsm_pct, em_count, em_pct, fsm_em_count, fsm_em_pct
+        );
+    }
 
     info!("Finished!");
     Ok(())
