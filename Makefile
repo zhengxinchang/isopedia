@@ -108,6 +108,13 @@ t45:build
 	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF  \
 	 -o test/test.em.output2.gz 
 
+tfp:build
+	/usr/bin/time -v  target/release/isopedia isoform -i test/lrgasp_sim_merged_idx  \
+	 -g test/pb_fp_em_ENST00000640322.1.gtf \
+	 -o test/test.em.output.tpb.fp.gz \
+	  --min-em-abundance 0.0000001  \
+     --em-effective-len-coef 1 
+
 
 tbench:build
 	/usr/bin/time -v  target/release/isopedia isoform -n 16  -i /ssd1/stix-iso-devspace/stix-isoform-experiment/stage/lrgasp/human_merged_idx \

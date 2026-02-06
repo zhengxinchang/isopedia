@@ -81,12 +81,12 @@ pub struct AnnIsoCli {
     pub em_chunk_size: usize,
 
     // EM effective length coefficient
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 1)]
     pub em_effective_len_coef: usize,
 
-    // If only consider transcripts that are fully covered by the provided splice junctions,set to false to ignore the frist and last splice junciton.
-    #[arg(long, default_value_t = false)]
-    pub only_fully_covered_tx: bool,
+    // EM damping factor
+    #[arg(long, default_value_t = 0.3)]
+    pub em_damping_factor: f32,
 
     // Minimum EM abundance to report
     #[arg(long, default_value_t = 0.01)]

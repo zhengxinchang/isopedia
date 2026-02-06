@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Reverse,
-    collections::BinaryHeap,
+    collections::{BinaryHeap, HashSet},
     fs::File,
     io::{BufReader, BufWriter, Read, Write},
     path::PathBuf,
@@ -543,6 +543,8 @@ impl GroupedTx {
             );
         }
 
+        let mut overall_fsm_ptrs = HashSet::new();
+
         // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
         let mut local_mono_exonic_idx = 0;
         // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
@@ -586,6 +588,7 @@ impl GroupedTx {
 
                         if msjc.check_mono_exon_fsm(&tx_abd, cli) {
                             tx_abd.add_fsm_evidence_count(&misoform);
+                            overall_fsm_ptrs.insert(misoform_ptr.offset);
                         } else {
                             if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
                                 let tx_local_id_in_this_msjc =
@@ -645,11 +648,16 @@ impl GroupedTx {
                     let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
 
                     tx_abd.add_fsm_evidence_count(&fsm_msjc_rec);
+                    overall_fsm_ptrs.insert(fsm.offset);
                 }
 
                 // add msjcs
 
                 for (offset, msjc_ptr) in partial_msjc_map.into_iter() {
+                    if overall_fsm_ptrs.contains(&offset) {
+                        continue;
+                    }
+
                     let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
                         msjc_idx
                     } else {
@@ -911,50 +919,49 @@ impl TxAbundance {
         self.msjc_ids.push((msjc_idx, tx_local_id));
     }
 
-    pub fn is_all_sj_covered(&self, cli: &AnnIsoCli) -> bool {
+    pub fn is_all_sj_covered(&self) -> bool {
         // must match all splice junctions including the first and last bits
-        if cli.only_fully_covered_tx {
-            let n_sj = self.sj_pairs.len();
-            let n_bytes = (n_sj + 7) / 8;
-            for i in 0..n_bytes {
-                let byte = self.covered_sj_bits[i];
-                if i == n_bytes - 1 {
-                    // last byte
-                    let remaining_bits = n_sj % 8;
-                    let mask = if remaining_bits == 0 {
-                        0xFF
-                    } else {
-                        (1 << remaining_bits) - 1
-                    };
-                    if byte & mask != mask {
-                        return false;
-                    }
+        // if cli.only_fully_covered_tx {
+        let n_sj = self.sj_pairs.len();
+        let n_bytes = (n_sj + 7) / 8;
+        for i in 0..n_bytes {
+            let byte = self.covered_sj_bits[i];
+            if i == n_bytes - 1 {
+                // last byte
+                let remaining_bits = n_sj % 8;
+                let mask = if remaining_bits == 0 {
+                    0xFF
                 } else {
-                    if byte != 0xFF {
-                        return false;
-                    }
+                    (1 << remaining_bits) - 1
+                };
+                if byte & mask != mask {
+                    return false;
                 }
-            }
-            true
-        } else {
-            // dont consider first and last splice junctions
-
-            let n_sj = self.sj_pairs.len();
-            if n_sj <= 2 {
-                return true;
             } else {
-                let mut all_covered = true;
-                for sj_idx in 1..(n_sj - 1) {
-                    let byte_idx = sj_idx / 8;
-                    let bit_idx = sj_idx % 8;
-                    if (self.covered_sj_bits[byte_idx] & (1 << bit_idx)) == 0 {
-                        all_covered = false;
-                        break;
-                    }
+                if byte != 0xFF {
+                    return false;
                 }
-                all_covered
             }
         }
+        true
+        // } else {
+        //     // dont consider first and last splice junctions
+
+        //     let n_sj = self.sj_pairs.len();
+        //     if n_sj <= 2 {
+        //         return true;
+        //     } else {
+        //         let mut all_covered = true;
+        //         for sj_idx in 1..(n_sj - 1) {
+        //             let byte_idx = sj_idx / 8;
+        //             let bit_idx = sj_idx % 8;
+        //             if (self.covered_sj_bits[byte_idx] & (1 << bit_idx)) == 0 {
+        //                 all_covered = false;
+        //                 break;
+        //             }
+        //         }
+        //         all_covered
+        //     }
     }
 
     pub fn prepare_em(&mut self, msjc_vec: &Vec<MSJC>, cli: &AnnIsoCli) {
@@ -971,9 +978,6 @@ impl TxAbundance {
                 let mut count = 0;
 
                 for (msjc_idx, _tx_local_id) in self.msjc_ids.iter() {
-                    // info!(
-                    //     "xsafe 1"
-                    // );
                     let msjc = unsafe { msjc_vec.get_unchecked(*msjc_idx) };
                     avg_msjc_len += msjc.get_effective_length() as f32;
                     count += 1;
@@ -986,7 +990,7 @@ impl TxAbundance {
                 }
             }
         } else {
-            if !self.is_all_sj_covered(cli) {
+            if !self.is_all_sj_covered() {
                 // dont need em
                 self.is_need_em = false;
 
@@ -1006,6 +1010,33 @@ impl TxAbundance {
                 self.alive_samples_bitmap[byte_idx] |= 1 << bit_idx;
             }
         }
+
+        // initialize abundance_cur based on fsm_abundance for alive samples
+        // for sid in 0..self.sample_size {
+        //     let byte_idx = sid / 8;
+        //     let bit_idx = sid % 8;
+
+        //     if (self.alive_samples_bitmap[byte_idx] & (1 << bit_idx)) != 0 {
+        //         // 用FSM + 小伪计数
+        //         self.abundance_cur[sid] = self.fsm_abundance[sid].max(0.1);
+        //     } else {
+        //         self.abundance_cur[sid] = 0.0;
+        //     }
+        // }
+
+        // self.abundance_prev.clone_from(&self.abundance_cur);
+
+        // if cli.verbose {
+        //     info!(
+        //         "Tx {}: n_junctions={}, length={}, inv_pt_junc={:.6}, inv_pt_len={:.6}, ratio={:.2}",
+        //         self.orig_tx_id,
+        //         self.sj_pairs.len(),
+        //         self.orig_tx_len,
+        //         1.0 / (self.sj_pairs.len() + cli.em_effective_len_coef) as f32,
+        //         1.0 / self.orig_tx_len as f32,
+        //         (self.sj_pairs.len() + cli.em_effective_len_coef) as f32 / self.orig_tx_len as f32
+        //     );
+        // }
     }
 
     pub fn m_step(&mut self, msjc_vec: &Vec<MSJC>, cli: &AnnIsoCli) {
@@ -1081,6 +1112,17 @@ impl TxAbundance {
                     *self.abundance_cur.get_unchecked_mut(sid) += cov * gamma;
                     i += 1;
                 }
+            }
+        }
+
+        // damping
+        for sid in 0..sample_size {
+            let byte_idx = sid / 8;
+            let bit_idx = sid % 8;
+            if (self.alive_samples_bitmap[byte_idx] & (1 << bit_idx)) != 0 {
+                let updated_abd = self.abundance_cur[sid]; // * self.inv_pt;
+                self.abundance_cur[sid] = cli.em_damping_factor * updated_abd
+                    + (1.0 - cli.em_damping_factor) * self.abundance_prev[sid];
             }
         }
     }
