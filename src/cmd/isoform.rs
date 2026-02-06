@@ -80,7 +80,7 @@ pub struct AnnIsoCli {
     #[arg(long, default_value_t = 4)]
     pub em_chunk_size: usize,
 
-    // EM effective length coefficient
+    // EM effective length coefficient, avoid divide by zero when transcript is very short.
     #[arg(long, default_value_t = 1)]
     pub em_effective_len_coef: usize,
 
@@ -91,6 +91,18 @@ pub struct AnnIsoCli {
     // Minimum EM abundance to report
     #[arg(long, default_value_t = 0.01)]
     pub min_em_abundance: f32,
+
+    // No check tss tes
+    #[arg(long, default_value_t = false)]
+    pub no_check_tss_tes: bool,
+
+    // Flank bp for checking tss
+    #[arg(long, default_value_t = 100)]
+    pub flank_bp_check_tss: u64,
+
+    // Flank bp for checking tes
+    #[arg(long, default_value_t = 100)]
+    pub flank_bp_check_tes: u64,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]

@@ -110,10 +110,10 @@ t45:build
 
 tfp:build
 	/usr/bin/time -v  target/release/isopedia isoform -i test/lrgasp_sim_merged_idx  \
-	 -g test/pb_fp_em_ENST00000640322.1.gtf \
+	 -g test/pb_fp_em_ENST00000371897.8.gtf \
 	 -o test/test.em.output.tpb.fp.gz \
 	  --min-em-abundance 0.0000001  \
-     --em-effective-len-coef 1 
+     --em-effective-len-coef 1 --verbose
 
 
 tbench:build

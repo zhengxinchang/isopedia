@@ -13,6 +13,7 @@ use crate::{
 use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
+use noodles_gtf::record::Strand;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -202,10 +203,10 @@ impl ChromGroupedTxManager {
 #[derive(Clone)]
 pub struct GroupedTx {
     pub id: u32,
-    pub positions: Vec<u64>, // deduped positions sort by genomic coordinate
-    pub positions_mono_exonic: Vec<(u64, u64)>, //  positions for mono exonic transcripts
-    pub mono_exonic_tx_indices: Vec<usize>, // mono exon tx index in the tx_abundances
-    pub position_tx_abd_map: FxHashMap<u64, usize>, // position -> tx_abundance ids
+    pub sj_pooled_positions_multi_exonic: Vec<u64>, // deduped positions sort by genomic coordinate , pooled from all transcripts in the group, length == number of unique splice junction positions in multi-exonic transcripts
+    pub sj_positions_mono_exonic: Vec<(u64, u64)>, //  positions for mono exonic transcripts, length == number of mono exonic transcripts
+    pub mono_exonic_tx_indices: Vec<usize>,        // mono exon tx index in the tx_abundances
+    pub sj_pooled_position_to_tx_abundance_map: FxHashMap<u64, usize>, // position -> tx_abundance ids
     pub tx_abundances: Vec<TxAbundance>,
     pub msjcs: Vec<MSJC>,
 }
@@ -248,9 +249,9 @@ impl GroupedTx {
 
         GroupedTx {
             id,
-            positions,
-            positions_mono_exonic: pos_set_mono_exonic,
-            position_tx_abd_map: position_tx_abd_map,
+            sj_pooled_positions_multi_exonic: positions,
+            sj_positions_mono_exonic: pos_set_mono_exonic,
+            sj_pooled_position_to_tx_abundance_map: position_tx_abd_map,
             mono_exonic_tx_indices: mono_exonic_tx_indices,
             tx_abundances: tx_abundances,
             msjcs: Vec::new(),
@@ -271,11 +272,11 @@ impl GroupedTx {
             msjc.nonzero_sample_indices.shrink_to_fit();
         }
 
-        self.positions.clear();
-        self.positions.shrink_to_fit();
+        self.sj_pooled_positions_multi_exonic.clear();
+        self.sj_pooled_positions_multi_exonic.shrink_to_fit();
 
-        self.position_tx_abd_map.clear();
-        self.position_tx_abd_map.shrink_to_fit();
+        self.sj_pooled_position_to_tx_abundance_map.clear();
+        self.sj_pooled_position_to_tx_abundance_map.shrink_to_fit();
 
         self.msjcs.clear();
         self.msjcs.shrink_to_fit();
@@ -293,7 +294,7 @@ impl GroupedTx {
     pub fn get_quieries(&self, chrom: &str) -> Vec<(String, u64)> {
         let mut queries: Vec<(String, u64)> = Vec::new();
 
-        for &pos in self.positions.iter() {
+        for &pos in self.sj_pooled_positions_multi_exonic.iter() {
             queries.push((chrom.to_string(), pos));
         }
 
@@ -301,7 +302,7 @@ impl GroupedTx {
     }
 
     pub fn get_quieries_mono_exon(&self) -> Vec<(u64, u64)> {
-        self.positions_mono_exonic.clone()
+        self.sj_positions_mono_exonic.clone()
     }
 
     pub fn update_results(
@@ -316,7 +317,7 @@ impl GroupedTx {
             info!("updating searched results...")
         }
 
-        if all_res.len() != self.positions.len() {
+        if all_res.len() != self.sj_pooled_positions_multi_exonic.len() {
             panic!("Number of results does not match number of positions");
         }
 
@@ -330,8 +331,8 @@ impl GroupedTx {
             info!(
                 "Updating results for grouped tx with {} transcripts, {} positions for multi-exon tx, {} positions for mono-exon tx, total MSJC {}",
                 self.tx_abundances.len(),
-                self.positions.len(),
-                self.positions_mono_exonic.len(),
+                self.sj_pooled_positions_multi_exonic.len(),
+                self.sj_positions_mono_exonic.len(),
                 self.msjcs.len()
             );
         }
@@ -349,11 +350,11 @@ impl GroupedTx {
 
                 for sj_pair in tx_abd.sj_pairs.iter() {
                     let sj_start_idx = self
-                        .position_tx_abd_map
+                        .sj_pooled_position_to_tx_abundance_map
                         .get(&sj_pair.0)
                         .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.0));
                     let sj_end_idx = self
-                        .position_tx_abd_map
+                        .sj_pooled_position_to_tx_abundance_map
                         .get(&sj_pair.1)
                         .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.1));
 
@@ -386,7 +387,7 @@ impl GroupedTx {
                 for fsm in fsm_msjc_offsets.into_iter() {
                     let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
 
-                    tx_abd.add_fsm_evidence_count(&fsm_msjc_rec);
+                    tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
                 }
 
                 // add msjcs
@@ -478,7 +479,7 @@ impl GroupedTx {
                         let tx_abd = &self.tx_abundances[*tx_idx];
 
                         if msjc.check_mono_exon_fsm(&tx_abd, cli) {
-                            self.tx_abundances[*tx_idx].add_fsm_evidence_count(&misoform);
+                            self.tx_abundances[*tx_idx].update_fsm_evidence_count(&misoform, cli);
                         } else {
                             if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
                                 // add to the merged msjc for this transcript
@@ -507,7 +508,8 @@ impl GroupedTx {
 
         // self.msjcs = msjc_map_global;
         if cli.verbose {
-            info!("update results... finished.")
+            info!("update results... finished.");
+            // dbg!(self.tx_abundances.iter().map(|x| &x.msjc_ids).collect::<Vec<_>>());
         }
     }
 
@@ -523,11 +525,11 @@ impl GroupedTx {
             info!("updating searched results...")
         }
 
-        if all_res.len() != self.positions.len() {
+        if all_res.len() != self.sj_pooled_positions_multi_exonic.len() {
             panic!("Number of results does not match number of positions");
         }
 
-        if all_res_mono_exonic.len() != self.positions_mono_exonic.len() {
+        if all_res_mono_exonic.len() != self.sj_positions_mono_exonic.len() {
             panic!("Number of mono exonic results does not match number of mono exonic positions");
         }
 
@@ -537,8 +539,8 @@ impl GroupedTx {
             info!(
                 "Updating results for grouped tx with {} transcripts, {} positions for multi-exon tx, {} positions for mono-exon tx, total MSJC {}",
                 self.tx_abundances.len(),
-                self.positions.len(),
-                self.positions_mono_exonic.len(),
+                self.sj_pooled_positions_multi_exonic.len(),
+                self.sj_positions_mono_exonic.len(),
                 self.msjcs.len()
             );
         }
@@ -587,7 +589,7 @@ impl GroupedTx {
                         let msjc = &self.msjcs[msjc_idx];
 
                         if msjc.check_mono_exon_fsm(&tx_abd, cli) {
-                            tx_abd.add_fsm_evidence_count(&misoform);
+                            tx_abd.update_fsm_evidence_count(&misoform, cli);
                             overall_fsm_ptrs.insert(misoform_ptr.offset);
                         } else {
                             if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
@@ -610,11 +612,11 @@ impl GroupedTx {
 
                 for sj_pair in tx_abd.sj_pairs.iter() {
                     let sj_start_idx = self
-                        .position_tx_abd_map
+                        .sj_pooled_position_to_tx_abundance_map
                         .get(&sj_pair.0)
                         .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.0));
                     let sj_end_idx = self
-                        .position_tx_abd_map
+                        .sj_pooled_position_to_tx_abundance_map
                         .get(&sj_pair.1)
                         .unwrap_or_else(|| panic!("Can not get position index for {}", sj_pair.1));
 
@@ -647,7 +649,7 @@ impl GroupedTx {
                 for fsm in fsm_msjc_offsets.into_iter() {
                     let fsm_msjc_rec = archive_cache.read_bytes(&fsm);
 
-                    tx_abd.add_fsm_evidence_count(&fsm_msjc_rec);
+                    tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
                     overall_fsm_ptrs.insert(fsm.offset);
                 }
 
@@ -715,8 +717,8 @@ impl GroupedTx {
         }
 
         // clean up the position_tx_abd_map to save memory
-        self.position_tx_abd_map.clear();
-        self.position_tx_abd_map.shrink_to_fit();
+        self.sj_pooled_position_to_tx_abundance_map.clear();
+        self.sj_pooled_position_to_tx_abundance_map.shrink_to_fit();
 
         if cli.verbose {
             info!("preparing em... finished")
@@ -849,6 +851,7 @@ pub struct TxAbundance {
     pub orig_start: u64,
     pub orig_end: u64,
     pub orig_attrs: String,
+    pub orig_is_plus_strand: bool,
     pub sj_pairs: Vec<(u64, u64)>, // splice junction positions
     pub fsm_abundance: Vec<f32>,
     pub abundance_cur: Vec<f32>, // sample size length
@@ -867,6 +870,10 @@ impl TxAbundance {
     pub fn new(txid: usize, sample_size: usize, tx: &Transcript, cli: &AnnIsoCli) -> TxAbundance {
         // calclulate pt
         let nsj = tx.splice_junc.len() + cli.em_effective_len_coef; // J + 1
+        let is_plus_strand = match tx.strand {
+            Strand::Forward => true,
+            Strand::Reverse => false,
+        };
         TxAbundance {
             id: txid,
             orig_idx: tx.origin_idx,
@@ -878,6 +885,7 @@ impl TxAbundance {
             orig_start: tx.start,
             orig_end: tx.end,
             orig_attrs: tx.get_attributes(),
+            orig_is_plus_strand: is_plus_strand,
             sj_pairs: tx.get_splice_junction_pairs(),
             fsm_abundance: vec![0.0; sample_size],
             abundance_cur: vec![0.1; sample_size],
@@ -892,9 +900,124 @@ impl TxAbundance {
         }
     }
 
-    pub fn add_fsm_evidence_count(&mut self, misoform: &MergedIsoform) {
-        for sid in 0..self.sample_size {
-            self.fsm_abundance[sid] += misoform.sample_evidence_arr[sid] as f32;
+    /// Add the evidence count from a FSM misoform to the fsm_abundance of this transcript
+    /// Further check if each read is compatible with transcript start and end, if not,
+    /// then the evidence count from this misoform will not be added to the fsm_abundance
+    pub fn update_fsm_evidence_count(&mut self, misoform: &MergedIsoform, cli: &AnnIsoCli) {
+        // if mono exonic, then no need to check start and end compatibility, directly add the evidence count
+        if self.is_mono_exonic || cli.no_check_tss_tes {
+            for sid in 0..self.sample_size {
+                self.fsm_abundance[sid] += misoform.sample_evidence_arr[sid] as f32;
+            }
+            return;
+        } else {
+            // for multisplice junction transcripts, check the compatibility of each read with transcript start and end
+
+            let (start_left, start_right, end_left, end_right) = if self.orig_is_plus_strand {
+                (
+                    self.orig_start.saturating_sub(cli.flank_bp_check_tss),
+                    self.orig_start + cli.flank_bp_check_tss,
+                    self.orig_end.saturating_sub(cli.flank_bp_check_tes),
+                    self.orig_end + cli.flank_bp_check_tes,
+                )
+            } else {
+                (
+                    self.orig_start.saturating_sub(cli.flank_bp_check_tes),
+                    self.orig_start + cli.flank_bp_check_tes,
+                    self.orig_end.saturating_sub(cli.flank_bp_check_tss),
+                    self.orig_end + cli.flank_bp_check_tss,
+                )
+            };
+
+            for sample_idx in 0..self.sample_size {
+                let offset = misoform.sample_offset_arr[sample_idx];
+                let evidence = misoform.sample_evidence_arr[sample_idx];
+
+                if evidence == 0 {
+                    continue;
+                }
+
+                let mut count = 0.0;
+
+                for ridx in offset..(offset + evidence) {
+                    let rdiff = &misoform.isoform_reads_slim_vec[ridx as usize];
+
+                    if start_left <= rdiff.left
+                        && rdiff.left <= start_right
+                        && end_left <= rdiff.right
+                        && rdiff.right <= end_right
+                    {
+                        count += 1.0;
+                    }
+                }
+
+                self.fsm_abundance[sample_idx] += count;
+            }
+
+            // misoform
+            //     .get_sample_offset_arr()
+            //     .iter()
+            //     .zip(misoform.get_sample_evidence_arr().iter())
+            //     .for_each(|(offset, evidence)| {
+            //         if *evidence > 0 {
+            //             for ridx in *offset..(*offset + *evidence) {
+            //                 let rdiff = &misoform.isoform_reads_slim_vec[ridx as usize];
+            //                 // println!(
+            //                 //     "read diff: left {}, right {}, tx start {}, tx end {}",
+            //                 //     rdiff.left, rdiff.right, self.orig_start, self.orig_end
+            //                 // );
+            //                 if self.orig_is_plus_strand {
+
+            //                     let cond1 = tx_start_flank_left <= rdiff.left;
+            //                     let cond2 = rdiff.left <= tx_start_flank_right;
+            //                     let cond3 = tx_end_flank_left <= rdiff.right;
+            //                     let cond4 = rdiff.right <= tx_end_flank_right;
+
+            //                     // println!(
+            //                     //     "cond1={} cond2={} cond3={} cond4={}",
+            //                     //     cond1, cond2, cond3, cond4
+            //                     // );
+
+            //                     if cond1 && cond2 && cond3 && cond4 {
+            //                         // println!("added plus strand!");
+            //                         new_evidence_vec[sample_idx] += 1.0;
+            //                     }
+            //                 } else {
+            //                     // minus strand, then read if plus stranded, then left is tes and right is tss
+
+            //                     let tx_start_flank_left =
+            //                         self.orig_start.saturating_sub(cli.flank_bp_check_tes);
+            //                     let tx_start_flank_right = self.orig_start + cli.flank_bp_check_tes;
+            //                     let tx_end_flank_left =
+            //                         self.orig_end.saturating_sub(cli.flank_bp_check_tss);
+            //                     let tx_end_flank_right = self.orig_end + cli.flank_bp_check_tss;
+            //                     let cond1 = tx_start_flank_left <= rdiff.left;
+            //                     let cond2 = rdiff.left <= tx_start_flank_right;
+            //                     let cond3 = tx_end_flank_left <= rdiff.right;
+            //                     let cond4 = rdiff.right <= tx_end_flank_right;
+
+            //                     // println!(
+            //                     //     "cond1={} cond2={} cond3={} cond4={}",
+            //                     //     cond1, cond2, cond3, cond4
+            //                     // );
+
+            //                     if cond1 && cond2 && cond3 && cond4 {
+            //                         // println!("added minus strand!");
+            //                         new_evidence_vec[sample_idx] += 1.0;
+            //                     }
+            //                 }
+            //             }
+            //         }
+
+            //         sample_idx += 1;
+            //     });
+            // // println!("new evidence vec: {:?}", new_evidence_vec);
+            // self.fsm_abundance
+            //     .iter_mut()
+            //     .zip(new_evidence_vec.iter())
+            //     .for_each(|(a, new_evidence)| {
+            //         *a += *new_evidence;
+            //     });
         }
     }
 
@@ -2104,7 +2227,7 @@ impl GetMemSize for TxAbundance {
 
 impl GetMemSize for GroupedTx {
     fn get_mem_size(&self) -> usize {
-        let mut size = std::mem::size_of_val(&self.positions);
+        let mut size = std::mem::size_of_val(&self.sj_pooled_positions_multi_exonic);
 
         for tx_ab in self.tx_abundances.iter() {
             size += tx_ab.get_mem_size();
