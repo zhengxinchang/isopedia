@@ -1012,19 +1012,17 @@ impl TxAbundance {
         }
 
         // initialize abundance_cur based on fsm_abundance for alive samples
-        // for sid in 0..self.sample_size {
-        //     let byte_idx = sid / 8;
-        //     let bit_idx = sid % 8;
+        for sid in 0..self.sample_size {
+            let byte_idx = sid / 8;
+            let bit_idx = sid % 8;
 
-        //     if (self.alive_samples_bitmap[byte_idx] & (1 << bit_idx)) != 0 {
-        //         // 用FSM + 小伪计数
-        //         self.abundance_cur[sid] = self.fsm_abundance[sid].max(0.1);
-        //     } else {
-        //         self.abundance_cur[sid] = 0.0;
-        //     }
-        // }
+            if (self.alive_samples_bitmap[byte_idx] & (1 << bit_idx)) == 0 {
+                // this sample is not covered by any msjc, set abundance to 0 and mark as not alive
+                self.abundance_cur[sid] = 0.0;
+            }
+        }
 
-        // self.abundance_prev.clone_from(&self.abundance_cur);
+        self.abundance_prev.clone_from(&self.abundance_cur);
 
         // if cli.verbose {
         //     info!(
