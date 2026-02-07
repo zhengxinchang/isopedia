@@ -60,10 +60,6 @@ pub struct AnnIsoCli {
     #[arg(long, default_value_t = false)]
     pub info: bool,
 
-    /// Include in-complete splice junction matches
-    #[arg(long, default_value_t = false)]
-    pub asm: bool,
-
     /// Number of threads to use
     #[arg(short, long, default_value_t = 4)]
     pub num_threads: usize,
@@ -72,37 +68,44 @@ pub struct AnnIsoCli {
     #[arg(long, default_value_t = 50)]
     pub em_max_iter: usize,
 
-    // EM convergence threshold
+    /// EM convergence threshold
     #[arg(long, default_value_t = 0.01)]
     pub em_conv_min_diff: f32,
 
-    // EM chunk size, reduce it if you have low memory
+    /// EM chunk size, reduce it if you have low memory
     #[arg(long, default_value_t = 4)]
     pub em_chunk_size: usize,
 
-    // EM effective length coefficient, avoid divide by zero when transcript is very short.
+    /// EM effective length coefficient, avoid divide by zero when transcript is very short.
     #[arg(long, default_value_t = 1)]
     pub em_effective_len_coef: usize,
 
-    // EM damping factor
+    /// EM damping factor
     #[arg(long, default_value_t = 0.3)]
     pub em_damping_factor: f32,
 
-    // Minimum EM abundance to report
+    /// Minimum EM abundance to report
     #[arg(long, default_value_t = 0.01)]
     pub min_em_abundance: f32,
 
-    // No check tss tes
+    /// No check TSS and TES
     #[arg(long, default_value_t = false)]
     pub no_check_tss_tes: bool,
 
-    // Flank bp for checking tss
-    #[arg(long, default_value_t = 100)]
-    pub flank_bp_check_tss: u64,
+    /// Maximum allowed degradation bp for TSS
+    #[arg(long, default_value_t = 500)]
+    pub tss_degrad_bp: u64,
 
-    // Flank bp for checking tes
-    #[arg(long, default_value_t = 100)]
-    pub flank_bp_check_tes: u64,
+    /// Maximum allowed degradation bp for TES
+    #[arg(long, default_value_t = 200)]
+    pub tes_degrad_bp: u64,
+
+    #[arg(
+        long,
+        default_value_t = 10,
+        help = "Maximum allowed deviation (bp) beyond annotated TSS and TES.\nIsoforms whose TSS and TES fall outside the annotation but within this tolerance are still classified as FSM."
+    )]
+    pub terminal_tolerance_bp: u64,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]

@@ -396,7 +396,6 @@ impl GroupedTx {
                 // process partial msjc misoforms
 
                 for (offset, msjc_ptr) in per_abd_partial_msjc_map.into_iter() {
-
                     // skip the fsm ptrs that are already processed
                     if overall_fsm_ptrs.contains(&offset) {
                         continue;
@@ -935,17 +934,17 @@ impl TxAbundance {
 
             let (start_left, start_right, end_left, end_right) = if self.orig_is_plus_strand {
                 (
-                    self.orig_start.saturating_sub(cli.flank_bp_check_tss),
-                    self.orig_start + cli.flank_bp_check_tss,
-                    self.orig_end.saturating_sub(cli.flank_bp_check_tes),
-                    self.orig_end + cli.flank_bp_check_tes,
+                    self.orig_start.saturating_sub(cli.terminal_tolerance_bp),
+                    self.orig_start + cli.tss_degrad_bp,
+                    self.orig_end.saturating_sub(cli.tes_degrad_bp),
+                    self.orig_end + cli.terminal_tolerance_bp,
                 )
             } else {
                 (
-                    self.orig_start.saturating_sub(cli.flank_bp_check_tes),
-                    self.orig_start + cli.flank_bp_check_tes,
-                    self.orig_end.saturating_sub(cli.flank_bp_check_tss),
-                    self.orig_end + cli.flank_bp_check_tss,
+                    self.orig_start.saturating_sub(cli.terminal_tolerance_bp),
+                    self.orig_start + cli.tes_degrad_bp,
+                    self.orig_end.saturating_sub(cli.tss_degrad_bp),
+                    self.orig_end + cli.terminal_tolerance_bp,
                 )
             };
 
