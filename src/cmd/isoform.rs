@@ -213,9 +213,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
     out_header.add_column("trans_id")?;
     out_header.add_column("gene_id")?;
     out_header.add_column("confidence")?;
-    out_header.add_column("detected")?;
+    out_header.add_column("detected(total:fsm:em)")?;
     out_header.add_column("min_read")?;
-    out_header.add_column("positive_count/sample_size")?;
+    out_header.add_column("n_pos_samples(total:fsm:em/sample_size)")?;
     out_header.add_column("attributes")?;
     let mut db_infos = DBInfos::new();
     for (name, evidence) in index_info.get_sample_evidence_pair_vec() {
@@ -321,9 +321,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             .parse::<usize>()
             .unwrap();
 
-        let fsm_count = global_stats.sample_posi_tx_count_fsm[sample_idx];
-        let em_count = global_stats.sample_posi_tx_count_em[sample_idx];
-        let fsm_em_count = global_stats.sample_posi_tx_count_fsm_em[sample_idx];
+        let fsm_count = global_stats.get_fsm_tx_by_sample_idx(sample_idx);
+        let em_count = global_stats.get_em_tx_by_sample_idx(sample_idx);
+        let fsm_em_count = global_stats.get_fsm_em_tx_by_sample_idx(sample_idx);
         let total_tx = gtf.trans_count as f32;
         let fsm_pct = (fsm_count as f32 / total_tx) * 100.0;
         let em_pct = (em_count as f32 / total_tx) * 100.0;

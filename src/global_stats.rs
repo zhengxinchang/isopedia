@@ -44,19 +44,23 @@ impl GlobalStats {
                 if *abd >= cli.min_read as f32 {
                     self.sample_posi_tx_count_fsm[i] += 1;
                 }
-            });
 
-        txview.em_abundance.iter().enumerate().for_each(|(i, abd)| {
-            if *abd >= cli.min_read as f32 {
-                self.sample_posi_tx_count_em[i] += 1;
-            }
-        });
+                if txview.em_abundance[i] >= cli.min_read as f32 {
+                    self.sample_posi_tx_count_em[i] += 1;
+                }
 
-        self.sample_posi_tx_count_fsm_em
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, count)| {
-                *count = self.sample_posi_tx_count_fsm[i] + self.sample_posi_tx_count_em[i];
+                if *abd >= cli.min_read as f32 || txview.em_abundance[i] >= cli.min_read as f32 {
+                    self.sample_posi_tx_count_fsm_em[i] += 1;
+                }
             });
+    }
+    pub fn get_fsm_tx_by_sample_idx(&self, idx: usize) -> usize {
+        self.sample_posi_tx_count_fsm_em[idx]
+    }
+    pub fn get_em_tx_by_sample_idx(&self, idx: usize) -> usize {
+        self.sample_posi_tx_count_em[idx]
+    }
+    pub fn get_fsm_em_tx_by_sample_idx(&self, idx: usize) -> usize {
+        self.sample_posi_tx_count_fsm_em[idx]
     }
 }
