@@ -1,6 +1,6 @@
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
-use crate::isoformarchive::ArchiveCache;
+use crate::pnir_archive::PNIRArchiveCache;
 use crate::tmpidx::Tmpindex;
 use crate::tools::ToolCmdValidate;
 use clap::Parser;
@@ -102,24 +102,12 @@ pub fn view_tmpidx(cli: &ViewArgs) {
 #[allow(dead_code, unused)]
 pub fn view_archive(cli: &ViewArgs) {
     let mut processed_signautres = std::collections::HashSet::new();
-
-    // let mut interim = Tmpindex::load(&idx.join(TMPIDX_FILE_NAME));
     let chrom_bytes = std::fs::read(&cli.idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
-    // let mut archive_buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-    //                                                        // let blocks = idx.get_blocks(chrom_id);
     let writer = std::fs::File::create(&cli.output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
 
-    // let archive_file_handler = File::open(cli.idx.join(MERGED_FILE_NAME))
-    //     .expect("Can not open aggregated records file...");
-    // let archive_mmap = unsafe { Mmap::map(&archive_file_handler).expect("Failed to map the file") };
-
-    // archive_mmap
-    //     .advise(memmap2::Advice::Sequential)
-    //     .expect("Failed to set mmap advice");
-
-    let mut archive = ArchiveCache::new(
+    let mut archive = PNIRArchiveCache::new(
         &cli.idx.join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb,
         cli.cached_chunk_number,
@@ -136,8 +124,6 @@ pub fn view_archive(cli: &ViewArgs) {
 
         for leaf in leafs {
             for ptr in &leaf.data.merge_isoform_offset_vec {
-                // let rec = read_record_from_mmap(&archive_mmap, &ptr, &mut archive_buf);
-
                 let rec = archive.load_from_disk(ptr);
                 if processed_signautres.contains(&rec.signature) {
                     continue;

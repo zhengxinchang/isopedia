@@ -4,12 +4,12 @@ use crate::{
     chromosome::{ChromMapping, ChromMappingHelper},
     constants::*,
     dataset_info::DatasetInfo,
-    isoform::MergedIsoform,
-    isoformarchive::IsoformArchiveWriter,
     meta::Meta,
     myio::GeneralOutputIO,
+    pnir::PNIR,
+    pnir_archive::PNIRArchiveWriter,
     reads::{AggrRead, SingleSampleReader},
-    tmpidx::{MergedIsoformOffsetPlusGenomeLoc, MergedIsoformOffsetPtr, Tmpindex},
+    tmpidx::{MergedIsoformOffsetPlusGenomeLoc, PNIROffsetPtr, Tmpindex},
     utils::greetings2,
 };
 use anyhow::Result;
@@ -169,7 +169,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     let mut heap: BinaryHeap<Reverse<HeapItem<AggrRead>>> = BinaryHeap::new();
 
     // init the merge buffer
-    let mut merged_map: FxHashMap<u64, MergedIsoform> = FxHashMap::default();
+    let mut merged_map: FxHashMap<u64, PNIR> = FxHashMap::default();
 
     let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME), cli.chunk_size);
 
@@ -203,7 +203,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         if let Some(merged_isoform) = merged_map.get_mut(&signature) {
             merged_isoform.add(rec, file_idx as u32);
         } else {
-            let new_merged_isoform = MergedIsoform::init(
+            let new_merged_isoform = PNIR::init(
                 &rec,
                 dataset_info.get_size(),
                 file_idx as u32,
@@ -272,7 +272,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
             // init the output file
 
-            let mut isoform_archive_writer = IsoformArchiveWriter::create(
+            let mut isoform_archive_writer = PNIRArchiveWriter::create(
                 &isoform_archive_base.with_extension(format!("chunk{}", chunks)),
             );
 
@@ -289,7 +289,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                         let interim_record = MergedIsoformOffsetPlusGenomeLoc {
                             chrom_id: merged_isoform_rec.chrom_id,
                             pos: *sj,
-                            record_ptr: MergedIsoformOffsetPtr {
+                            record_ptr: PNIROffsetPtr {
                                 offset: merged_offset,
                                 length: bytes_len,
                                 n_splice_sites: sjs.len() as u32,
@@ -306,7 +306,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                         let offset_plus_genomeloc = MergedIsoformOffsetPlusGenomeLoc {
                             chrom_id: merged_isoform_rec.chrom_id,
                             pos: position,
-                            record_ptr: MergedIsoformOffsetPtr {
+                            record_ptr: PNIROffsetPtr {
                                 offset: merged_offset,
                                 length: bytes_len,
                                 n_splice_sites: 0,
@@ -362,9 +362,8 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         }
     });
 
-    let mut isoform_archive_writer = IsoformArchiveWriter::create(
-        &isoform_archive_base.with_extension(format!("chunk{}", chunks)),
-    );
+    let mut isoform_archive_writer =
+        PNIRArchiveWriter::create(&isoform_archive_base.with_extension(format!("chunk{}", chunks)));
 
     let mut merged_offset = 0;
     for (_, _, signature) in tmp_vec.iter() {
@@ -375,7 +374,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             let interim_record = MergedIsoformOffsetPlusGenomeLoc {
                 chrom_id: merged_isoform_rec.chrom_id,
                 pos: *sj,
-                record_ptr: MergedIsoformOffsetPtr {
+                record_ptr: PNIROffsetPtr {
                     offset: merged_offset,
                     length: bytes_len,
                     n_splice_sites: sjs.len() as u32,
@@ -391,7 +390,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                 MergedIsoformOffsetPlusGenomeLoc {
                     chrom_id: merged_isoform_rec.chrom_id,
                     pos: *position,
-                    record_ptr: MergedIsoformOffsetPtr {
+                    record_ptr: PNIROffsetPtr {
                         offset: merged_offset,
                         length: bytes_len,
                         n_splice_sites: 0,

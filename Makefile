@@ -93,12 +93,12 @@ t43:build
 	 -o test/test.assembled2.output.gz --info
 
 tlarge:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /ssd2/isopedia_wk/isopedia_index \
-	 -g /ssd1/stix-iso-devspace/stix-isoform-experiment/data/LRGASP/human_simulation/ground_truth/hs_GENCODE38.basic_annotation.gtf \
+	/usr/bin/time -v  target/release/isopedia isoform  -i /hdd1/isopedia_datadownload/isopedia_index \
+	 -g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v49.annotation.gtf \
 	 -o test/test.em.output2.gz 
 
 tlarge1:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /ssd2/isopedia_wk/isopedia_index -c 10 \
+	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10 \
 	 -g test/chr1.gtf \
 	 -o test/test.em.output.chr1.gz 
 
@@ -128,17 +128,17 @@ tbench13:build
 	 -o test/test.em.chr13.output.gz 
 
 tpb:build
-	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index  -c 10\
+	/usr/bin/time -v  target/release/isopedia isoform -i /hdd1/isopedia_datadownload/isopedia_index  -c 10\
 	 -g test/gencode49_and_chess313_classcodeU.sorted.gtf \
 	 -o test/test.em.output.tpb.gz
 
 tpbchrm:build
-	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
+	/usr/bin/time -v  target/release/isopedia isoform -i /hdd1/isopedia_datadownload/isopedia_index \
 	 -g test/gencode49_and_chess313_classcodeU.sorted.chrM.GTF  \
 	 -o test/test.em.output.tpb.chrm.gz --verbose
 
 tpbhg002chrm:build
-	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
+	/usr/bin/time -v  target/release/isopedia isoform -i /hdd1/isopedia_datadownload/isopedia_index \
 	 -o test/test.em.output.tpb.chrm.gz --verbose -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.chrM.gtf
 
 	# -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.chrM.gtf \
@@ -150,7 +150,7 @@ tsamd:build
 	 -o test/test.em.output3.gz --verbose
 
 tpbhg002:build
-	/usr/bin/time -v  target/release/isopedia isoform -i /ssd2/isopedia_wk/isopedia_index \
+	/usr/bin/time -v  target/release/isopedia isoform -i /hdd1/isopedia_datadownload/isopedia_index \
 	 -g ../stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/5-Pigeon/isoseq_transcripts.sorted.filtered_lite.gtf \
 	 -o test/test.em.output.tpb.hg002.gz 
 
@@ -162,7 +162,7 @@ tfusion2:build
 
 
 tfusion22:build
-	target/release/isopedia fusion -i /ssd2/isopedia_wk/isopedia_index  -P test/fusion.bed  -o test/fusion.output.gz
+	target/release/isopedia fusion -i /hdd1/isopedia_datadownload/isopedia_index  -P test/fusion.bed  -o test/fusion.output.gz
 
 
 tfusion3:build
@@ -189,7 +189,7 @@ tfusion7:build
 	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz --verbose
 
 tfusion8:build
-	target/release/isopedia fusion  -i /ssd2/isopedia_wk/isopedia_index \
+	target/release/isopedia fusion  -i /hdd1/isopedia_datadownload/isopedia_index \
 	-r chr22:23289517-23290413,chr9:130713043-130854237 \
 	-o test/isopedia_fusion_bcr_abl1_e13a2.output.gz 
 

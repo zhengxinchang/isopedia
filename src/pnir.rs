@@ -65,7 +65,7 @@ pub enum RecordType {
 
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MergedIsoform {
+pub struct PNIR {
     pub signature: u64,
     pub total_evidence: u32,
     pub sample_size: u32,
@@ -82,34 +82,34 @@ pub struct MergedIsoform {
     pub supp_segs_vec: Vec<Segment>,
 }
 
-impl PartialEq for MergedIsoform {
+impl PartialEq for PNIR {
     fn eq(&self, other: &Self) -> bool {
         self.signature == other.signature
     }
 }
 
-impl Eq for MergedIsoform {}
+impl Eq for PNIR {}
 
-impl PartialOrd for MergedIsoform {
+impl PartialOrd for PNIR {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.signature.cmp(&other.signature))
     }
 }
 
-impl Ord for MergedIsoform {
+impl Ord for PNIR {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.signature.cmp(&other.signature)
     }
 }
 
-impl MergedIsoform {
+impl PNIR {
     pub fn init(
         aggr_isofrom: &AggrRead,
         sample_size: usize,
         sample_idx: u32,
         chrom_id: u16,
-    ) -> MergedIsoform {
-        let mut aggr_record = MergedIsoform {
+    ) -> PNIR {
+        let mut aggr_record = PNIR {
             signature: aggr_isofrom.signature,
             total_evidence: aggr_isofrom.evidence,
             sample_size: sample_size as u32, // the number of samples
@@ -286,7 +286,7 @@ impl MergedIsoform {
         return length as u32;
     }
 
-    pub fn gz_decode(bytes: &[u8]) -> Result<MergedIsoform, bincode::Error> {
+    pub fn gz_decode(bytes: &[u8]) -> Result<PNIR, bincode::Error> {
         let mut decoder = flate2::bufread::GzDecoder::new(bytes);
         let mut bytes = Vec::new();
         decoder.read_to_end(&mut bytes)?;
@@ -743,7 +743,7 @@ impl FusionRecord {
         breakpoints: &FusionBreakPointPair, // query breakpoint info
         read_diff: &ReadDiffSlim,           // read start/end
         supp_segs: &Segment,                // supplementary segments of the read
-        misoform: &MergedIsoform,           // common splice junction isoform
+        misoform: &PNIR,                    // common splice junction isoform
         sample_name: String,
         query_type: &str,
     ) -> FusionRecord {
@@ -844,7 +844,7 @@ mod tests {
         dataset_info.sample_size = evidence_arr.len();
         dataset_info.sample_total_evidence_vec = vec![10000, 20000, 30000, 40000];
 
-        let confidence = MergedIsoform::get_confidence_value(
+        let confidence = PNIR::get_confidence_value(
             &evidence_arr,
             dataset_info.get_size(),
             &dataset_info.sample_total_evidence_vec,

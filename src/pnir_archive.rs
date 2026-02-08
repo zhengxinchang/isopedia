@@ -10,22 +10,22 @@ use std::{
 use anyhow::Result;
 use lru::LruCache;
 
-use crate::{isoform::MergedIsoform, tmpidx::MergedIsoformOffsetPtr};
+use crate::{pnir::PNIR, tmpidx::PNIROffsetPtr};
 
-pub struct IsoformArchiveWriter {
+pub struct PNIRArchiveWriter {
     writer: BufWriter<File>,
     buf: Vec<u8>,
 }
 
-impl IsoformArchiveWriter {
-    pub fn create(path: &Path) -> IsoformArchiveWriter {
+impl PNIRArchiveWriter {
+    pub fn create(path: &Path) -> PNIRArchiveWriter {
         let file = File::create(path).expect("Failed to open file");
         let writer = BufWriter::with_capacity(10 * 1024 * 1024, file);
         let buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-        IsoformArchiveWriter { writer, buf }
+        PNIRArchiveWriter { writer, buf }
     }
 
-    pub fn dump_to_disk(&mut self, record: &MergedIsoform) -> u32 {
+    pub fn dump_to_disk(&mut self, record: &PNIR) -> u32 {
         self.buf.clear();
         let byte_len = record.gz_encode(&mut self.buf);
         self.writer
@@ -40,26 +40,7 @@ impl IsoformArchiveWriter {
     }
 }
 
-// pub fn read_record_from_mmap(
-//     mmap: &[u8],
-//     offset: &MergedIsoformOffsetPtr,
-//     buf: &mut Vec<u8>,
-// ) -> MergedIsoform {
-//     let start = offset.offset as usize;
-//     let end = start + offset.length as usize;
-//     buf.clear();
-//     buf.extend_from_slice(&mmap[start..end]);
-//     match MergedIsoform::gz_decode(buf) {
-//         Ok(record) => record,
-//         Err(_) => {
-//             eprintln!("Failed to decode gzipped record");
-//             eprintln!("Offset: {:?}", offset);
-//             std::process::exit(1);
-//         }
-//     }
-// }
-
-pub struct ArchiveCache {
+pub struct PNIRArchiveCache {
     file: File,
     chunk_size: u64,
     lru_order: Vec<u64>,
@@ -67,13 +48,13 @@ pub struct ArchiveCache {
     buf: Vec<u8>,
 }
 
-impl ArchiveCache {
-    pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> ArchiveCache {
+impl PNIRArchiveCache {
+    pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> PNIRArchiveCache {
         let f = File::open(&file).expect(&format!(
             "Failed to open file {:?}",
             file.as_ref().display()
         ));
-        ArchiveCache {
+        PNIRArchiveCache {
             file: f,
             chunk_size,
             lru_order: Vec::new(),
@@ -89,14 +70,9 @@ impl ArchiveCache {
     pub fn read_chunk(&mut self, offset: u64) -> Result<Arc<Vec<u8>>> {
         let aligned = self.align_offset(offset);
 
-        // if let Some(buf) = self.cache.get(&aligned) {
-        //     return Ok(Arc::clone(buf));
-        // }
-
         if let Some(buf) = self.cache.get(&aligned) {
             return Ok(Arc::clone(buf));
         }
-        // dbg!(aligned);
 
         let mut buf = vec![0u8; self.chunk_size as usize];
         let bytes_read = self.file.read_at(&mut buf, aligned)?;
@@ -109,7 +85,7 @@ impl ArchiveCache {
         Ok(arc_buf)
     }
 
-    pub fn load_from_disk(&mut self, offset: &MergedIsoformOffsetPtr) -> MergedIsoform {
+    pub fn load_from_disk(&mut self, offset: &PNIROffsetPtr) -> PNIR {
         // info!("Reading record at offset: {:?}", offset);
         if self.buf.len() > 100 * 1024 * 1024 {
             // if buffer larger than 100MB, reset it
@@ -153,7 +129,7 @@ impl ArchiveCache {
             self.buf.extend_from_slice(&chunk[local_start..local_end]);
         }
 
-        match MergedIsoform::gz_decode(&self.buf) {
+        match PNIR::gz_decode(&self.buf) {
             Ok(record) => record,
             Err(_) => {
                 eprintln!("Failed to decode gzipped record");

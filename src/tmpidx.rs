@@ -513,7 +513,7 @@ impl Iterator for TmpIdxChunker {
 #[repr(C, align(8))]
 pub struct MergedIsoformOffsetPlusGenomeLoc {
     pub pos: u64,
-    pub record_ptr: MergedIsoformOffsetPtr,
+    pub record_ptr: PNIROffsetPtr,
     pub chrom_id: u16,
 }
 
@@ -552,7 +552,7 @@ impl MergedIsoformOffsetPlusGenomeLoc {
         MergedIsoformOffsetPlusGenomeLoc {
             chrom_id,
             pos: position,
-            record_ptr: MergedIsoformOffsetPtr::new(offset, length, nsj),
+            record_ptr: PNIROffsetPtr::new(offset, length, nsj),
         }
     }
 }
@@ -602,7 +602,7 @@ impl Hash for MergedIsoformOffsetPlusGenomeLoc {
 pub struct MergedIsoformOffsetGroup {
     pub chrom_id: u16,
     pub pos: u64,
-    pub record_ptr_vec: Vec<MergedIsoformOffsetPtr>,
+    pub record_ptr_vec: Vec<PNIROffsetPtr>,
 }
 
 impl MergedIsoformOffsetGroup {
@@ -614,7 +614,7 @@ impl MergedIsoformOffsetGroup {
         }
     }
 
-    pub fn add(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<MergedIsoformOffsetPtr>) {
+    pub fn add(&mut self, chrom_id: u16, pos: u64, record_ptr_vec: Vec<PNIROffsetPtr>) {
         assert!(self.chrom_id == chrom_id && self.pos == pos);
         self.record_ptr_vec = record_ptr_vec;
     }
@@ -622,12 +622,12 @@ impl MergedIsoformOffsetGroup {
 
 #[derive(Debug, Clone, IntoBytes, FromBytes, Immutable, Serialize, Deserialize)]
 #[repr(C)]
-pub struct MergedIsoformOffsetPtr {
+pub struct PNIROffsetPtr {
     pub offset: u64,
     pub length: u32,
     pub n_splice_sites: u32, // 0 means the offset is for read terminal positions, otherwise its for splice junction positions
 }
-impl MergedIsoformOffsetPtr {
+impl PNIROffsetPtr {
     pub fn new(offset: u64, length: u32, n_splice_sites: u32) -> Self {
         Self {
             offset,
@@ -641,25 +641,25 @@ impl MergedIsoformOffsetPtr {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        if bytes.len() != std::mem::size_of::<MergedIsoformOffsetPtr>() {
+        if bytes.len() != std::mem::size_of::<PNIROffsetPtr>() {
             panic!(
                 "{}",
                 format!(
                     "RecordPtr bytes should be {} bytes long, while the length is {}",
-                    std::mem::size_of::<MergedIsoformOffsetPtr>(),
+                    std::mem::size_of::<PNIROffsetPtr>(),
                     bytes.len()
                 )
             );
         }
-        let record_bytes: &[u8; std::mem::size_of::<MergedIsoformOffsetPtr>()] = bytes
-            [0..std::mem::size_of::<MergedIsoformOffsetPtr>()]
+        let record_bytes: &[u8; std::mem::size_of::<PNIROffsetPtr>()] = bytes
+            [0..std::mem::size_of::<PNIROffsetPtr>()]
             .try_into()
             .unwrap();
-        MergedIsoformOffsetPtr::read_from_bytes(record_bytes).unwrap()
+        PNIROffsetPtr::read_from_bytes(record_bytes).unwrap()
     }
 }
 
-impl PartialEq for MergedIsoformOffsetPtr {
+impl PartialEq for PNIROffsetPtr {
     fn eq(&self, other: &Self) -> bool {
         self.offset == other.offset
             && self.length == other.length
@@ -667,7 +667,7 @@ impl PartialEq for MergedIsoformOffsetPtr {
     }
 }
 
-impl PartialOrd for MergedIsoformOffsetPtr {
+impl PartialOrd for PNIROffsetPtr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         // Some(self.offset.cmp(&other.offset))
 
@@ -684,9 +684,9 @@ impl PartialOrd for MergedIsoformOffsetPtr {
     }
 }
 
-impl Eq for MergedIsoformOffsetPtr {}
+impl Eq for PNIROffsetPtr {}
 
-impl Ord for MergedIsoformOffsetPtr {
+impl Ord for PNIROffsetPtr {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // if offsets are equal, compare length, if length equal, compare n_splice_sites
         if self.offset == other.offset {
@@ -701,7 +701,7 @@ impl Ord for MergedIsoformOffsetPtr {
     }
 }
 
-impl Hash for MergedIsoformOffsetPtr {
+impl Hash for PNIROffsetPtr {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // self.offset.hash(state);
         self.offset.hash(state);

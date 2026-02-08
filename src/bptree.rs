@@ -4,7 +4,7 @@ use crate::cmd::isoform::AnnIsoCli;
 use crate::constants::*;
 pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
 use crate::tmpidx::MergedIsoformOffsetGroup;
-use crate::tmpidx::MergedIsoformOffsetPtr;
+use crate::tmpidx::PNIROffsetPtr;
 use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::Tmpindex;
 use crate::utils::intersect_sorted;
@@ -131,7 +131,7 @@ impl NodeHeader {
 #[derive(Debug, Clone)]
 pub struct NodeData {
     num_records: usize,
-    pub merge_isoform_offset_vec: Vec<MergedIsoformOffsetPtr>,
+    pub merge_isoform_offset_vec: Vec<PNIROffsetPtr>,
 }
 
 impl NodeData {
@@ -142,19 +142,19 @@ impl NodeData {
         }
     }
 
-    pub fn add_record(&mut self, archive_offset: MergedIsoformOffsetPtr) {
+    pub fn add_record(&mut self, archive_offset: PNIROffsetPtr) {
         self.merge_isoform_offset_vec.push(archive_offset);
         self.num_records += 1;
     }
 
-    pub fn add_records(&mut self, merge_isoform_offsets: Vec<MergedIsoformOffsetPtr>) -> usize {
+    pub fn add_records(&mut self, merge_isoform_offsets: Vec<PNIROffsetPtr>) -> usize {
         let len = merge_isoform_offsets.len();
         self.merge_isoform_offset_vec.extend(merge_isoform_offsets);
         self.num_records += len.clone();
         return len;
     }
 
-    pub fn get_records(&self, start: usize, length: usize) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn get_records(&self, start: usize, length: usize) -> Vec<PNIROffsetPtr> {
         self.merge_isoform_offset_vec[start..start + length].to_vec()
     }
 }
@@ -241,9 +241,9 @@ impl Node {
     pub fn load_record_pointers_from_bytes(&mut self, b: &[u8]) {
         let mut offset = 0;
         let mut length = 0;
-        let mut record_addr_list: Vec<MergedIsoformOffsetPtr> = Vec::new();
+        let mut record_addr_list: Vec<PNIROffsetPtr> = Vec::new();
         while offset < b.len() {
-            let record = MergedIsoformOffsetPtr::from_bytes(&b[offset..offset + 16]);
+            let record = PNIROffsetPtr::from_bytes(&b[offset..offset + 16]);
             record_addr_list.push(record);
             offset += 16;
             length += 1;
@@ -309,10 +309,7 @@ impl Node {
         ret
     }
 
-    pub fn get_addresses_by_children_value(
-        &self,
-        value: &ValueType,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn get_addresses_by_children_value(&self, value: &ValueType) -> Vec<PNIROffsetPtr> {
         if !self.is_leaf() {
             panic!("get_addresses_by_children_value is only for leaf node");
         }
@@ -727,7 +724,7 @@ impl BPTree {
     /// return the record pointer list
     /// if the key is not found, return None
     /// this function does not need chrom id since one bptree for one chromsome
-    pub fn search_pos(&mut self, key: KeyType) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn search_pos(&mut self, key: KeyType) -> Vec<PNIROffsetPtr> {
         // println!("search key: {}", &key);
         // let mut cache = cache::DataCache::from_disk("./test/block0.dat");
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -762,7 +759,7 @@ impl BPTree {
         }
     }
 
-    pub fn search_flank(&mut self, pos: KeyType, flank: KeyType) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn search_flank(&mut self, pos: KeyType, flank: KeyType) -> Vec<PNIROffsetPtr> {
         let start = pos.saturating_sub(flank);
         let end = pos.saturating_add(flank);
         let cache = self.cache.as_mut().expect("Can not get cache");
@@ -821,11 +818,7 @@ impl BPTree {
         results
     }
 
-    pub fn search_start_end(
-        &mut self,
-        start: KeyType,
-        end: KeyType,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    pub fn search_start_end(&mut self, start: KeyType, end: KeyType) -> Vec<PNIROffsetPtr> {
         let cache = self.cache.as_mut().expect("Can not get cache");
 
         let mut node = {
@@ -945,7 +938,7 @@ impl BPForest {
         chrom_name: &str,
         pos: u64,
         lru_size: usize,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    ) -> Vec<PNIROffsetPtr> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
             None => {
@@ -971,7 +964,7 @@ impl BPForest {
         pos: u64,
         flank: u64,
         lru_size: usize,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    ) -> Vec<PNIROffsetPtr> {
         let chrom_id = match self.chrom_mapping.get_chrom_idx(chrom_name) {
             Some(id) => id,
             None => {
@@ -999,8 +992,8 @@ impl BPForest {
         &mut self,
         positions: &Vec<(String, u64)>,
         lru_size: usize,
-    ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
-        let mut res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
+    ) -> Vec<Vec<PNIROffsetPtr>> {
+        let mut res_vec: Vec<Vec<PNIROffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
                 self.base_single_search_exact(
@@ -1023,8 +1016,8 @@ impl BPForest {
         flank: u64,
         // min_matched_splice_site: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
-    ) -> Vec<Vec<MergedIsoformOffsetPtr>> {
-        let mut res_vec: Vec<Vec<MergedIsoformOffsetPtr>> = positions
+    ) -> Vec<Vec<PNIROffsetPtr>> {
+        let mut res_vec: Vec<Vec<PNIROffsetPtr>> = positions
             .iter()
             .map(|(chrom_name, pos)| {
                 self.base_single_search_flank(
@@ -1047,8 +1040,8 @@ impl BPForest {
         flank: u64,
         lru_size: usize,
     ) -> (
-        Vec<MergedIsoformOffsetPtr>,      // common results
-        Vec<Vec<MergedIsoformOffsetPtr>>, // positional matched results, each position one vec
+        Vec<PNIROffsetPtr>,      // common results
+        Vec<Vec<PNIROffsetPtr>>, // positional matched results, each position one vec
     ) {
         if flank == 0 {
             let res = self.fsm_search_exact(positions, lru_size);
@@ -1065,7 +1058,7 @@ impl BPForest {
         positions: &Vec<(String, u64)>,
         flank: u64,
         lru_size: usize,
-    ) -> Vec<Vec<MergedIsoformOffsetPtr>> // positional matched results, each position one vec
+    ) -> Vec<Vec<PNIROffsetPtr>> // positional matched results, each position one vec
     {
         if flank == 0 {
             let res = self.fsm_search_exact(positions, lru_size);
@@ -1084,7 +1077,7 @@ impl BPForest {
         flank: u64,
         min_match: usize, // must larger than 0 and less than positions.len()
         lru_size: usize,
-    ) -> Vec<MergedIsoformOffsetPtr> {
+    ) -> Vec<PNIROffsetPtr> {
         if flank == 0 {
             let res = self.fsm_search_exact(positions, lru_size);
 
@@ -1112,7 +1105,7 @@ impl BPForest {
         positions: &Vec<(u64, u64)>,
         flank: u64,
         lru_size: usize,
-    ) -> Option<Vec<Vec<MergedIsoformOffsetPtr>>> {
+    ) -> Option<Vec<Vec<PNIROffsetPtr>>> {
         let tree_id = &self.chrom_mapping.get_chrom_idx(chrom);
         let tree_id = match tree_id {
             Some(x) => x,
@@ -1168,7 +1161,7 @@ impl BPForest {
         flank: u64,
         lru_size: usize,
         cli: &AnnIsoCli,
-    ) -> Option<Vec<Vec<Rc<MergedIsoformOffsetPtr>>>> {
+    ) -> Option<Vec<Vec<Rc<PNIROffsetPtr>>>> {
         let tree_id = &self.chrom_mapping.get_chrom_idx(chrom);
         let tree_id = match tree_id {
             Some(x) => x,
@@ -1205,11 +1198,8 @@ impl BPForest {
         };
 
         let mut results = Vec::new();
-        let mut map: std::collections::HashMap<
-            u64,
-            Rc<MergedIsoformOffsetPtr>,
-            rustc_hash::FxBuildHasher,
-        > = FxHashMap::default();
+        let mut map: std::collections::HashMap<u64, Rc<PNIROffsetPtr>, rustc_hash::FxBuildHasher> =
+            FxHashMap::default();
 
         let mut processed = 0;
 
@@ -1221,7 +1211,7 @@ impl BPForest {
             res.dedup();
             res.retain(|s| s.n_splice_sites > 0);
 
-            let mut res2: Vec<Rc<MergedIsoformOffsetPtr>> = Vec::new();
+            let mut res2: Vec<Rc<PNIROffsetPtr>> = Vec::new();
 
             for ptr in res {
                 let found = map.contains_key(&ptr.offset);
@@ -1324,7 +1314,7 @@ impl BPForest {
 pub struct SegmentedMonoExonSearchResult {
     pub start: u64,
     pub end: u64,
-    pub ptrs: Vec<MergedIsoformOffsetPtr>,
+    pub ptrs: Vec<PNIROffsetPtr>,
     pub mono_exon_tx_indices: Vec<usize>,
 }
 
@@ -1337,7 +1327,7 @@ impl SegmentedMonoExonSearchResult {
             mono_exon_tx_indices: par.2.clone(),
         }
     }
-    pub fn add_records(&mut self, new_ptrs: Vec<MergedIsoformOffsetPtr>) {
+    pub fn add_records(&mut self, new_ptrs: Vec<PNIROffsetPtr>) {
         self.ptrs.extend(new_ptrs);
     }
 }
@@ -1345,10 +1335,7 @@ impl SegmentedMonoExonSearchResult {
 /// find the common elements in the vecs, if one element
 /// appears in at least min_match vecs, it is considered as common
 /// min_match is set to 2 in case the mono exon isoforms
-pub fn find_partial_common(
-    vecs: &[Vec<MergedIsoformOffsetPtr>],
-    min_match: usize,
-) -> Vec<MergedIsoformOffsetPtr> {
+pub fn find_partial_common(vecs: &[Vec<PNIROffsetPtr>], min_match: usize) -> Vec<PNIROffsetPtr> {
     let mut count_map = FxHashMap::default();
 
     for vec in vecs {
@@ -1365,7 +1352,7 @@ pub fn find_partial_common(
         .collect()
 }
 
-pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsoformOffsetPtr> {
+pub fn find_common(mut vecs: Vec<Vec<PNIROffsetPtr>>) -> Vec<PNIROffsetPtr> {
     if vecs.is_empty() {
         return vec![];
     }
@@ -1389,7 +1376,7 @@ pub fn find_common(mut vecs: Vec<Vec<MergedIsoformOffsetPtr>>) -> Vec<MergedIsof
     result
 }
 
-pub fn dedup_vec_vec(vecs: &mut Vec<Vec<MergedIsoformOffsetPtr>>) {
+pub fn dedup_vec_vec(vecs: &mut Vec<Vec<PNIROffsetPtr>>) {
     // remove the duplicate MergedIsoformOffsetPtr in each vec
     for vec in vecs.iter_mut() {
         vec.sort();
@@ -1403,8 +1390,8 @@ impl GetMemSize for Node {
 
         total += std::mem::size_of::<Node>();
 
-        total += self.data.merge_isoform_offset_vec.capacity()
-            * std::mem::size_of::<MergedIsoformOffsetPtr>();
+        total +=
+            self.data.merge_isoform_offset_vec.capacity() * std::mem::size_of::<PNIROffsetPtr>();
         total
     }
 }

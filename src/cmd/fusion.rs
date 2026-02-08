@@ -8,15 +8,14 @@ use std::{
 
 use crate::{
     bptree::BPForest,
-    breakpoints,
     constants::*,
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionCluster},
     gene_index::GeneIntervalTree,
-    isoform::MergedIsoform,
-    isoformarchive::ArchiveCache,
     meta::Meta,
     myio::*,
+    pnir::PNIR,
+    pnir_archive::PNIRArchiveCache,
     results::TableOutput,
     utils::{self, greetings2},
 };
@@ -295,7 +294,7 @@ fn anno_single_fusion(
     fusionbrkpt_out: &mut TableOutput,
     cli: &AnnFusionCli,
     forest: &mut BPForest,
-    archive_cache: &mut ArchiveCache,
+    archive_cache: &mut PNIRArchiveCache,
     dbinfo: &DatasetInfo,
 ) -> Result<()> {
     info!(
@@ -370,7 +369,7 @@ fn anno_single_fusion(
     // check if the left portion is supported
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform: MergedIsoform = archive_cache.load_from_disk(&target);
+        let merged_isoform: PNIR = archive_cache.load_from_disk(&target);
         let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
             &breakpoints.left_chr,
             breakpoints.left_start,
@@ -431,7 +430,7 @@ pub fn anno_single_fusion_detail(
     // fusionbrkpt_out: &mut TableOutput,
     cli: &AnnFusionCli,
     forest: &mut BPForest,
-    archive_cache: &mut ArchiveCache,
+    archive_cache: &mut PNIRArchiveCache,
     meta: &Meta,
     dbinfo: &DatasetInfo,
 ) -> Result<()> {
@@ -552,7 +551,7 @@ pub fn anno_single_fusion_detail(
     }
 
     for target_right in right_target {
-        let merged_isoform: MergedIsoform = archive_cache.load_from_disk(&target_right);
+        let merged_isoform: PNIR = archive_cache.load_from_disk(&target_right);
 
         let fusion_read_records = merged_isoform.cast_to_fusion_records(
             &q_l_chr,
@@ -624,7 +623,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
-    let mut archive_cache = ArchiveCache::new(
+    let mut archive_cache = PNIRArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
         cli.cached_chunk_number,                // max 4 chunks in cache ~2GB
@@ -776,7 +775,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
                 }
 
                 for rec_ptr in targets {
-                    let isoform: MergedIsoform = archive_cache.load_from_disk(&rec_ptr);
+                    let isoform: PNIR = archive_cache.load_from_disk(&rec_ptr);
 
                     let candidates = isoform.to_fusion_candidates();
 

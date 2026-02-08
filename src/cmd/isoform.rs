@@ -8,9 +8,9 @@ use crate::{
     global_stats::GlobalStats,
     grouped_tx::{ChromGroupedTxManager, TmpOutputManager},
     gtf::{open_gtf_reader, TranscriptChunker},
-    isoformarchive::ArchiveCache,
     meta::Meta,
     myio::{DBInfos, Header},
+    pnir_archive::PNIRArchiveCache,
     results::TableOutput,
     utils::greetings2,
 };
@@ -195,7 +195,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     info!("Loading index file");
 
-    let mut archive_cache = ArchiveCache::new(
+    let mut archive_cache = PNIRArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
         cli.cached_chunk_num,                   // max 4 chunks in cache ~2GB
@@ -313,7 +313,7 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
 
     // output global stats each sample is a row, columns are  sample name, fsm_total(pct), em_total(pct), fsm_em_total(pct)
     info!("> Stats summary:");
-    info!("> Sample FSM(CPT) EM(CPT) FSM+EM(CPT)");
+    info!("> Sample\tFSM(CPT)\tEM(CPT)\tFSM+EM(CPT)");
     for sample_name in index_info.get_sample_names() {
         let sample_idx = index_info
             .get_sample_idx_by_name(&sample_name)
