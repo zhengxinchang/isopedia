@@ -65,7 +65,7 @@ pub struct AnnIsoCli {
     pub num_threads: usize,
 
     /// Max EM iterations
-    #[arg(long, default_value_t = 50)]
+    #[arg(long, default_value_t = 100)]
     pub em_max_iter: usize,
 
     /// EM convergence threshold
@@ -77,7 +77,7 @@ pub struct AnnIsoCli {
     pub em_chunk_size: usize,
 
     /// EM effective length coefficient, avoid divide by zero when transcript is very short.
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 2)]
     pub em_effective_len_coef: usize,
 
     /// EM damping factor
@@ -85,7 +85,7 @@ pub struct AnnIsoCli {
     pub em_damping_factor: f32,
 
     /// Minimum EM abundance to report
-    #[arg(long, default_value_t = 0.01)]
+    #[arg(long, default_value_t = 0.0001)]
     pub min_em_abundance: f32,
 
     /// No check TSS and TES
@@ -93,11 +93,11 @@ pub struct AnnIsoCli {
     pub no_check_tss_tes: bool,
 
     /// Maximum allowed degradation bp for TSS
-    #[arg(long, default_value_t = 500)]
+    #[arg(long, default_value_t = 2000)]
     pub tss_degrad_bp: u64,
 
     /// Maximum allowed degradation bp for TES
-    #[arg(long, default_value_t = 200)]
+    #[arg(long, default_value_t = 8000)]
     pub tes_degrad_bp: u64,
 
     #[arg(

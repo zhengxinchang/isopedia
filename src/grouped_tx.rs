@@ -1307,6 +1307,10 @@ pub struct MSJC {
     is_mono_exon_merged: bool,
     mono_exon_total_length: u64,
     mono_exon_merged_cnt: u64,
+
+    // /// 用于 mono-exon merge 加速: sid -> index in nonzero_sample_indices
+    /// 长度为 sample_size, 值为 u32::MAX 表示不存在
+    sid_to_pos: Vec<u32>,
 }
 
 impl MSJC {
@@ -1333,6 +1337,7 @@ impl MSJC {
             is_mono_exon_merged: false,
             mono_exon_total_length: 0,
             mono_exon_merged_cnt: 0,
+            sid_to_pos: vec![u32::MAX; sample_size],
         }
     }
 
@@ -1349,6 +1354,7 @@ impl MSJC {
             is_mono_exon_merged: true,
             mono_exon_total_length: 0,
             mono_exon_merged_cnt: 0,
+            sid_to_pos: vec![u32::MAX; sample_size],
         }
     }
 
@@ -1356,18 +1362,38 @@ impl MSJC {
         // merge the splice junctions
 
         // update nonzero sample indices and cov_vec
+        // for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
+        //     if let Some(pos) = self.nonzero_sample_indices.iter().position(|&x| x == sid) {
+        //         // already exists, update cov_vec
+        //         self.cov_vec[pos] += msjc.cov_vec[i];
+        //     } else {
+        //         // new sample index
+        //         self.nonzero_sample_indices.push(sid);
+        //         self.cov_vec.push(msjc.cov_vec[i]);
+        //     }
+        // }
+
+        // // update mono exon total length and count
+        // let length = msjc.get_inner_span();
+        // self.mono_exon_total_length += length;
+        // self.mono_exon_merged_cnt += 1;
+
         for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
-            if let Some(pos) = self.nonzero_sample_indices.iter().position(|&x| x == sid) {
-                // already exists, update cov_vec
-                self.cov_vec[pos] += msjc.cov_vec[i];
+            let pos = unsafe { *self.sid_to_pos.get_unchecked(sid) };
+            if pos != u32::MAX {
+                unsafe {
+                    *self.cov_vec.get_unchecked_mut(pos as usize) += msjc.cov_vec.get_unchecked(i);
+                }
             } else {
-                // new sample index
+                let new_pos = self.nonzero_sample_indices.len() as u32;
+                unsafe {
+                    *self.sid_to_pos.get_unchecked_mut(sid) = new_pos;
+                }
                 self.nonzero_sample_indices.push(sid);
                 self.cov_vec.push(msjc.cov_vec[i]);
             }
         }
 
-        // update mono exon total length and count
         let length = msjc.get_inner_span();
         self.mono_exon_total_length += length;
         self.mono_exon_merged_cnt += 1;
