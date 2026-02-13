@@ -1,5 +1,3 @@
-
-
 # About the Isopedia <img src="./img/logo3.png" align="right" alt="" width=120 />
 
 **Isopedia** is a scalable tool designed for the analysis of hundreds to thousands of long-read transcriptome datasets simultaneously by read-level indexing approach. It provides two key capabilities:
@@ -27,7 +25,7 @@
 
 # Quick Start
 
-Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `isopedia` is used for all the main functions, and `isopedia-tools` has some helper functions.
+Isopedia has two binaries: `isopedia` and `isopedia-tools`. The main binary `isopedia` is used for all the main functions, and `isopedia-tools` has some helper functions.
 
 **Download prebuild index and run**
 
@@ -42,19 +40,19 @@ git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 isopedia isoform -i index/ -g query.gtf -o ./out.profile.tsv.gz
 
 # query one fusion gene (two breakpoints)
-isopedia fusion  -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz
+isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz
 
 # query multiple fusion genes
-isopedia fusion  -i index/ -P fusion_query.bed -o ./out.fusion.tsv.gz
+isopedia fusion -i index/ -P fusion_query.bed -o ./out.fusion.tsv.gz
 
 # query gene regions and discover potential fusion events
-isopedia fusion  -i index/ -g gene.gtf -o ./out.fusion.discovery.tsv.gz
+isopedia fusion -i index/ -G gene.gtf -o ./out.fusion.discovery.tsv.gz
 
 # query a splice junction from the BID gene
-isopedia splice  -i index/ -s 22:17744013,22:17750104  -o ./out.splice.tsv.gz
+isopedia splice -i index/ -s 22:17744013,22:17750104 -o ./out.splice.tsv.gz
 
 # visualize the splice junction
-isopedia-splice-viz.py  -i ./out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf   -o isopedia-splice-view
+python script/isopedia-splice-viz.py -i ./out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -o isopedia-splice-view
 ```
 
 For indexing GTF files, please refer to [Indexing GTF Files](doc/indexing_gtf.md) section.
@@ -65,7 +63,7 @@ For indexing GTF files, please refer to [Indexing GTF Files](doc/indexing_gtf.md
 
 ![how-it-works](./img/how-it-works.png)
 
-The workflow of Isopedia involves several key steps, including isoform profiling, merging, indexing, and quering. Users can start by profiling isoform signals from individual BAM files, then merge the results to build a comprehensive index. Once the index is ready, it can be used to qeury isoforms, fusion genes, and explore splice junctions across multiple samples. Users can also visualize specific splicing events using the provided visualization tools. 
+The workflow of Isopedia involves several key steps, including isoform profiling, merging, indexing, and querying. Users can start by profiling isoform signals from individual BAM files, then merge the results to build a comprehensive index. Once the index is ready, it can be used to query isoforms, fusion genes, and explore splice junctions across multiple samples. Users can also visualize specific splicing events using the provided visualization tools. 
 
 
 <details>
@@ -89,25 +87,25 @@ Isopedia comes with pre-built indexes from hundreds of publicly available long-r
 
 **Download and unpack the index:**
 
-```
+```bash
 wget ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz
 tar -xvf isopedia_index_hs_v1.0.tar.xz
 ```
 
 **Unpack the index**
 
-The index file was compressed by xz to achieve the heighest compression rate, it can be decompressed by:
+The index file was compressed by xz to achieve the highest compression rate, it can be decompressed by:
 
-```
+```bash
 tar -xvf isopedia_index_hs_v1.0.tar.xz
 ```
 
 # Build your own index
 
-Isopedia supports building local index in your own datasets. prerequests are listed below:
+Isopedia supports building local index in your own datasets. Prerequisites are listed below:
 
-2. A set of mapped bam files(sorted bam are not required)
-3. A manifest file that describe the sample name, isoform file path, and other optional meta data in tabular(\t sperated and with a header line) format. 
+1. A set of mapped bam files (sorted bam are not required)
+2. A manifest file that describes the sample name, isoform file path, and other optional metadata in tabular (\t separated and with a header line) format. 
 
 Example manifest file:
 
@@ -115,13 +113,12 @@ Example manifest file:
 sample_name   path   platform
 HG002_pb_chr22   /path/to/hg002_pb_chr22.isoform.gz   PacBio
 HG002_ont_chr22   /path/to/hg002_ont_chr22.isoform.gz   ONT
-
 ```
 
 ## Example workflow
 
 ```bash
-# make sure isopedia in your $PATH or use absolute path to the binaries.
+# make sure isopedia is in your $PATH or use absolute path to the binaries.
 
 # download the toy_ex 
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
@@ -130,23 +127,21 @@ git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 isopedia profile -i ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
 isopedia profile -i ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 
-`--tid` include transcript id in the profile file , only work when `-g` (GTF) is passed.
+# Optional flags for profile command:
+# --tid : include transcript id in the profile file, only works when -g (GTF) is passed.
+# --gid : include gene id in the profile file, only works when -g (GTF) is passed.
+# --rname : include read name in the profile file, only works when -i (BAM/CRAM) is passed.
 
-`--gid` include gene id in the profile file, only work when `-g` (GTF) is passed.
+# make a manifest.tsv (tab-separated) for *.isoform.gz files. example can be found at ./manifest.tsv
 
-`--rname` include read name in the profile file, only work when `-i` (BAM/CRAM) is passed.
-
-# make a manifest.tsv(tab-seprated) for *.isoform.gz files. example can be found at ./manifest.tsv
-
-# merging, only first two column will be read in this step.
+# merging, only first two columns will be read in this step.
 isopedia merge -i manifest.tsv -o index/
 
 # build index. provide the same manifest file, the rest of meta columns will be read.
-isopedia index  -i index/ -m manifest.tsv 
+isopedia index -i index/ -m manifest.tsv 
 
-# test your index by run a small annotation task.
+# test your index by running a small annotation task.
 isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.isoform.tsv.gz
-
 ```
 
 # How to use Isopedia
@@ -160,20 +155,57 @@ Search transcripts from input gtf file and return how many samples in the index 
 ### Example:
 
 ```bash
-
-# isopeida assumes the GTF file is sorted.
-gffread -T -o- origin.gtf  | sort -k1,1 -k4,4n | gffread - -o query.gtf
+# Isopedia assumes the GTF file is sorted.
+gffread -T -o- origin.gtf | sort -k1,1 -k4,4n | gffread - -o query.gtf
 
 isopedia isoform -i index/ -g query.gtf -o out.tsv.gz
 ```
 
-key parameters:
+### Key parameters:
 
-`--min-read(-m)` minimal support read in each sample to define a postive sample
+`--min-read(-m)` Minimum support reads in each sample to define a positive sample (default: 1)
 
-`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+`--flank(-f)` Flank base pairs when searching splice sites. Larger value will slow down the run time but allow more wobble splice sites (default: 10)
 
-`--info` include additional information such as read name(indexing BAM/CRAM), transcript IDs(indexing GTF), and/or gene IDs(indexing GTF) in the annotation output.
+`--info` Include additional information such as read name (indexing BAM/CRAM), transcript IDs (indexing GTF), and/or gene IDs (indexing GTF) in the annotation output
+
+`--num-threads(-n)` Number of threads to use (default: 4)
+
+### EM Algorithm Parameters:
+
+`--em-max-iter` Maximum EM iterations (default: 100)
+
+`--em-conv-min-diff` EM convergence threshold (default: 0.01)
+
+`--em-chunk-size` EM chunk size, reduce it if you have low memory (default: 4)
+
+`--em-effective-len-coef` EM effective length coefficient, avoid divide by zero when transcript is very short (default: 2)
+
+`--em-damping-factor` EM damping factor (default: 0.3)
+
+`--min-em-abundance` Minimum EM abundance to report (default: 0.0001)
+
+### TSS/TES Filtering Parameters:
+
+`--no-check-tss-tes` Disable TSS and TES checking
+
+`--tss-degrad-bp` Maximum allowed degradation bp for TSS (default: 2000)
+
+`--tes-degrad-bp` Maximum allowed degradation bp for TES (default: 8000)
+
+`--terminal-tolerance-bp` Maximum allowed deviation (bp) beyond annotated TSS and TES. Isoforms whose TSS and TES fall outside the annotation but within this tolerance are still classified as FSM (default: 10)
+
+### Performance Tuning Parameters:
+
+`--cached-nodes(-c)` Maximum number of cached tree nodes in memory (default: 10)
+
+`--cached-chunk-num` Maximum number of cached isoform chunks in memory (default: 4)
+
+`--cached-chunk-size-mb` Cached isoform chunk size in MB (default: 128)
+
+`--output-tmp-shard-counts` Output temporary shard record size (default: 10000)
+
+`--verbose` Enable verbose mode for detailed logging
 
 <details>
 <summary>
@@ -192,12 +224,10 @@ Options:
 
   -f, --flank <FLANK>
           Flanking size (in bases) before and after the position
-          
           [default: 10]
 
   -m, --min-read <MIN_READ>
           Minimum number of reads required to define a positive sample
-          
           [default: 1]
 
   -o, --output <OUTPUT>
@@ -206,14 +236,66 @@ Options:
       --info
           Whether to include additional information in the output
 
-  -w, --warmup-mem <WARMUP_MEM>
-          Memory size to use for warming up (in gigabytes). Example: 4GB. Increasing this will significantly improve performance; set it as large as your system allows
-          
+  -n, --num-threads <NUM_THREADS>
+          Number of threads to use
           [default: 4]
 
-  -c, --cached_nodes <LRU_SIZE>
-          Maximum number of cached nodes per tree
-          
+      --em-max-iter <EM_MAX_ITER>
+          Max EM iterations
+          [default: 100]
+
+      --em-conv-min-diff <EM_CONV_MIN_DIFF>
+          EM convergence threshold
+          [default: 0.01]
+
+      --em-chunk-size <EM_CHUNK_SIZE>
+          EM chunk size, reduce it if you have low memory
+          [default: 4]
+
+      --em-effective-len-coef <EM_EFFECTIVE_LEN_COEF>
+          EM effective length coefficient, avoid divide by zero when transcript is very short
+          [default: 2]
+
+      --em-damping-factor <EM_DAMPING_FACTOR>
+          EM damping factor
+          [default: 0.3]
+
+      --min-em-abundance <MIN_EM_ABUNDANCE>
+          Minimum EM abundance to report
+          [default: 0.0001]
+
+      --no-check-tss-tes
+          No check TSS and TES
+
+      --tss-degrad-bp <TSS_DEGRAD_BP>
+          Maximum allowed degradation bp for TSS
+          [default: 2000]
+
+      --tes-degrad-bp <TES_DEGRAD_BP>
+          Maximum allowed degradation bp for TES
+          [default: 8000]
+
+      --terminal-tolerance-bp <TERMINAL_TOLERANCE_BP>
+          Maximum allowed deviation (bp) beyond annotated TSS and TES
+          [default: 10]
+
+  -c, --cached-nodes <CACHED_NODES>
+          Maximum number of cached tree nodes in memory
+          [default: 10]
+
+      --cached-chunk-num <CACHED_CHUNK_NUM>
+          Maximum number of cached isoform chunks in memory
+          [default: 4]
+
+      --cached-chunk-size-mb <CACHED_CHUNK_SIZE_MB>
+          Cached isoform chunk size in Mb
+          [default: 128]
+
+      --verbose
+          Verbose mode
+
+      --output-tmp-shard-counts <OUTPUT_TMP_SHARD_COUNTS>
+          Output temporary shard record size
           [default: 10000]
 
   -h, --help
@@ -246,42 +328,42 @@ The output of the search command is a tab-separated file with the following colu
 | positive_count/sample_size  | Positive count / sample size                                                |
 | attributes                 | Original attributes of the transcript from the input GTF file               |
 | FORMAT                     | Format of the values in each sample column                                  |
-| sample1                    | Valuesv (CPM:COUNT:INFO)                                                                   |
+| sample1                    | Values (CPM:COUNT:INFO)                                                                   |
 | …                          | …                                                                           |
 | sampleN                    | Values (CPM:COUNT:INFO)                                                                      |
 
 
-There are a few columns can be used to filter the results.
+There are a few columns that can be used to filter the results.
 
-`detected` this binary value indicates if at least one sample has evidence to support the query transcirpt. it can be used to quickly filterout transcirpts without evidence.
+`detected` This binary value indicates if at least one sample has evidence to support the query transcript. It can be used to quickly filter out transcripts without evidence.
 
-`positive_count/sample_size` this value is a combination of two values. it indicates how many samples have engouth evidence(defined by `--min-read`). it can be used to quckly filter the transcirpts that have at least several samples in the index.
+`positive_count/sample_size` This value is a combination of two values. It indicates how many samples have enough evidence (defined by `--min-read`). It can be used to quickly filter the transcripts that have at least several samples in the index.
 
-`confidence` a value that summarize the confidence of observing a transcript in the entire index
+`confidence` A value that summarizes the confidence of observing a transcript in the entire index
 
 *CPM* values are provided in each sample column, which is defined as:
 
-$$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} * 1,000,000 $$ 
+$$CPM=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample}} \times 1,000,000 $$ 
 
 `INFO` field in each sample column contains additional information depending on the index content, such as read names (if BAM/CRAM files were indexed) or transcript/gene IDs (if GTF files were indexed). This information can be useful for further analysis or validation. It is recommended to include this field when building the index from GTF files.
 
 **Note that** 
 
-The `INFO` field only be included when the index was created with `--rname`(BAM/CRAM) or `--tid`/`--gid` option and the `--info` flag is used during the query.
+The `INFO` field will only be included when the index was created with `--rname` (BAM/CRAM) or `--tid`/`--gid` option and the `--info` flag is used during the query.
 
 
 <details>
+<summary>Confidence score calculation details</summary>
 
-$$C = \frac{k}{n}* (\prod_{i}^{n}CPM_{i})^{1/n} *G$$
+$$C = \frac{k}{n} \times (\prod_{i}^{n}CPM_{i})^{1/n} \times G$$
 
-where $n$ is the total number of samples in the index. $k$ is the sample number that found evidence(at least 1 support read) for a query. $CPM_{i}$ is the count per million value of the transcript in the sample $i$, which is defined as:
+where $n$ is the total number of samples in the index. $k$ is the sample number that found evidence (at least 1 support read) for a query. $CPM_{i}$ is the count per million value of the transcript in the sample $i$, which is defined as:
 
-$$CPM_{i}=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample }i} * 1,000,000$$
+$$CPM_{i}=\frac{ \text{Number of support reads for the query transcript}} {\text{Total number of valid reads in the sample }i} \times 1,000,000$$
 
-$G$ is the GINI coefficient in positive samples$(i=0..k)$:
+$G$ is the GINI coefficient in positive samples $(i=0..k)$:
 
-$$G = 2 \frac{\sum_{i=1}^{n} i*CPM_{i}}{n \sum_{i=1}^{n} CPM_{i} } - \frac{n+1}{n}$$
-
+$$G = 2 \frac{\sum_{i=1}^{n} i \times CPM_{i}}{n \sum_{i=1}^{n} CPM_{i} } - \frac{n+1}{n}$$
 
 </details>
 
@@ -300,16 +382,34 @@ isopedia fusion -i index/ -f 10 -p chr1:pos1,chr2:pos2 -o fusion.anno.bed.gz
 
 # query multiple fusions at the same time
 isopedia fusion -i index/ -f 10 -P fusion_breakpoints.bed -o fusion_all.anno.bed.gz
+
 ```
 
-key parameters:
+### Key parameters:
 
-`--min-read(-m)` minimal support read in each sample to define a postive sample
+`--min-read(-m)` Minimum support reads in each sample to define a positive sample (default: 1)
 
-`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+`--flank(-f)` Flank base pairs when searching splice sites. Larger value will slow down the run time but allow more wobble splice sites (default: 10)
+
+`--pos(-p)` Two breakpoints for gene fusion to be searched (format: chr1:pos1,chr2:pos2)
+
+`--pos-bed(-P)` BED file with breakpoints for gene fusions. First six columns are chr1, start, end, chr2, start, end, and from the seventh column is the fusion id
+
+`--region(-r)` Query two regions for possible gene fusions, returns any reads that have breakpoints within the two regions (format: chr1:start-end,chr2:start-end)
+
+`--gene-gtf(-G)` GTF file with gene annotations for discovering potential gene fusions
+
+### Performance Tuning Parameters:
+
+`--cached_nodes(-c)` Number of cached nodes for each tree in maximal (default: 1000000)
+
+`--cached-chunk-number` Maximum number of cached isoform chunks in memory (default: 4)
+
+`--cached-chunk-size-mb` Cached isoform chunk size in MB (default: 128)
+
+`--verbose` Enable verbose mode for detailed logging
 
 <details>
-
 <summary>
 All parameters:
 </summary>
@@ -325,40 +425,54 @@ Options:
           two breakpoints for gene fusion to be search(-p chr1:pos1,chr2:pos2)
 
   -P, --pos-bed <POS_BED>
-          bed file that has the breakpoints for gene fusions. First four columns are chr1, pos1, chr2, pos2, and starts from the fifth column is the fusion id
+          bed file that has the breakpoints for gene fusions. First six columns are 
+          chr1, start, end, chr2, start, end, and starts from the seventh column is 
+          the fusion id
+
+  -r, --region <REGION>
+          query two regions for possible gene fusions, return any reads that has 
+          breakpoints within the two regions. Format: chr1:start-end,chr2:start-end
 
   -G, --gene-gtf <GENE_GTF>
-          bed file that has the start-end positions of the genes, used to find any possible gene fusions within the provided gene regions
+          bed file that has the start-end positions of the genes, used to find any 
+          possible gene fusions within the provided gene regions
 
   -f, --flank <FLANK>
           flank size for search, before and after the position
-          
           [default: 10]
 
   -m, --min-read <MIN_READ>
           minimal reads to define a positive sample
-          
           [default: 1]
 
   -o, --output <OUTPUT>
           output file for search results
 
-      --debug
-          debug mode
-
   -c, --cached_nodes <LRU_SIZE>
           number of cached nodes for each tree in maximal
-          
           [default: 1000000]
+
+      --cached-chunk-number <CACHED_CHUNK_NUMBER>
+          Maximum number of cached isoform chunks in memory
+          [default: 4]
+
+      --cached-chunk-size-mb <CACHED_CHUNK_SIZE_MB>
+          Cached isoform chunk size in Mb
+          [default: 128]
+
+      --verbose
+          Verbose mode
 
   -h, --help
           Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
 ```
 </details>
 
+### Example BED format for fusion breakpoints:
+
+```
+chr2    50795173    50795273    chr17    61368325    61368425    BCAS4:BCAS3,UHR(optional)
+```
 
 ### Output
 
@@ -387,17 +501,16 @@ Query candidate fusion genes within specified gene regions. It identifies potent
 ### Example:
 
 ```bash
-
-isopedia fusion -i index/  -G gene.gtf -o fusion.discovery.out.gz
+isopedia fusion -i index/ -G gene.gtf -o fusion.discovery.out.gz
 ```
 
-key parameters:
+### Key parameters:
 
-`--gene-gtf(-G)` a gtf file that has gene records. the rest of feature will be ignored.
+`--gene-gtf(-G)` A GTF file that has gene records. The rest of the features will be ignored.
 
-`--min-read(-m)` minimal support read in each sample to define a postive sample
+`--min-read(-m)` Minimum support reads in each sample to define a positive sample (default: 1)
 
-`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+`--flank(-f)` Flank base pairs when searching splice sites. Larger value will slow down the run time but allow more wobble splice sites (default: 10)
 
 ### Output
 
@@ -433,22 +546,35 @@ This command is designed for cases where you have a specific splice junction of 
 ### Example:
 
 ```bash
-isopedia splice  -i index/ -s chr22:41100500,chr22:41101500  -o splice.out.gz
-python script/isopedia-splice-viz.py  -i splice.out.gz -g gencode.v47.basic.annotation.gtf  script/isopedia-splice-viz-temp.html -o isopedia-splice-view
-
+isopedia splice -i index/ -s chr22:41100500,chr22:41101500 -o splice.out.gz
+python script/isopedia-splice-viz.py -i splice.out.gz -g gencode.v47.basic.annotation.gtf -o isopedia-splice-view
 ```
 
-key parameters(isopedia splice):
+### Key parameters (isopedia splice):
 
-`--min-read(-m)` minimal support read in each sample to define a postive sample
+`--splice(-s)` Splice junction in 'chr1:pos1,chr2:pos2' format
 
-`--flank(-f)` flank base pairs when searching splice sites. large value will slow down the run time but allow more wobble splice site.
+`--splice-bed(-S)` Path to splice junction BED file
 
-key parameters(isopedia-splice-viz.py):
+`--min-read(-m)` Minimum support reads in each sample to define a positive sample (default: 1)
 
-`-g/--gtf` a gtf file that has gene annotations. it will be used to annotate the splice junction and isoforms.
+`--flank(-f)` Flank base pairs when searching splice sites. Larger value will slow down the run time but allow more wobble splice sites (default: 10)
 
-`-t/--temp-html` a template html file that will be used to generate the interactive vislization.
+### Performance Tuning Parameters:
+
+`--cached_nodes(-c)` Maximum number of cached nodes per tree (default: 1000)
+
+`--cached-chunk-number` Maximum number of cached isoform chunks in memory (default: 4)
+
+`--cached-chunk-size-mb` Cached isoform chunk size in MB (default: 128)
+
+`--verbose` Enable verbose mode for detailed logging
+
+### Key parameters (isopedia-splice-viz.py):
+
+`-g/--gtf` A GTF file that has gene annotations. It will be used to annotate the splice junction and isoforms.
+
+`-t/--template` A template HTML file that will be used to generate the interactive visualization.
 
 
 <details>
@@ -457,7 +583,6 @@ All parameters:
 </summary>
 
 ```bash
-
 Usage: isopedia splice [OPTIONS] --idxdir <IDXDIR> --output <OUTPUT>
 
 Options:
@@ -472,36 +597,35 @@ Options:
 
   -f, --flank <FLANK>
           Flanking size (in bases) before and after the position
-          
           [default: 10]
 
   -m, --min-read <MIN_READ>
           Minimum number of reads required to define a positive sample
-          
           [default: 1]
 
   -o, --output <OUTPUT>
           Output file for search results
 
-  -w, --warmup-mem <WARMUP_MEM>
-          Memory size to use for warming up (in gigabytes). Example: 4GB. Increasing this will significantly improve performance; Set it to 0(default) if you only have small query and want to skip warming up step
-          
-          [default: 0]
-
   -c, --cached_nodes <LRU_SIZE>
           Maximum number of cached nodes per tree
-          
-          [default: 100000]
+          [default: 1000]
+
+      --cached-chunk-number <CACHED_CHUNK_NUMBER>
+          Maximum number of cached isoform chunks in memory
+          [default: 4]
+
+      --cached-chunk-size-mb <CACHED_CHUNK_SIZE_MB>
+          Cached isoform chunk size in Mb
+          [default: 128]
+
+      --verbose
+          Verbose mode
 
   -h, --help
           Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
 ```
 
 ```bash
-
 usage: isopedia-splice-viz.py [-h] -i INPUT [-g GTF] [-t TEMPLATE] -o OUTPUT
 
 Visualize isoforms from isopedia-anno-splice output
@@ -515,15 +639,21 @@ options:
                         Templates HTML file
   -o OUTPUT, --output OUTPUT
                         Output file
-
 ```
 </details>
 
+### Example format of splice_bed:
 
+```
+id    chr1    pos1    chr2    pos2
+```
+
+**Note:** If you are using coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.
 
 ### Output
 
 The output is a gzip-compressed file containing detailed information about the splice junction and associated isoforms. Each isoform record includes:
+
 | Field Name          | Description                                                                 |
 |---------------------|-----------------------------------------------------------------------------|
 | #id                 | Isoform identifier                                                          |
@@ -540,7 +670,7 @@ The output is a gzip-compressed file containing detailed information about the s
 | end_pos_right       | Rightmost ending position of isoform                                        |
 | splice_junctions    | List of splice junctions in the isoform                                     |
 | format              | Format of record                                                            |
-| SAMPLE columns      | Per-sample evidence, the format is: support_read:CPM:[read_start|read_end|strand,]*N   |
+| SAMPLE columns      | Per-sample evidence, the format is: support_read:CPM:[read_start\|read_end\|strand,]*N   |
 
 
 
@@ -550,12 +680,12 @@ https://zhengxinchang.github.io/isopedia/
 ![isopedia-splice-view](./img/isopedia-splice-view.png)
 
 
-# Computational resource usge
+# Computational resource usage
 
 
 Isopedia 1.4.0 was tested on 1,007 long-read transcriptome datasets from SRA and ENCODE.
 
-> tested on AMD Ryzen 9 7940HX, 64 GB RAM.
+> Tested on AMD Ryzen 9 7940HX, 64 GB RAM.
 
 
 | Step                       | Peak Mem (GB)  | Time(H:MM:SS) |
@@ -578,7 +708,7 @@ conda install -c zhengxinchang isopedia
 
 https://github.com/zhengxinchang/isopedia/releases
 
-Note that the `isopedia-<version>.linux.tar.gz` was compliled in Amazon Linux 2 with GCC 7.3, Glibc 2.26, and Binutils 2.29.1. It should work in most of Linux distrubtion, however, if your Linux distribution can not run it, you can still try to use the `isopedia-<version>.musl.tar.gz`(statically linked with musl). 
+Note that the `isopedia-<version>.linux.tar.gz` was compiled in Amazon Linux 2 with GCC 7.3, Glibc 2.26, and Binutils 2.29.1. It should work in most Linux distributions. However, if your Linux distribution cannot run it, you can still try to use the `isopedia-<version>.musl.tar.gz` (statically linked with musl). 
 
 ## From source code
 
@@ -595,9 +725,9 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 # Annotate ORF with ORFannotate
 
-Isopedia is designed to interoperate with [ORFannotate](https://github.com/egustavsson/ORFannotate), which can process isopedia outputs to predict ORFs and UTRs, annotate CDS features in GTF files, and produce transcript-level summaries.
+Isopedia is designed to interoperate with [ORFannotate](https://github.com/egustavsson/ORFannotate), which can process Isopedia outputs to predict ORFs and UTRs, annotate CDS features in GTF files, and produce transcript-level summaries.
 
-Example to use ORF annotate 
+Example to use ORF annotate:
 
 ```
 <place holder>
@@ -606,7 +736,7 @@ Example to use ORF annotate
 
 # Development Roadmap
 
-- Builtin download for remote indexes
+- Built-in download for remote indexes
 
 # Contact
 

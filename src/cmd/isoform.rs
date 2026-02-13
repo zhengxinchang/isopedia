@@ -334,6 +334,9 @@ pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
             sample_name, fsm_count, fsm_pct, em_count, em_pct, fsm_em_count, fsm_em_pct
         );
     }
+    info!(
+        "Save output to file {:?}", tableout.get_out_path().unwrap()
+    );
 
     info!("Finished!");
     Ok(())
