@@ -38,6 +38,8 @@ jobs:
 
       - name: Package binaries
         run: |
+          cp script/isopedia-splice-viz.py linux_build/
+          cp script/isopedia-splice-viz-temp.html linux_build/
           cd linux_build
           tar czf ../isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz *
 
@@ -46,4 +48,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
