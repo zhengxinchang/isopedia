@@ -22,10 +22,9 @@ build-targz: build-docker build build-musl
 	tar -zcvf ver_release/isopedia-$(VERSION).musl.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py isopedia-splice-viz-temp.html
 	tar -zcvf ver_release/isopedia-$(VERSION).linux.tar.gz -C linux_build/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py isopedia-splice-viz-temp.html
 
-merge2main:
-	git checkout main && git merge dev && git tag $(VERSION) && git push && git checkout dev
-
-pack: build build-docker build-conda 
+pack:
+	git checkout main
+	
 
 debug:
 	export RUST_LOG="debug"
