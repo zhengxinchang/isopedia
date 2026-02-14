@@ -290,9 +290,9 @@ def main():
     args = parse_args()
 
     # get current path for the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
     if args.template is None:
-        template_path = os.path.join(script_dir, "isopedia-splice-viz-temp.html")
+        template_path = os.path.join(script_dir, "..", "share", "isopedia", "isopedia-splice-viz-temp.html")
     else:
         template_path = args.template
 
