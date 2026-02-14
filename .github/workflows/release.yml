@@ -2,8 +2,6 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
 
@@ -11,14 +9,24 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  verify:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
+            echo "❌ Tag is not on main branch"
+            exit 1
+          fi
 
       - name: Verify version matches tag
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           TAG_VERSION="${GITHUB_REF_NAME#v}"
@@ -26,6 +34,13 @@ jobs:
             echo "❌ Cargo.toml version ($CARGO_VERSION) doesn't match tag ($TAG_VERSION)"
             exit 1
           fi
+
+  build-and-release:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Build Docker image
         run: docker build -t isopedia-build .
@@ -45,8 +60,59 @@ jobs:
           tar czf ../isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz *
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2 
+        uses: softprops/action-gh-release@v2
         with:
           files: isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz
           body_path: RELEASE_NOTES.md
+
+
+# name: Build and Release
+
+# on:
+#   push:
+#     tags:
+#       - 'v*'
+
+# permissions:
+#   contents: write
+
+# jobs:
+#   build-and-release:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+
+#       - name: Verify version matches tag
+#         if: startsWith(github.ref, 'refs/tags/v')
+#         run: |
+#           CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+#           TAG_VERSION="${GITHUB_REF_NAME#v}"
+#           if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+#             echo "❌ Cargo.toml version ($CARGO_VERSION) doesn't match tag ($TAG_VERSION)"
+#             exit 1
+#           fi
+
+#       - name: Build Docker image
+#         run: docker build -t isopedia-build .
+
+#       - name: Extract binaries
+#         run: |
+#           docker create --name isopedia-builder isopedia-build
+#           docker cp isopedia-builder:/linux_build ./linux_build
+#           docker rm isopedia-builder
+
+#       - name: Package binaries
+#         run: |
+#           cp script/isopedia-splice-viz.py linux_build/
+#           cp script/isopedia-splice-viz-temp.html linux_build/
+#           cp LICENSE linux_build/
+#           cd linux_build
+#           tar czf ../isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz *
+
+#       - name: Create GitHub Release
+#         if: startsWith(github.ref, 'refs/tags/v')
+#         uses: softprops/action-gh-release@v2 
+#         with:
+#           files: isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz
+#           body_path: RELEASE_NOTES.md
