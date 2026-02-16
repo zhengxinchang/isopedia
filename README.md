@@ -33,7 +33,7 @@ Iospedida has two binaries: `isopedia` and `isopedia-tools`. the main binary `is
 
 ```bash
 # install isopedia from conda
-conda install -y -c zhengxinchang isopedia
+conda install -c bioconda isopedia
 
 # clone the repo and enter the toy_ex directory
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
