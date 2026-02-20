@@ -15,7 +15,6 @@ use md5::Context as Md5Context;
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 use crate::constants::RMT_MANIFEST_URL1;
 use crate::utils::greetings2;
@@ -136,7 +135,6 @@ pub fn run_download(cli: &DownloadCli) -> Result<()> {
             size: 0,
             description: Some("custom-url".to_string()),
             md5: None,
-            sha256: None,
             source: SourceType::Direct,
             protocol: Protocol::HTTPS,
         }
@@ -160,7 +158,6 @@ pub struct IndexItem {
     pub description: Option<String>,
 
     pub md5: Option<String>,
-    pub sha256: Option<String>,
 
     #[serde(default)]
     pub source: SourceType,
@@ -325,7 +322,7 @@ fn download_ftp_with_curl(url: &str, outpath: &PathBuf) -> Result<()> {
 }
 
 fn validate_download(item: &IndexItem, outpath: &PathBuf) -> Result<()> {
-    let (total_written, sha256_hex, md5_hex) = compute_file_hashes(outpath)?;
+    let (total_written, md5_hex) = compute_file_hashes(outpath)?;
     if item.size > 0 && total_written != item.size {
         return Err(anyhow!(
             "Size mismatch for {}: expected {}, got {}",
@@ -333,17 +330,6 @@ fn validate_download(item: &IndexItem, outpath: &PathBuf) -> Result<()> {
             item.size,
             total_written
         ));
-    }
-
-    if let Some(expected_sha256) = &item.sha256 {
-        if sha256_hex.to_lowercase() != expected_sha256.to_lowercase() {
-            return Err(anyhow!(
-                "SHA256 mismatch for {}: expected {}, got {}",
-                item.name,
-                expected_sha256,
-                sha256_hex
-            ));
-        }
     }
 
     if let Some(expected_md5) = &item.md5 {
@@ -360,11 +346,10 @@ fn validate_download(item: &IndexItem, outpath: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn compute_file_hashes(path: &PathBuf) -> Result<(u64, String, String)> {
+fn compute_file_hashes(path: &PathBuf) -> Result<(u64, String)> {
     let file =
         File::open(path).with_context(|| format!("Failed to open file {}", path.display()))?;
     let mut reader = BufReader::new(file);
-    let mut sha256_hasher = Sha256::new();
     let mut md5_hasher = Md5Context::new();
     let mut buf = vec![0u8; 8 * 1024 * 1024];
     let mut total = 0u64;
@@ -377,12 +362,10 @@ fn compute_file_hashes(path: &PathBuf) -> Result<(u64, String, String)> {
             break;
         }
         let chunk = &buf[..n];
-        sha256_hasher.update(chunk);
         md5_hasher.consume(chunk);
         total += n as u64;
     }
 
-    let sha256_hex = format!("{:x}", sha256_hasher.finalize());
     let md5_hex = format!("{:x}", md5_hasher.finalize());
-    Ok((total, sha256_hex, md5_hex))
+    Ok((total, md5_hex))
 }
