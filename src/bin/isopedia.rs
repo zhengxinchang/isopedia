@@ -87,36 +87,43 @@ fn main() {
         Commands::Isoform(ref anno_isoform_cli) => {
             if let Err(e) = run_anno_isoform(anno_isoform_cli) {
                 eprintln!("Error running annotation isoform: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Splice(ref anno_splice_cli) => {
             if let Err(e) = run_anno_splice(anno_splice_cli) {
                 eprintln!("Error running annotation splice: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Fusion(ref anno_fusion_cli) => {
             if let Err(e) = run_anno_fusion(anno_fusion_cli) {
                 eprintln!("Error running annotation fusion: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Profile(ref profile_cli) => {
             if let Err(e) = run_profile(profile_cli) {
                 eprintln!("Error running extraction: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Merge(ref merge_cli) => {
             if let Err(e) = run_merge(merge_cli) {
                 eprintln!("Error running merge: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Index(ref idx_cli) => {
             if let Err(e) = run_idx(idx_cli) {
                 eprintln!("Error running indexing: {}", e);
+                std::process::exit(1);
             }
         }
         Commands::Download(ref download_cli) => {
             if let Err(e) = run_download(download_cli) {
                 eprintln!("Error running download: {}", e);
+                std::process::exit(1);
             }
         }
     }
