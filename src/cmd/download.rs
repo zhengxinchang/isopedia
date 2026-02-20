@@ -322,7 +322,7 @@ fn download_ftp_with_curl(url: &str, outpath: &PathBuf) -> Result<()> {
 }
 
 fn validate_download(item: &IndexItem, outpath: &PathBuf) -> Result<()> {
-    let (total_written, md5_hex) = compute_file_hashes(outpath)?;
+    let (total_written, md5_hex) = compute_file_size_and_md5(outpath)?;
     if item.size > 0 && total_written != item.size {
         return Err(anyhow!(
             "Size mismatch for {}: expected {}, got {}",
@@ -346,7 +346,7 @@ fn validate_download(item: &IndexItem, outpath: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn compute_file_hashes(path: &PathBuf) -> Result<(u64, String)> {
+fn compute_file_size_and_md5(path: &PathBuf) -> Result<(u64, String)> {
     let file =
         File::open(path).with_context(|| format!("Failed to open file {}", path.display()))?;
     let mut reader = BufReader::new(file);

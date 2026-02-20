@@ -7,7 +7,7 @@ use crate::{
     dataset_info::DatasetInfo,
     meta::Meta,
     myio::GeneralOutputIO,
-    tmpidx::Tmpindex,
+    tmpidx::TmpIndex,
     utils::greetings2,
 };
 use anyhow::Result;
@@ -95,7 +95,7 @@ impl IndexCli {
     }
 }
 
-pub fn run_idx(cli: &IndexCli) -> Result<()> {
+pub fn run_index(cli: &IndexCli) -> Result<()> {
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
@@ -144,7 +144,7 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
     let mut chrom_map = ChromMapping::decode(&chrom_bytes);
 
     info!("Loading...");
-    let tmpidx = Tmpindex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
+    let tmpidx = TmpIndex::load(&cli.idxdir.join(TMPIDX_FILE_NAME));
     // info!("Indexing...");
     let nchrs = chrom_map.get_size();
 
@@ -162,7 +162,7 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
                         std::process::exit(1);
                     }
                     cur_chr += 1;
-                    chrom_helper.add_record2chrom(chrom_id);
+                    chrom_helper.add_record_to_chrom(chrom_id);
                 }
                 None => {
                     info!(
@@ -209,7 +209,7 @@ pub fn run_idx(cli: &IndexCli) -> Result<()> {
                                 std::process::exit(1);
                             }
                             let mut helper = chrom_helper.lock().unwrap();
-                            helper.add_record2chrom(chrom_id);
+                            helper.add_record_to_chrom(chrom_id);
                         }
                         None => {
                             info!(

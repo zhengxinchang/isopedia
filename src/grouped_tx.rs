@@ -129,7 +129,7 @@ impl ChromGroupedTxManager {
                     res_vec.sort_by_key(|x| x.offset);
                 }
 
-                let mono_queries = grouped_tx.get_quieries_mono_exon();
+                let mono_queries = grouped_tx.get_mono_exon_queries();
 
                 if cli.verbose {
                     info!(
@@ -303,7 +303,7 @@ impl GroupedTx {
         queries
     }
 
-    pub fn get_quieries_mono_exon(&self) -> Vec<(u64, u64)> {
+    pub fn get_mono_exon_queries(&self) -> Vec<(u64, u64)> {
         self.sj_positions_mono_exonic.clone()
     }
 
@@ -363,7 +363,7 @@ impl GroupedTx {
 
                     fsm_misoforms_candidates.push(&all_res[*sj_start_idx]);
                     fsm_misoforms_candidates.push(&all_res[*sj_end_idx]);
-                    quick_find_partial_msjc_exclude_read_st_end(
+                    find_partial_msjc_excluding_terminal_sites(
                         &all_res[*sj_start_idx],
                         &all_res[*sj_end_idx],
                         &mut per_abd_partial_msjc_map,
@@ -490,7 +490,7 @@ impl GroupedTx {
                         if msjc.check_mono_exon_fsm(&tx_abd, cli) {
                             self.tx_abundances[*tx_idx].update_fsm_evidence_count(&misoform, cli);
                         } else {
-                            if msjc.check_msjc_belong_to_tx(&tx_abd, cli) {
+                            if msjc.msjc_belongs_to_tx(&tx_abd, cli) {
                                 // add to the merged msjc for this transcript
                                 mrgd_msjc_vec[mrgd_msjc_vec_idx].add_mono_exon_msjc(&msjc);
                             }
@@ -605,7 +605,7 @@ impl GroupedTx {
     }
 }
 
-pub fn quick_find_partial_msjc_exclude_read_st_end<'a>(
+pub fn find_partial_msjc_excluding_terminal_sites<'a>(
     a: &'a Vec<PNIROffsetPtr>,
     b: &'a Vec<PNIROffsetPtr>,
     collection: &mut HashMap<u64, &'a PNIROffsetPtr>,
@@ -1447,7 +1447,7 @@ impl MSJC {
         is_fsm
     }
 
-    pub fn check_msjc_belong_to_tx(&self, txabd: &TxAbundance, _cli: &AnnIsoCli) -> bool {
+    pub fn msjc_belongs_to_tx(&self, txabd: &TxAbundance, _cli: &AnnIsoCli) -> bool {
         // the MJSC must with in the transcript region
         if self.splice_junctions_vec.is_empty() {
             return false;

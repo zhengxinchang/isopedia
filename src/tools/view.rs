@@ -1,7 +1,7 @@
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
 use crate::pnir_archive::PNIRArchiveCache;
-use crate::tmpidx::Tmpindex;
+use crate::tmpidx::TmpIndex;
 use crate::tools::ToolCmdValidate;
 use clap::Parser;
 // use isopedia::tools::ToolCmdValidate;
@@ -75,7 +75,7 @@ impl ToolCmdValidate for ViewArgs {
 
 #[allow(dead_code, unused)]
 pub fn view_tmpidx(cli: &ViewArgs) {
-    let mut tmpidx = Tmpindex::load(&cli.idx.join(TMPIDX_FILE_NAME));
+    let mut tmpidx = TmpIndex::load(&cli.idx.join(TMPIDX_FILE_NAME));
     let chrom_bytes = std::fs::read(&cli.idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
     // let blocks = idx.get_blocks(chrom_id);
@@ -120,7 +120,7 @@ pub fn view_archive(cli: &ViewArgs) {
         let mut cache = crate::bptree::Cache::from_disk(cache_name, 10)
             .expect("Failed to load cache from disk");
 
-        let leafs = cache.get_leaf_notes();
+        let leafs = cache.get_leaf_nodes();
 
         for leaf in leafs {
             for ptr in &leaf.data.merge_isoform_offset_vec {

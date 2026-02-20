@@ -9,7 +9,7 @@ use std::{
     vec,
 };
 
-use crate::utils::line2fields;
+use crate::utils::split_line_fields;
 
 #[derive(Serialize, Deserialize, Debug)]
 
@@ -37,7 +37,7 @@ impl DatasetInfo {
         let content = std::fs::read_to_string(path)?;
         let mut dbinfo = DatasetInfo::new();
         for (i, line) in content.lines().skip(1).enumerate() {
-            let fields = line2fields(line);
+            let fields = split_line_fields(line);
 
             if fields.is_empty() {
                 warn!("Skipping empty line {} in manifest", i + 1);

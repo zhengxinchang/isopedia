@@ -287,7 +287,7 @@ impl GeneralOutputIO for Meta {
             header.trim()
         };
 
-        let header = utils::line2fields(&header);
+        let header = utils::split_line_fields(&header);
 
         // info!("Parsed {} fields from header: {:?}", header.len(), header);
 
@@ -304,7 +304,7 @@ impl GeneralOutputIO for Meta {
 
             line_no += 1;
 
-            let parts = utils::line2fields(&line);
+            let parts = utils::split_line_fields(&line);
             if parts.len() == 0 {
                 warn!("Skipping empty line at {}", line_no);
                 continue;

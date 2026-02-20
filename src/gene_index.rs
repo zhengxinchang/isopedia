@@ -278,7 +278,7 @@ impl GeneIntervalTree {
     }
 
     /// match splice sites between fusion candidates and gene intervals.
-    pub fn match2(
+    pub fn match_splice_sites(
         &self,
         chrom: &str,
         splice_sites: &Vec<u64>,

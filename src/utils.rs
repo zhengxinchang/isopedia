@@ -192,7 +192,7 @@ pub fn check_index_dir(path: &Path) -> bool {
     true
 }
 
-pub fn line2fields(line: &str) -> Vec<String> {
+pub fn split_line_fields(line: &str) -> Vec<String> {
     // if  \t detcted in the line , use \t to split, else use whitespace to split
 
     if line.contains('\t') {

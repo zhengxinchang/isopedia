@@ -122,7 +122,7 @@ impl AnnSpliceCli {
     }
 }
 
-pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
+pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
     greetings2(&cli);
     cli.validate();
 
@@ -171,7 +171,7 @@ pub fn run_anno_splice(cli: &AnnSpliceCli) -> Result<()> {
             &splice_bed_path.display()
         );
 
-        let bpv = breakpoints::bed2breakpointsvec(&splice_bed_path).expect(&format!(
+        let bpv = breakpoints::parse_bed_to_breakpoint_pairs(&splice_bed_path).expect(&format!(
             "Can not parse splice junctions from {}",
             &splice_bed_path.display()
         ));

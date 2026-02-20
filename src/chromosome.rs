@@ -85,7 +85,7 @@ impl ChromMappingHelper {
         ChromMappingHelper { id2rec_count }
     }
 
-    pub fn add_record2chrom(&mut self, chrom_idx: u16) {
+    pub fn add_record_to_chrom(&mut self, chrom_idx: u16) {
         if let Some(record) = self.id2rec_count.get_mut(&chrom_idx) {
             *record += 1;
         } else {

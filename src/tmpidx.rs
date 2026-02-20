@@ -31,7 +31,7 @@ type ChromId = u16;
 // use anyhow::Result;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TmpindexMeta {
+pub struct TmpIndexMeta {
     pub magic: u64,
     pub chrom_offsets: FxHashMap<ChromId, (ChromIdxStartart, ChromIdxLength)>,
     pub data_size: u64,
@@ -40,9 +40,9 @@ pub struct TmpindexMeta {
 // This is the Temporary Index structure for indexing.
 // it use `MergedIsoformOffsetPlusGenomeLoc` to store the genomic location and the record offset of the isforms in the isoform archive file.
 #[derive(Debug)]
-pub struct Tmpindex {
+pub struct TmpIndex {
     pub meta_start: u64,
-    pub meta: TmpindexMeta,
+    pub meta: TmpIndexMeta,
     pub offsets: Vec<MergedIsoformOffsetPlusGenomeLoc>,
     pub file_name: PathBuf,
     pub file: File,
@@ -50,11 +50,11 @@ pub struct Tmpindex {
     pub chunk_size: usize,
 }
 
-impl Tmpindex {
+impl TmpIndex {
     pub fn memory_usage_bytes(&self) -> usize {
         let mut total = 0;
         total += size_of::<Self>();
-        total += size_of::<TmpindexMeta>();
+        total += size_of::<TmpIndexMeta>();
         total += self.meta.chrom_offsets.len() * (size_of::<ChromId>() + size_of::<(u64, u64)>());
         total += self.offsets.capacity() * size_of::<MergedIsoformOffsetPlusGenomeLoc>();
         total
@@ -65,11 +65,11 @@ impl Tmpindex {
         self.memory_usage_bytes() as f64 / (1024.0 * 1024.0)
     }
 
-    pub fn create(file_name: &PathBuf, chunk_size: usize) -> Tmpindex {
+    pub fn create(file_name: &PathBuf, chunk_size: usize) -> TmpIndex {
         let file = fs::File::create(file_name).expect("Can not create file");
-        let interim_index = Tmpindex {
+        let interim_index = TmpIndex {
             meta_start: 0,
-            meta: TmpindexMeta {
+            meta: TmpIndexMeta {
                 magic: MAGIC,
                 chrom_offsets: FxHashMap::default(),
                 data_size: 0,
@@ -363,13 +363,13 @@ impl Tmpindex {
         }
     }
 
-    pub fn load(file_name: &PathBuf) -> Tmpindex {
+    pub fn load(file_name: &PathBuf) -> TmpIndex {
         let file = fs::File::open(file_name).expect("Can not open file");
         let mut reader = BufReader::with_capacity(BUF_SIZE_64M, file);
         let file2 = fs::File::open(file_name).expect("Can not open file");
-        let mut interim_index = Tmpindex {
+        let mut interim_index = TmpIndex {
             meta_start: 0,
-            meta: TmpindexMeta {
+            meta: TmpIndexMeta {
                 magic: 0,
                 chrom_offsets: FxHashMap::default(),
                 data_size: 0,

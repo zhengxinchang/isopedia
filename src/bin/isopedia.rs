@@ -1,17 +1,17 @@
 use clap::{Parser, Subcommand};
 use isopedia::cmd::download::run_download;
 use isopedia::cmd::download::DownloadCli;
-use isopedia::cmd::fusion::run_anno_fusion;
+use isopedia::cmd::fusion::run_fusion_annotation;
 use isopedia::cmd::fusion::AnnFusionCli;
-use isopedia::cmd::index::run_idx;
+use isopedia::cmd::index::run_index;
 use isopedia::cmd::index::IndexCli;
-use isopedia::cmd::isoform::run_anno_isoform;
+use isopedia::cmd::isoform::run_isoform_annotation;
 use isopedia::cmd::isoform::AnnIsoCli;
 use isopedia::cmd::merge::run_merge;
 use isopedia::cmd::merge::MergeCli;
 use isopedia::cmd::profile::run_profile;
 use isopedia::cmd::profile::ProfileCli;
-use isopedia::cmd::splice::run_anno_splice;
+use isopedia::cmd::splice::run_splice_annotation;
 use isopedia::cmd::splice::AnnSpliceCli;
 use isopedia::logger::init_logger;
 #[derive(Parser)]
@@ -85,19 +85,19 @@ fn main() {
 
     match cli.command {
         Commands::Isoform(ref anno_isoform_cli) => {
-            if let Err(e) = run_anno_isoform(anno_isoform_cli) {
+            if let Err(e) = run_isoform_annotation(anno_isoform_cli) {
                 eprintln!("Error running annotation isoform: {}", e);
                 std::process::exit(1);
             }
         }
         Commands::Splice(ref anno_splice_cli) => {
-            if let Err(e) = run_anno_splice(anno_splice_cli) {
+            if let Err(e) = run_splice_annotation(anno_splice_cli) {
                 eprintln!("Error running annotation splice: {}", e);
                 std::process::exit(1);
             }
         }
         Commands::Fusion(ref anno_fusion_cli) => {
-            if let Err(e) = run_anno_fusion(anno_fusion_cli) {
+            if let Err(e) = run_fusion_annotation(anno_fusion_cli) {
                 eprintln!("Error running annotation fusion: {}", e);
                 std::process::exit(1);
             }
@@ -115,7 +115,7 @@ fn main() {
             }
         }
         Commands::Index(ref idx_cli) => {
-            if let Err(e) = run_idx(idx_cli) {
+            if let Err(e) = run_index(idx_cli) {
                 eprintln!("Error running indexing: {}", e);
                 std::process::exit(1);
             }

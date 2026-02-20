@@ -168,7 +168,7 @@ impl AnnIsoCli {
     }
 }
 
-pub fn run_anno_isoform(cli: &AnnIsoCli) -> Result<()> {
+pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     greetings2(&cli);
     cli.validate();
 

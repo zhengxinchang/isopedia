@@ -6,7 +6,7 @@ pub type RangeSearchHits = (Option<(KeyType, u64, u64)>, Vec<ValueType>);
 use crate::tmpidx::MergedIsoformOffsetGroup;
 use crate::tmpidx::PNIROffsetPtr;
 use crate::tmpidx::TmpIdxChunker;
-use crate::tmpidx::Tmpindex;
+use crate::tmpidx::TmpIndex;
 use crate::utils::intersect_sorted;
 use crate::utils::GetMemSize;
 use ahash::HashSet;
@@ -118,7 +118,7 @@ impl NodeHeader {
         self.keys[..len].copy_from_slice(&keys);
         return len;
     }
-    pub fn set_non_leaf_node_childrens(&mut self, node_ids: &[KeyType]) -> usize {
+    pub fn set_internal_children(&mut self, node_ids: &[KeyType]) -> usize {
         let len = node_ids.len();
         if len as u64 > ORDER {
             panic!("keys length is larger than ORDER");
@@ -215,7 +215,7 @@ impl Node {
     }
 
     /// serialize the record pointers in the node to bytes
-    pub fn serialize_payload2bytes(&self) -> Vec<u8> {
+    pub fn serialize_payload_to_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
         for record in &self.data.merge_isoform_offset_vec {
             bytes.extend(record.to_bytes());
@@ -445,7 +445,7 @@ impl Cache {
         // dump the data first if the node is leaf
         assert!(std::mem::size_of_val(&node.header) == 4096); // the size of the node header should be 4096
         if node.is_leaf() {
-            let payload_bytes: Vec<u8> = node.serialize_payload2bytes();
+            let payload_bytes: Vec<u8> = node.serialize_payload_to_bytes();
             let payload_bytes: &[u8] = payload_bytes.as_slice();
             let payload_bytes_len: usize = payload_bytes.len();
             // self.file
@@ -472,10 +472,10 @@ impl Cache {
         Ok(())
     }
 
-    pub fn get_leaf_notes(&mut self) -> Vec<Arc<Node>> {
+    pub fn get_leaf_nodes(&mut self) -> Vec<Arc<Node>> {
         let mut leaves: Vec<Arc<Node>> = Vec::new();
         for node_id in 1..=self.header.leaf_nodes {
-            let leaf = self.get_node2(node_id).unwrap();
+            let leaf = self.get_node_by_id(node_id).unwrap();
             leaves.push(leaf);
         }
         leaves
@@ -513,7 +513,7 @@ impl Cache {
         self.lru.clear();
     }
 
-    pub fn get_node2(&mut self, node_id: u64) -> Option<Arc<Node>> {
+    pub fn get_node_by_id(&mut self, node_id: u64) -> Option<Arc<Node>> {
         if let Some(n) = self.lru.get(&node_id) {
             return Some(Arc::clone(n));
         }
@@ -550,18 +550,18 @@ impl Cache {
     }
 
     pub fn get_root_node(&mut self) -> Arc<Node> {
-        self.get_node2(self.header.root_node_id).unwrap()
+        self.get_node_by_id(self.header.root_node_id).unwrap()
     }
 
     pub fn get_max_key(&mut self) -> u64 {
-        let max_leaf = self.get_node2(self.header.leaf_nodes);
+        let max_leaf = self.get_node_by_id(self.header.leaf_nodes);
         // dbg!(&max_leaf);
         let max_key = max_leaf.unwrap().get_max_key();
         max_key
     }
 
     pub fn get_min_key(&mut self) -> u64 {
-        let min_leaf = self.get_node2(1);
+        let min_leaf = self.get_node_by_id(1);
         let min_key = min_leaf.unwrap().get_min_key();
         min_key
     }
@@ -678,7 +678,7 @@ impl BPTree {
                     let key_arr = keys.as_slice();
                     node.header.set_keys(key_arr);
                     let childerns_arr = childerns.as_slice();
-                    node.header.set_non_leaf_node_childrens(childerns_arr);
+                    node.header.set_internal_children(childerns_arr);
                     node.header.num_keys = key_arr.len() as u64;
                     cache
                         .dump_one_node(&mut node)
@@ -741,7 +741,7 @@ impl BPTree {
         };
 
         loop {
-            let node = cache.get_node2(hit).expect("Can not get node");
+            let node = cache.get_node_by_id(hit).expect("Can not get node");
             // println!("search node: {}", node.header.id);
             if !node.is_leaf() {
                 hit = match node.search(key) {
@@ -785,7 +785,7 @@ impl BPTree {
                     return vec![]; // no such node
                 }
 
-                n = cache.get_node2(child_id).expect("Can not get next node");
+                n = cache.get_node_by_id(child_id).expect("Can not get next node");
             }
         };
 
@@ -812,7 +812,7 @@ impl BPTree {
                 break;
             }
             node = cache
-                .get_node2(next_node_id)
+                .get_node_by_id(next_node_id)
                 .expect("Can not get next leaf node");
         }
         results
@@ -842,7 +842,7 @@ impl BPTree {
                     return vec![]; // no such node
                 }
 
-                n = cache.get_node2(child_id).expect("Can not get next node");
+                n = cache.get_node_by_id(child_id).expect("Can not get next node");
             }
         };
 
@@ -872,7 +872,7 @@ impl BPTree {
                 break;
             }
             node = cache
-                .get_node2(next_node_id)
+                .get_node_by_id(next_node_id)
                 .expect("Can not get next leaf node");
         }
         results.sort_unstable();
@@ -909,7 +909,7 @@ impl BPForest {
         let intrim_path = idx_path.join("interim.idx");
         let mut count = 0;
         for chrom_id in chromamp.get_chrom_idxs() {
-            let idx = Tmpindex::load(&intrim_path);
+            let idx = TmpIndex::load(&intrim_path);
             // let blocks = idx.get_blocks(chrom_id);
             let blocks = idx.groups(chrom_id).unwrap();
             // if blocks.len() == 0 {

@@ -126,7 +126,7 @@ impl Transcript {
         trans
     }
 
-    pub fn get_quieries(&self) -> Vec<(String, u64)> {
+    pub fn get_queries(&self) -> Vec<(String, u64)> {
         let mut queries = Vec::new();
         for junc in &self.splice_junc {
             queries.push((self.chrom.clone(), junc.0));

@@ -288,7 +288,7 @@ impl FusionBreakPointPair {
     }
 }
 
-fn anno_single_fusion(
+fn annotate_single_fusion(
     breakpoints: FusionBreakPointPair,
     // mywriter: &mut MyGzWriter,
     fusionbrkpt_out: &mut TableOutput,
@@ -424,7 +424,7 @@ fn anno_single_fusion(
 /// breakpoints is not a single bp but two regions for each side,
 /// this allows to find all combiantion for two regions, this is useful when query
 /// all possible fusions withint the regions(eg. intron) from each gene
-pub fn anno_single_fusion_detail(
+pub fn annotate_single_fusion_detailed(
     breakpoints: FusionBreakPointPair,
     // mywriter: &mut MyGzWriter,
     // fusionbrkpt_out: &mut TableOutput,
@@ -578,7 +578,7 @@ pub fn anno_single_fusion_detail(
     Ok(())
 }
 
-fn parse_bed2(line: &str) -> Result<FusionBreakPointPair> {
+fn parse_fusion_bed_line(line: &str) -> Result<FusionBreakPointPair> {
     let fields: Vec<&str> = line.split('\t').collect();
     if fields.len() < 5 {
         return Err(anyhow!(
@@ -614,7 +614,7 @@ fn parse_bed2(line: &str) -> Result<FusionBreakPointPair> {
     })
 }
 
-pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
+pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
     greetings2(&cli);
     cli.validate();
 
@@ -666,7 +666,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
             let breakpoints = FusionBreakPointPair::from_pos_str(pos)?;
 
-            anno_single_fusion(
+            annotate_single_fusion(
                 breakpoints,
                 // &mut mywriter,
                 &mut fusionbrkpt_out,
@@ -686,9 +686,9 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
 
             for line in reader.lines() {
                 let line = line.context("Failed to read line from bed file")?;
-                let breakpoints: FusionBreakPointPair = parse_bed2(&line)?;
+                let breakpoints: FusionBreakPointPair = parse_fusion_bed_line(&line)?;
 
-                anno_single_fusion(
+                annotate_single_fusion(
                     breakpoints,
                     // &mut mywriter,
                     &mut fusionbrkpt_out,
@@ -811,7 +811,7 @@ pub fn run_anno_fusion(cli: &AnnFusionCli) -> Result<()> {
         let pos = &cli.region.clone().unwrap();
         let breakpoints = FusionBreakPointPair::from_region_str(pos)?;
 
-        anno_single_fusion_detail(
+        annotate_single_fusion_detailed(
             breakpoints,
             // &mut mywriter,
             // &mut fusionbrkpt_out,

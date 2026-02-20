@@ -9,7 +9,7 @@ use crate::{
     pnir::PNIR,
     pnir_archive::PNIRArchiveWriter,
     reads::{AggrRead, SingleSampleReader},
-    tmpidx::{MergedIsoformOffsetPlusGenomeLoc, PNIROffsetPtr, Tmpindex},
+    tmpidx::{MergedIsoformOffsetPlusGenomeLoc, PNIROffsetPtr, TmpIndex},
     utils::greetings2,
 };
 use anyhow::Result;
@@ -171,7 +171,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     // init the merge buffer
     let mut merged_map: FxHashMap<u64, PNIR> = FxHashMap::default();
 
-    let mut tmpidx = Tmpindex::create(&cli.outdir.join(TMPIDX_FILE_NAME), cli.chunk_size);
+    let mut tmpidx = TmpIndex::create(&cli.outdir.join(TMPIDX_FILE_NAME), cli.chunk_size);
 
     let isoform_archive_base = &cli.outdir.join(MERGED_FILE_NAME);
 
@@ -241,7 +241,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
                 // Add to processing collection
 
-                chrom_helper.add_record2chrom(merged_isoform_rec.chrom_id);
+                chrom_helper.add_record_to_chrom(merged_isoform_rec.chrom_id);
 
                 tmp_vec.push((
                     merged_isoform_rec.chrom_id,
@@ -343,7 +343,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     }
 
     for (_, merged_isoform_rec) in &merged_map {
-        chrom_helper.add_record2chrom(merged_isoform_rec.chrom_id);
+        chrom_helper.add_record_to_chrom(merged_isoform_rec.chrom_id);
 
         tmp_vec.push((
             merged_isoform_rec.chrom_id,

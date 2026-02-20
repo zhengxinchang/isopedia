@@ -99,7 +99,7 @@ impl SpliceBreakPointPair {
     }
 }
 
-pub fn bed2breakpointsvec<P: AsRef<Path>>(p: P) -> Result<Vec<SpliceBreakPointPair>> {
+pub fn parse_bed_to_breakpoint_pairs<P: AsRef<Path>>(p: P) -> Result<Vec<SpliceBreakPointPair>> {
     let file = File::open(p)?;
     let reader = BufReader::new(file);
     let mut breakpoints: Vec<SpliceBreakPointPair> = Vec::new();
