@@ -12,18 +12,12 @@ use lru::LruCache;
 
 use crate::{pnir::PNIR, tmpidx::PNIROffsetPtr};
 
-/// Purpose: Data container for PNIRArchiveWriter.
-/// Inputs: Field values defined in `PNIRArchiveWriter`.
-/// Output: A `PNIRArchiveWriter` instance.
 pub struct PNIRArchiveWriter {
     writer: BufWriter<File>,
     buf: Vec<u8>,
 }
 
 impl PNIRArchiveWriter {
-    /// Purpose: Executes `create` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `PNIRArchiveWriter`.
     pub fn create(path: &Path) -> PNIRArchiveWriter {
         let file = File::create(path).expect("Failed to open file");
         let writer = BufWriter::with_capacity(10 * 1024 * 1024, file);
@@ -31,9 +25,6 @@ impl PNIRArchiveWriter {
         PNIRArchiveWriter { writer, buf }
     }
 
-    /// Purpose: Executes `dump_to_disk` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `u32`.
     pub fn dump_to_disk(&mut self, record: &PNIR) -> u32 {
         self.buf.clear();
         let byte_len = record.gz_encode(&mut self.buf);
@@ -43,18 +34,12 @@ impl PNIRArchiveWriter {
         byte_len
     }
 
-    /// Purpose: Executes `close_file` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `std::io::Result<()>`.
     pub fn close_file(&mut self) -> std::io::Result<()> {
         self.writer.flush()?;
         Ok(())
     }
 }
 
-/// Purpose: Data container for PNIRArchiveCache.
-/// Inputs: Field values defined in `PNIRArchiveCache`.
-/// Output: A `PNIRArchiveCache` instance.
 pub struct PNIRArchiveCache {
     file: File,
     chunk_size: u64,
@@ -64,9 +49,6 @@ pub struct PNIRArchiveCache {
 }
 
 impl PNIRArchiveCache {
-    /// Purpose: Executes `new` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `PNIRArchiveCache`.
     pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> PNIRArchiveCache {
         let f = File::open(&file).expect(&format!(
             "Failed to open file {:?}",
@@ -81,16 +63,10 @@ impl PNIRArchiveCache {
         }
     }
 
-    /// Purpose: Executes `align_offset` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `u64`.
     pub fn align_offset(&self, offset: u64) -> u64 {
         (offset / self.chunk_size) * self.chunk_size
     }
 
-    /// Purpose: Executes `read_chunk` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `Result<Arc<Vec<u8>>>`.
     pub fn read_chunk(&mut self, offset: u64) -> Result<Arc<Vec<u8>>> {
         let aligned = self.align_offset(offset);
 
@@ -109,9 +85,6 @@ impl PNIRArchiveCache {
         Ok(arc_buf)
     }
 
-    /// Purpose: Executes `load_from_disk` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: `PNIR`.
     pub fn load_from_disk(&mut self, offset: &PNIROffsetPtr) -> PNIR {
         // info!("Reading record at offset: {:?}", offset);
         if self.buf.len() > 100 * 1024 * 1024 {
@@ -166,9 +139,6 @@ impl PNIRArchiveCache {
         }
     }
 
-    /// Purpose: Executes `clear_cache` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: Side effects and/or unit return (`()`).
     pub fn clear_cache(&mut self) {
         self.cache.clear();
         self.lru_order.clear();
@@ -178,9 +148,6 @@ impl PNIRArchiveCache {
         self.buf.shrink_to_fit();
     }
 
-    /// Purpose: Executes `clear_buffer` logic for this module.
-    /// Inputs: Parameters listed in the function signature.
-    /// Output: Side effects and/or unit return (`()`).
     pub fn clear_buffer(&mut self) {
         self.buf.clear();
         if self.buf.capacity() > 10 * 1024 * 1024 {
