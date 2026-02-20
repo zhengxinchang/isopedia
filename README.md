@@ -102,6 +102,7 @@ isopedia download --url ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_inde
 
 # use custom manifest TOML
 isopedia download --manifest /path/to/manifest.toml --name isopedia_index_hs_v1.0.tar.xz --outdir ./downloads
+
 ```
 
 Example custom manifest entry:

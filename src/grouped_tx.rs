@@ -24,6 +24,9 @@ use std::{
     io::{BufReader, BufWriter, Read, Write},
     path::PathBuf,
 };
+/// Purpose: Data container for ChromGroupedTxManager.
+/// Inputs: Field values defined in `ChromGroupedTxManager`.
+/// Output: A `ChromGroupedTxManager` instance.
 pub struct ChromGroupedTxManager {
     pub chrom: String,
     group_queries: Vec<GroupedTx>,
@@ -31,6 +34,9 @@ pub struct ChromGroupedTxManager {
 }
 
 impl ChromGroupedTxManager {
+    /// Purpose: Executes `new` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Self`.
     pub fn new(chrom: &str, sample_size: usize) -> Self {
         ChromGroupedTxManager {
             chrom: chrom.to_string(),
@@ -39,11 +45,17 @@ impl ChromGroupedTxManager {
         }
     }
 
+    /// Purpose: Executes `clear` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn clear(&mut self) {
         self.group_queries.clear();
         self.group_queries.shrink_to_fit();
     }
 
+    /// Purpose: Executes `add_transcript_by_chrom` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn add_transcript_by_chrom(&mut self, tx_v: &Vec<Transcript>, cli: &AnnIsoCli) {
         let mut merged_intervals: Vec<(u64, u64, Vec<&Transcript>)> = Vec::new();
 
@@ -76,6 +88,9 @@ impl ChromGroupedTxManager {
         }
     }
 
+    /// Purpose: Executes `process_tx_groups` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn process_tx_groups(
         &mut self,
         bpforest: &mut BPForest,
@@ -200,6 +215,9 @@ impl ChromGroupedTxManager {
 }
 
 #[derive(Clone)]
+/// Purpose: Data container for GroupedTx.
+/// Inputs: Field values defined in `GroupedTx`.
+/// Output: A `GroupedTx` instance.
 pub struct GroupedTx {
     pub id: u32,
     pub sj_pooled_positions_multi_exonic: Vec<u64>, // deduped positions sort by genomic coordinate , pooled from all transcripts in the group, length == number of unique splice junction positions in multi-exonic transcripts
@@ -210,6 +228,9 @@ pub struct GroupedTx {
     pub msjcs: Vec<MSJC>,
 }
 impl GroupedTx {
+    /// Purpose: Executes `from_grouped_txs` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn from_grouped_txs(
         sample_size: usize,
         txs: &Vec<&Transcript>,
@@ -257,6 +278,9 @@ impl GroupedTx {
         }
     }
 
+    /// Purpose: Executes `post_cleanup` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn post_cleanup(&mut self, _cli: &AnnIsoCli) {
         for msjc in self.msjcs.iter_mut() {
             msjc.gamma_data.clear();
@@ -290,6 +314,9 @@ impl GroupedTx {
         }
     }
 
+    /// Purpose: Executes `get_quieries` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Vec<(String,`.
     pub fn get_quieries(&self, chrom: &str) -> Vec<(String, u64)> {
         let mut queries: Vec<(String, u64)> = Vec::new();
 
@@ -300,10 +327,16 @@ impl GroupedTx {
         queries
     }
 
+    /// Purpose: Executes `get_quieries_mono_exon` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Vec<(u64,`.
     pub fn get_quieries_mono_exon(&self) -> Vec<(u64, u64)> {
         self.sj_positions_mono_exonic.clone()
     }
 
+    /// Purpose: Executes `update_results` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn update_results(
         &mut self,
         all_res: &Vec<Vec<PNIROffsetPtr>>,
@@ -441,17 +474,6 @@ impl GroupedTx {
             info!("Processing mono exonic transcripts results...");
         }
 
-        // self.tx_abundances.iter().for_each(|txabd|{
-        //     // print msjcs for this txabd
-        //     println!("tx_idx: {}, is_mono_exonic: {}, sj_pairs: {:?}, msjc_ids: {:?}", txabd.id, txabd.is_mono_exonic, txabd.sj_pairs, txabd.msjc_ids.len());
-
-        //     for (msjc_id,_) in txabd.msjc_ids.iter() {
-        //         let msjc = &self.msjcs[*msjc_id];
-        //         println!("  msjc_id: {}, splice_junctions_vec: {:?}",
-        //             msjc_id, msjc.splice_junctions_vec);
-        //     }
-        // });
-
         let mut cnt = 0;
         // process mono exonic transcripts results
         for mono_exon_result in all_res_mono_exonic.iter() {
@@ -530,6 +552,9 @@ impl GroupedTx {
         }
     }
 
+    /// Purpose: Executes `prepare_em` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn prepare_em(&mut self, cli: &AnnIsoCli) {
         if cli.verbose {
             info!("preparing em...")
@@ -553,6 +578,9 @@ impl GroupedTx {
         }
     }
 
+    /// Purpose: Executes `em` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn em(&mut self, cli: &AnnIsoCli) {
         if cli.verbose {
             info!(
@@ -613,6 +641,9 @@ impl GroupedTx {
     }
 }
 
+/// Purpose: Executes `quick_find_partial_msjc_exclude_read_st_end` logic for this module.
+/// Inputs: Parameters listed in the function signature.
+/// Output: Side effects and/or unit return (`()`).
 pub fn quick_find_partial_msjc_exclude_read_st_end<'a>(
     a: &'a Vec<PNIROffsetPtr>,
     b: &'a Vec<PNIROffsetPtr>,
@@ -642,6 +673,9 @@ pub fn quick_find_partial_msjc_exclude_read_st_end<'a>(
     }
 }
 
+/// Purpose: Executes `find_fsm` logic for this module.
+/// Inputs: Parameters listed in the function signature.
+/// Output: `Vec<PNIROffsetPtr>`.
 pub fn find_fsm(vecs: Vec<&Vec<PNIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PNIROffsetPtr> {
     if vecs.is_empty() {
         return vec![];
@@ -665,6 +699,9 @@ pub fn find_fsm(vecs: Vec<&Vec<PNIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PNIROf
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+/// Purpose: Data container for TxAbundance.
+/// Inputs: Field values defined in `TxAbundance`.
+/// Output: A `TxAbundance` instance.
 pub struct TxAbundance {
     pub id: usize, // idx in the grouped_tx
     pub orig_idx: u32,
@@ -692,6 +729,9 @@ pub struct TxAbundance {
 }
 
 impl TxAbundance {
+    /// Purpose: Executes `new` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `TxAbundance`.
     pub fn new(txid: usize, sample_size: usize, tx: &Transcript, cli: &AnnIsoCli) -> TxAbundance {
         // calclulate pt
         let nsj = tx.splice_junc.len() + cli.em_effective_len_coef; // J + 1
@@ -728,6 +768,9 @@ impl TxAbundance {
     /// Add the evidence count from a FSM misoform to the fsm_abundance of this transcript
     /// Further check if each read is compatible with transcript start and end, if not,
     /// then the evidence count from this misoform will not be added to the fsm_abundance
+    /// Purpose: Executes `update_fsm_evidence_count` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn update_fsm_evidence_count(&mut self, misoform: &PNIR, cli: &AnnIsoCli) {
         // if mono exonic, then no need to check start and end compatibility, directly add the evidence count
         if self.is_mono_exonic || cli.no_check_tss_tes {
@@ -781,6 +824,9 @@ impl TxAbundance {
         }
     }
 
+    /// Purpose: Executes `add_msjc` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn add_msjc(
         &mut self,
         msjc_idx: usize,
@@ -798,10 +844,16 @@ impl TxAbundance {
         }
     }
 
+    /// Purpose: Executes `add_msjc_mono_exonic` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn add_msjc_mono_exonic(&mut self, msjc_idx: usize, tx_local_id: usize) {
         self.msjc_ids.push((msjc_idx, tx_local_id));
     }
 
+    /// Purpose: Executes `is_all_sj_covered` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `bool`.
     pub fn is_all_sj_covered(&self) -> bool {
         // must match all splice junctions including the first and last bits
         // if cli.only_fully_covered_tx {
@@ -829,6 +881,9 @@ impl TxAbundance {
         true
     }
 
+    /// Purpose: Executes `prepare_em` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn prepare_em(&mut self, msjc_vec: &Vec<MSJC>, _cli: &AnnIsoCli) {
         // check all associated MSJCs, and mark the samples that have zero coverage in all MSJCs
         // set the self.alive_samples_bitmap accordingly
@@ -890,6 +945,9 @@ impl TxAbundance {
         self.abundance_prev.clone_from(&self.abundance_cur);
     }
 
+    /// Purpose: Executes `m_step` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn m_step(&mut self, msjc_vec: &Vec<MSJC>, cli: &AnnIsoCli) {
         if self.msjc_ids.is_empty() {
             // no msjc support, set abundance to 0
@@ -978,6 +1036,9 @@ impl TxAbundance {
         }
     }
 
+    /// Purpose: Executes `check_convergence` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `bool`.
     pub fn check_convergence(&mut self, tol: f32, cli: &AnnIsoCli) -> bool {
         // 这里必须check 所有的postive的样的abundance，而不是所有，否则，初始化的abundance都是1.0，realdiff都是1，永远不会converge。
 
@@ -1007,11 +1068,17 @@ impl TxAbundance {
         is_converged
     }
 
+    /// Purpose: Executes `to_bytes` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Vec<u8>`.
     pub fn to_bytes(&self) -> Vec<u8> {
         TxAbundanceView::encode(self)
     }
 }
 
+/// Purpose: Data container for TxAbundanceView.
+/// Inputs: Field values defined in `TxAbundanceView`.
+/// Output: A `TxAbundanceView` instance.
 pub struct TxAbundanceView {
     _orig_idx: u32,
     orig_tx_id: Vec<u8>,
@@ -1027,6 +1094,9 @@ pub struct TxAbundanceView {
 }
 
 impl TxAbundanceView {
+    /// Purpose: Executes `encode` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Vec<u8>`.
     pub fn encode(txabd: &TxAbundance) -> Vec<u8> {
         let mut buf = Vec::new();
 
@@ -1060,6 +1130,9 @@ impl TxAbundanceView {
         buf
     }
 
+    /// Purpose: Executes `from_bytes` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Result<Self>`.
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         let mut pos = 0;
 
@@ -1131,6 +1204,9 @@ impl TxAbundanceView {
 
     /// count number of samples with (fsm_abundance + em_abundance) >= min_read
     /// this is the overall threadshold for both em and fsm
+    /// Purpose: Executes `get_positive_samples_fsm_em` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     pub fn get_positive_samples_fsm_em(&self, min_read: f32) -> usize {
         let mut count = 0;
         for (abd1, abd2) in self.em_abundance.iter().zip(&self.fsm_abundance) {
@@ -1142,6 +1218,9 @@ impl TxAbundanceView {
         count
     }
 
+    /// Purpose: Executes `get_positive_samples_fsm_only` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     pub fn get_positive_samples_fsm_only(&self, min_read: f32) -> usize {
         let mut count = 0;
         for abd in &self.fsm_abundance {
@@ -1152,6 +1231,9 @@ impl TxAbundanceView {
         count
     }
 
+    /// Purpose: Executes `get_positive_samples_em_only` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     pub fn get_positive_samples_em_only(&self, min_read: f32) -> usize {
         let mut count = 0;
         for abd in &self.em_abundance {
@@ -1162,6 +1244,9 @@ impl TxAbundanceView {
         count
     }
 
+    /// Purpose: Executes `write_line_directly` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn write_line_directly(
         &self,
         global_stats: &mut GlobalStats,
@@ -1284,6 +1369,9 @@ impl TxAbundanceView {
 ///     mono_exon_merged_cnt: number of merged mono-exonic regions
 /// corresponded functions are also implemented to add
 #[derive(Clone, Debug)]
+/// Purpose: Data container for MSJC.
+/// Inputs: Field values defined in `MSJC`.
+/// Output: A `MSJC` instance.
 pub struct MSJC {
     // #[allow(unused)]
     // id: u64,
@@ -1314,6 +1402,9 @@ pub struct MSJC {
 }
 
 impl MSJC {
+    /// Purpose: Executes `new` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `MSJC`.
     pub fn new(sample_size: usize, misoform: &PNIR) -> MSJC {
         let mut nonzero_indices = Vec::new();
         let mut cov_vec = Vec::new();
@@ -1341,6 +1432,9 @@ impl MSJC {
         }
     }
 
+    /// Purpose: Executes `new_mono_exon_merged` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `MSJC`.
     pub fn new_mono_exon_merged(sample_size: usize) -> MSJC {
         MSJC {
             // id: id,
@@ -1358,47 +1452,10 @@ impl MSJC {
         }
     }
 
+    /// Purpose: Executes `add_mono_exon_msjc` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn add_mono_exon_msjc(&mut self, msjc: &MSJC) {
-        // merge the splice junctions
-
-        // update nonzero sample indices and cov_vec
-        // for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
-        //     if let Some(pos) = self.nonzero_sample_indices.iter().position(|&x| x == sid) {
-        //         // already exists, update cov_vec
-        //         self.cov_vec[pos] += msjc.cov_vec[i];
-        //     } else {
-        //         // new sample index
-        //         self.nonzero_sample_indices.push(sid);
-        //         self.cov_vec.push(msjc.cov_vec[i]);
-        //     }
-        // }
-
-        // // update mono exon total length and count
-        // let length = msjc.get_inner_span();
-        // self.mono_exon_total_length += length;
-        // self.mono_exon_merged_cnt += 1;
-        
-        // optimized version using sid_to_pos for O(1) lookup, but it allocate extra mem
-        // for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
-        //     let pos = unsafe { *self.sid_to_pos.get_unchecked(sid) };
-        //     if pos != u32::MAX {
-        //         unsafe {
-        //             *self.cov_vec.get_unchecked_mut(pos as usize) += msjc.cov_vec.get_unchecked(i);
-        //         }
-        //     } else {
-        //         let new_pos = self.nonzero_sample_indices.len() as u32;
-        //         unsafe {
-        //             *self.sid_to_pos.get_unchecked_mut(sid) = new_pos;
-        //         }
-        //         self.nonzero_sample_indices.push(sid);
-        //         self.cov_vec.push(msjc.cov_vec[i]);
-        //     }
-        // }
-
-        // let length = msjc.get_inner_span();
-        // self.mono_exon_total_length += length;
-        // self.mono_exon_merged_cnt += 1;
-
 
         for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
             match self.nonzero_sample_indices.binary_search(&sid) {
@@ -1416,11 +1473,17 @@ impl MSJC {
         self.mono_exon_merged_cnt += 1;
     }
 
+    /// Purpose: Executes `add_txabundance` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     pub fn add_txabundance(&mut self, txabd: &TxAbundance) -> usize {
         self.txids.push(txabd.id);
         self.txids.len() - 1
     }
 
+    /// Purpose: Executes `get_inner_span` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `u64`.
     pub fn get_inner_span(&self) -> u64 {
         if self.splice_junctions_vec.is_empty() {
             0
@@ -1439,6 +1502,9 @@ impl MSJC {
         }
     }
 
+    /// Purpose: Executes `get_effective_length` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `u32`.
     pub fn get_effective_length(&self) -> u32 {
         // start -end
         if self.is_mono_exon_merged {
@@ -1452,6 +1518,9 @@ impl MSJC {
         }
     }
 
+    /// Purpose: Executes `prepare_em` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn prepare_em(&mut self, tx_count: usize) {
         let k = self.nonzero_sample_indices.len();
         self.gamma_data = vec![0.0; k * tx_count];
@@ -1459,6 +1528,9 @@ impl MSJC {
     }
 
     /// check if current MSJC is a FSM for given Tx
+    /// Purpose: Executes `check_mono_exon_fsm` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `bool`.
     pub fn check_mono_exon_fsm(&self, txabd: &TxAbundance, cli: &AnnIsoCli) -> bool {
         if self.splice_junctions_vec.is_empty() {
             return false;
@@ -1495,6 +1567,9 @@ impl MSJC {
         is_fsm
     }
 
+    /// Purpose: Executes `check_msjc_belong_to_tx` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `bool`.
     pub fn check_msjc_belong_to_tx(&self, txabd: &TxAbundance, _cli: &AnnIsoCli) -> bool {
         // the MJSC must with in the transcript region
         if self.splice_junctions_vec.is_empty() {
@@ -1517,11 +1592,17 @@ impl MSJC {
     }
 
     #[inline(always)]
+    /// Purpose: Executes `nonzero_count` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     pub fn nonzero_count(&self) -> usize {
         self.nonzero_sample_indices.len()
     }
 
     #[inline(always)]
+    /// Purpose: Executes `e_step` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     fn e_step(&mut self, txabds: &Vec<TxAbundance>) {
         let k = self.nonzero_sample_indices.len();
         let txabds_slice = txabds.as_slice();
@@ -1638,6 +1719,9 @@ impl MSJC {
         }
     }
 
+    /// Purpose: Executes `splice_junctions_aligned_to_tx` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn splice_junctions_aligned_to_tx(
         &self,
         reference_sjs: &Vec<(u64, u64)>,
@@ -1690,16 +1774,13 @@ impl MSJC {
     }
 }
 
-// pub struct MJSCCache{
-//     msjc_cache:Vec<MSJC>,
-//     cache_size:u32,
-//     cache_fh:
-// }
-
 type OrigIdx = u32;
 
 /// write to temporary output manager with sharding,
 /// two files will be generated, one is the data file, another is the index file
+/// Purpose: Data container for TmpOutputManager.
+/// Inputs: Field values defined in `TmpOutputManager`.
+/// Output: A `TmpOutputManager` instance.
 pub struct TmpOutputManager {
     // pub curr_offset: u64,
     pub curr_processed_idx: usize,
@@ -1716,6 +1797,9 @@ pub struct TmpOutputManager {
 }
 
 impl TmpOutputManager {
+    /// Purpose: Executes `new` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Self`.
     pub fn new(file_path: &PathBuf, cli: &AnnIsoCli) -> Self {
         TmpOutputManager {
             // curr_offset: 0,
@@ -1733,6 +1817,9 @@ impl TmpOutputManager {
         }
     }
 
+    /// Purpose: Executes `dump_grouped_tx` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn dump_grouped_tx(&mut self, grouped_tx: &mut GroupedTx) {
         // for tx_abd in grouped_tx.tx_abundances.iter() {
         //     // self.records.push(tx_abd.clone());
@@ -1802,6 +1889,9 @@ impl TmpOutputManager {
         }
     }
 
+    /// Purpose: Executes `finish` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: Side effects and/or unit return (`()`).
     pub fn finish(&mut self) {
         // write remaining records
 
@@ -1904,6 +1994,9 @@ impl TmpOutputManager {
         );
     }
 
+    /// Purpose: Executes `clean_up` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Result<()>`.
     pub fn clean_up(&mut self) -> Result<()> {
         // remove temporary files
         for shard_idx in 0..self.curr_shard_idx {
@@ -1925,6 +2018,9 @@ impl TmpOutputManager {
 impl Iterator for TmpOutputManager {
     type Item = TxAbundanceView;
 
+    /// Purpose: Executes `next` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Option<Self::Item>`.
     fn next(&mut self) -> Option<Self::Item> {
         // 从堆中取出最小的元素
         let Reverse(entry) = self.heap.pop()?;
@@ -1963,6 +2059,9 @@ impl Iterator for TmpOutputManager {
 }
 
 #[derive(Eq, PartialEq)]
+/// Purpose: Data container for HeapEntry.
+/// Inputs: Field values defined in `HeapEntry`.
+/// Output: A `HeapEntry` instance.
 pub struct HeapEntry {
     orig_idx: OrigIdx,
     shard_idx: usize,
@@ -1971,6 +2070,9 @@ pub struct HeapEntry {
 }
 
 impl Ord for HeapEntry {
+    /// Purpose: Executes `cmp` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `std::cmp::Ordering`.
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.orig_idx
             .cmp(&other.orig_idx)
@@ -1979,12 +2081,18 @@ impl Ord for HeapEntry {
 }
 
 impl PartialOrd for HeapEntry {
+    /// Purpose: Executes `partial_cmp` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `Option<std::cmp::Ordering>`.
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl GetMemSize for TxAbundance {
+    /// Purpose: Executes `get_mem_size` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     fn get_mem_size(&self) -> usize {
         let size = std::mem::size_of_val(&self.id)
             + std::mem::size_of_val(&0f32) * self.fsm_abundance.len()
@@ -1999,6 +2107,9 @@ impl GetMemSize for TxAbundance {
 }
 
 impl GetMemSize for GroupedTx {
+    /// Purpose: Executes `get_mem_size` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     fn get_mem_size(&self) -> usize {
         let mut size = std::mem::size_of_val(&self.sj_pooled_positions_multi_exonic);
 
@@ -2015,6 +2126,9 @@ impl GetMemSize for GroupedTx {
 }
 
 impl GetMemSize for MSJC {
+    /// Purpose: Executes `get_mem_size` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     fn get_mem_size(&self) -> usize {
         std::mem::size_of::<u64>()
             + std::mem::size_of::<usize>()
@@ -2027,6 +2141,9 @@ impl GetMemSize for MSJC {
 }
 
 impl GetMemSize for ChromGroupedTxManager {
+    /// Purpose: Executes `get_mem_size` logic for this module.
+    /// Inputs: Parameters listed in the function signature.
+    /// Output: `usize`.
     fn get_mem_size(&self) -> usize {
         let mut size = std::mem::size_of_val(&self.chrom);
 
