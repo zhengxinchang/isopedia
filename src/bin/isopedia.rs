@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use isopedia::cmd::download::run_download;
+use isopedia::cmd::download::DownloadCli;
 use isopedia::cmd::fusion::run_anno_fusion;
 use isopedia::cmd::fusion::AnnFusionCli;
 use isopedia::cmd::index::run_idx;
@@ -70,6 +72,7 @@ enum Commands {
     Profile(ProfileCli),
     Merge(MergeCli),
     Index(IndexCli),
+    Download(DownloadCli),
 }
 
 fn main() {
@@ -109,6 +112,11 @@ fn main() {
         Commands::Index(ref idx_cli) => {
             if let Err(e) = run_idx(idx_cli) {
                 eprintln!("Error running indexing: {}", e);
+            }
+        }
+        Commands::Download(ref download_cli) => {
+            if let Err(e) = run_download(download_cli) {
+                eprintln!("Error running download: {}", e);
             }
         }
     }
