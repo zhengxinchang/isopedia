@@ -46,6 +46,9 @@ use isopedia::logger::init_logger;
     isopedia profile -i /path/to/sample.bam -o /path/to/profile.tsv.gz
 
     # step2: merge multiple profiles
+
+    ulimit -n 65535 # increase the maximum number of open file descriptors, in case of merging many samples.
+
     printf \"name \\t path \\n\" > manifest.tsv
     printf \"sample1 \\t /path/to/sample1_profile.tsv.gz \\n\" >> manifest.tsv
     printf \"sample2 \\t /path/to/sample2_profile.tsv.gz \\n\" >> manifest.tsv

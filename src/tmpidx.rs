@@ -154,12 +154,6 @@ impl TmpIndex {
             })
             .collect::<Vec<_>>();
 
-        // let mut offset_mapping_vec: Vec<FxHashMap<u64, u64>> = Vec::new();
-
-        // for _ in 0..self.chunks {
-        //     offset_mapping_vec.push(FxHashMap::default());
-        // }
-
         let mut offset_managers: Vec<ChunkOffsetManager> = (0..self.chunks)
             .map(|i| {
                 ChunkOffsetManager::new(
@@ -171,26 +165,10 @@ impl TmpIndex {
             })
             .collect();
 
-        // mmap the input file
-
         let merged_data_file_list = (0..self.chunks)
             .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
 
-        // let data_mmaps = merged_data_file_list
-        //     .iter()
-        //     .map(|path| {
-        //         // let file = fs::File::open(path).expect("Can not open chunk file");
-        //         // let mmap = unsafe { Mmap::map(&file).expect("mmap failed") };
-        //         // mmap.advise(memmap2::Advice::Sequential)
-        //         //     .expect("Can not set mmap advice");
-        //         // mmap
-
-        //         let file = fs::File::open(path).expect("Can not open chunk file");
-        //         let reader = BufReader::with_capacity(BUF_SIZE_1M, file);
-        //         reader
-        //     })
-        //     .collect::<Vec<_>>();
 
         let data_mmaps = merged_data_file_list
             .iter()
@@ -200,11 +178,6 @@ impl TmpIndex {
 
                 mmap.advise(memmap2::Advice::Sequential)
                     .expect("Can not set mmap advice");
-
-                // #[cfg(target_os = "linux")]
-                // {
-                //     mmap.advise(memmap2::Advice::WillNeed).ok();
-                // }
 
                 mmap
             })
@@ -231,8 +204,6 @@ impl TmpIndex {
                 heap.push(Reverse((interim_rec, idx)));
             }
         }
-
-        // let mut buffer = vec![0u8; 10 * 1024 * 1024]; // 10 MB buffer
 
         // process the heap
         while let Some(Reverse((interim_rec, idx))) = heap.pop() {
@@ -265,16 +236,6 @@ impl TmpIndex {
             let mut interim_rec = interim_rec.clone();
             let old_offset = interim_rec.record_ptr.offset;
 
-            // if let Some(&mapped_offset) = offset_mapping_vec[idx].get(&old_offset) {
-            //     interim_rec.record_ptr.offset = mapped_offset;
-
-            //     tmpidx_writer
-            //         .write_all(&interim_rec.to_bytes())
-            //         .expect("Can not write to tmpidx file");
-
-            //     continue;
-            // }
-
             if let Some(mapped_offset) = offset_managers[idx].get(old_offset) {
                 interim_rec.record_ptr.offset = mapped_offset;
                 tmpidx_writer.write_all(&interim_rec.to_bytes()).unwrap();
@@ -286,12 +247,6 @@ impl TmpIndex {
             offset_managers[idx].insert(old_offset, new_offset);
 
             let length = interim_rec.record_ptr.length as usize;
-
-            // if buffer.len() < length {
-            //     buffer.resize(length, 0);
-            // }
-
-            // let slice = &data_mmaps[idx][old_offset as usize..old_offset as usize + length];
 
             let slice = &data_mmaps[idx][old_offset as usize..old_offset as usize + length];
 

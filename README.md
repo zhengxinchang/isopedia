@@ -150,6 +150,7 @@ isopedia profile -i ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
 # --rname (BAM/CRAM), --tid and --gid (GTF)
 
 # 2) merge profiles
+ulimit -n 65535 # increase the maximum number of open file descriptors, in case of merging many samples.
 isopedia merge -i manifest.tsv -o index/
 
 # 3) build tree index
