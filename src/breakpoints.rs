@@ -66,19 +66,6 @@ impl SpliceBreakPointPair {
         })
     }
 
-    // pub fn parse_string_sj(s: &str) -> Result<Self> {
-    //     let (chr, left_pos, right_pos) = utils::parse_splice_junction_str(s)?;
-
-    //     Ok(Self {
-    //         left_chr: chr.clone(),
-    //         left_pos,
-    //         right_chr: chr,
-    //         right_pos,
-    //         id: "single_query".to_string(),
-    //         rest_info: "".to_string(),
-    //     })
-    // }
-
     pub fn is_same_chr(&self) -> bool {
         self.left_chr == self.right_chr
     }

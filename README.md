@@ -82,7 +82,7 @@ Isopedia provides pre-built indexes from public long-read RNA-seq datasets.
 
 | Name | Organism | Reference | Link | Sample Size | Index Size (Compressed) | Minimum Memory for Query | Description |
 |---|---|---|---|---:|---|---|---|
-| `isopedia_index_hs_v1.0` | *Homo sapiens* | GRCh38 | `ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz` | 1,007 | 305G (107G) | 16 GB | 107 ENCODE samples + 900 SRA samples |
+| `isopedia_index_hs_v1.0` | *Homo sapiens* | GRCh38 | `ftp://hgsc-sftp1.hgsc.bcm.tmc.edu/rt38520/isopedia_index_hs_v1.0.tar.xz` | 1,007 | 305G (107G) | 16 GB | 107 ENCODE samples + 900 SRA samples |
 
 Checksum file:
 
