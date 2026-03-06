@@ -22,6 +22,7 @@ It provides two key capabilities:
 - [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate)
 - [Computational Resource Usage](#computational-resource-usage)
 - [Contact](#contact)
+- [FAQ](#faq)
 
 ## Quick Start
 
@@ -40,6 +41,12 @@ git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 # query transcripts
 isopedia isoform -i index/ -g query.gtf -o out.profile.tsv.gz
 
+# query one splice junction
+isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz
+
+# visualize splice query output
+isopedia-splice-viz.py -i out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -o isopedia-splice-view
+
 # query one fusion event (two breakpoints)
 isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o out.fusion.tsv.gz
 
@@ -48,15 +55,9 @@ isopedia fusion -i index/ -P fusion_query.bed -o out.fusion.tsv.gz
 
 # discover candidate fusions from gene regions
 isopedia fusion -i index/ -G gene.gtf -o out.fusion.discovery.tsv.gz
-
-# query one splice junction
-isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz
-
-# visualize splice query output
-isopedia-splice-viz.py -i out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -o isopedia-splice-view
 ```
 
-For GTF indexing details, see [Indexing GTF Files](doc/indexing_gtf.md).
+<!-- For GTF indexing details, see [Indexing GTF Files](doc/indexing_gtf.md). -->
 
 ## How It Works
 
@@ -401,7 +402,16 @@ Isopedia 1.4.0 benchmark on 1,007 long-read transcriptome datasets from SRA and 
 | `isopedia index` | 45.85 | 5:48:55 |
 | `isopedia isoform` (280K GENCODE v49 basic) | 9.19 | 4:52:18 |
 
+
+
 ## Contact
 
 - zhengxc93@gmail.com
 - fritz.sedlazeck@bcm.edu
+
+
+
+## FAQ
+
+**Q:** Can Isopedia be used in a "transcript discovery" mode — for example, to retrieve all transcripts indexed for a given gene or within a genomic region, without providing a GTF file in advance?
+**A:** Isopedia is designed as a genotyper rather than a caller. It always requires a GTF file as input, meaning users need to specify the transcript structures they want to query. Gene-level or coordinate-range discovery queries (e.g., "retrieve all transcripts for gene N" or "all transcripts between coordinates A–B") fall under the scope of a transcript caller, which is outside Isopedia's current functionality.
