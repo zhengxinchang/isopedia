@@ -2,3 +2,12 @@
 name="demo"
 url="https://raw.githubusercontent.com/zhengxinchang/swapfinder/main/img/logo.png"
 size=6029432
+
+[[index]]
+name = "isopedia_index_hs_v1.0"
+url = "ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz"
+size = 114596438692
+md5 = "eb922ef27257d363969a835d4175da26"
+source = "ftp"
+protocol = "ftp"
+description = "Human pre-built index (GRCh38)"

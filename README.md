@@ -39,7 +39,7 @@ conda install -c bioconda isopedia
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
 # query transcripts
-isopedia isoform -i index/ -g query.gtf -o out.profile.tsv.gz
+isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.profile.tsv.gz
 
 # query one splice junction
 isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz
@@ -48,13 +48,11 @@ isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz
 isopedia-splice-viz.py -i out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -o isopedia-splice-view
 
 # query one fusion event (two breakpoints)
-isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o out.fusion.tsv.gz
+isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz
 
 # query multiple fusion events
-isopedia fusion -i index/ -P fusion_query.bed -o out.fusion.tsv.gz
+isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz
 
-# discover candidate fusions from gene regions
-isopedia fusion -i index/ -G gene.gtf -o out.fusion.discovery.tsv.gz
 ```
 
 <!-- For GTF indexing details, see [Indexing GTF Files](doc/indexing_gtf.md). -->
@@ -88,7 +86,7 @@ Isopedia provides pre-built indexes from public long-read RNA-seq datasets.
 Checksum file:
 
 - `ftp://hgsc-sftp1.hgsc.bcm.tmc.edu//rt38520/isopedia_index_hs_v1.0.tar.xz.md5sum`
-
+<!-- 
 ### Download with `isopedia download`
 
 ```bash
@@ -117,7 +115,7 @@ md5 = "eb922ef27257d363969a835d4175da26"
 source = "ftp"
 protocol = "ftp"
 description = "Human pre-built index (GRCh38)"
-```
+``` -->
 
 Unpack:
 
