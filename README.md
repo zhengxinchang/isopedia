@@ -412,4 +412,5 @@ Isopedia 1.4.0 benchmark on 1,007 long-read transcriptome datasets from SRA and 
 ## FAQ
 
 **Q:** Can Isopedia be used in a "transcript discovery" mode — for example, to retrieve all transcripts indexed for a given gene or within a genomic region, without providing a GTF file in advance?
+
 **A:** Isopedia is designed as a genotyper rather than a caller. It always requires a GTF file as input, meaning users need to specify the transcript structures they want to query. Gene-level or coordinate-range discovery queries (e.g., "retrieve all transcripts for gene N" or "all transcripts between coordinates A–B") fall under the scope of a transcript caller, which is outside Isopedia's current functionality.
