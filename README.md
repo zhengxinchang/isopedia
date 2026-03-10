@@ -201,6 +201,9 @@ Current `FORMAT` string in output header:
 
 Per-sample values include abundance/count components for total, FSM, and EM estimates.
 
+
+**Please note that CPM values are calculated by normalizing across all input transcript queries, as Isopedia expects the input GTF to represent a complete transcriptome. If you query only a subset of transcripts, the CPM values will not be meaningful.**
+
 ### Fusion Query and Discovery
 
 `fusion` supports three modes:
