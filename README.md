@@ -17,9 +17,9 @@ It provides two key capabilities:
   - [Isoform Query](#isoform-query)
   - [Fusion Query and Discovery](#fusion-query-and-discovery)
   - [Splice Query and Visualization](#splice-query-and-visualization)
-- [Command Parameters (Latest)](#command-parameters-latest)
+- [Command Parameters](#command-parameters-latest)
 - [How to Install Isopedia](#how-to-install-isopedia)
-- [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate)
+<!-- - [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate) -->
 - [Computational Resource Usage](#computational-resource-usage)
 - [Contact](#contact)
 - [FAQ](#faq)
@@ -39,19 +39,19 @@ conda install -c bioconda isopedia
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
 # query transcripts
-isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.profile.tsv.gz
+isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.profile.tsv.gz # 3364 records returned
 
 # query one splice junction
-isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz
+isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz # 13 records returned
 
 # visualize splice query output
 isopedia-splice-viz.py -i out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -o isopedia-splice-view
 
 # query one fusion event (two breakpoints)
-isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz
+isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz # 0 recored returned, as hg002 is a healthy individual
 
 # query multiple fusion events
-isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz
+isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz # 0 recored returned, as hg002 is a healthy individual
 
 ```
 
@@ -127,7 +127,8 @@ tar -xvf isopedia_index_hs_v1.0.tar.xz
 
 Prerequisites:
 
-1. Long-read alignments (`.bam`/`.cram`) or transcript annotations (`.gtf`).
+<!-- 1. Long-read alignments (`.bam`/`.cram`) or transcript annotations (`.gtf`). -->
+1. Long-read alignments (`.bam`/`.cram`)
 2. A manifest TSV with at least two columns: sample name and profile path.
 
 Example manifest:
@@ -144,9 +145,6 @@ Workflow:
 # 1) profile each sample
 isopedia profile -i ./chr22.pb.grch38.bam -o ./hg002_pb_chr22.isoform.gz
 isopedia profile -i ./chr22.ont.grch38.bam -o ./hg002_ont_chr22.isoform.gz
-
-# optional profile fields
-# --rname (BAM/CRAM), --tid and --gid (GTF)
 
 # 2) merge profiles
 ulimit -n 65535 # increase the maximum number of open file descriptors, in case of merging many samples.
@@ -276,7 +274,7 @@ python script/isopedia-splice-viz.py \
 
 - `COUNT:CPM:START|END|STRAND`
 
-## Command Parameters (Latest)
+## Command Parameters
 
 Parameter lists below are based on the current CLI in source.
 
@@ -383,13 +381,13 @@ cargo build --release
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
-## Annotate ORF with ORFannotate
+<!-- ## Annotate ORF with ORFannotate
 
 Isopedia interoperates with [ORFannotate](https://github.com/egustavsson/ORFannotate), which can consume Isopedia outputs to predict ORFs/UTRs and annotate CDS features.
 
 ```text
 <placeholder>
-```
+``` -->
 
 ## Computational Resource Usage
 
@@ -402,13 +400,6 @@ Isopedia 1.4.0 benchmark on 1,007 long-read transcriptome datasets from SRA and 
 | `isopedia merge` | 54.77 | 28:26:08 |
 | `isopedia index` | 45.85 | 5:48:55 |
 | `isopedia isoform` (280K GENCODE v49 basic) | 9.19 | 4:52:18 |
-
-
-
-## Contact
-
-- zhengxc93@gmail.com
-- fritz.sedlazeck@bcm.edu
 
 
 
