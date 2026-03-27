@@ -360,15 +360,12 @@ Core options:
 ### Install from conda
 
 ```bash
-conda install -c zhengxinchang isopedia
+conda install -c bioconda isopedia
 ```
 
 ### Latest release
 
 - https://github.com/zhengxinchang/isopedia/releases
-
-`isopedia-<version>.linux.tar.gz` is compiled on Amazon Linux 2 (GCC 7.3, glibc 2.26, binutils 2.29.1).
-If your distribution is not compatible, use `isopedia-<version>.musl.tar.gz`.
 
 ### Build from source
 
