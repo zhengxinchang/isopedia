@@ -22,7 +22,7 @@ use std::path::PathBuf;
 
 The example format of splice_bed 
 
-id\tchr1\tpos1\tchr2\tpos2
+chr1\tpos1\tchr2\tpos2\tid
 
 Note that if you are using the coordinates from GFF/GTF, please convert the 1-based to 0-based coordinates.
 
