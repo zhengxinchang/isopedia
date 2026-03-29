@@ -55,6 +55,10 @@ isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz # 0 recored
 
 ```
 
+
+![What you can get from isopedia](./img/workflow.png)
+
+
 <!-- For GTF indexing details, see [Indexing GTF Files](doc/indexing_gtf.md). -->
 
 ## How It Works
