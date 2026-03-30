@@ -363,17 +363,19 @@ Core options:
 
 ## How to Install Isopedia
 
-### Install from conda
+We offer three ways to install isopedia:
+
+### 1. Install from conda (for most of the users)
 
 ```bash
 conda install -c bioconda isopedia
 ```
 
-### Latest release
+### 2. Latest release (for users who don't have conda)
 
 - https://github.com/zhengxinchang/isopedia/releases
 
-### Build from source
+### 3. Build from source (for users want to build from source)
 
 Rust and Cargo are required.
 
@@ -381,7 +383,6 @@ Rust and Cargo are required.
 git clone https://github.com/zhengxinchang/isopedia.git
 cd isopedia
 cargo build --release
-cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 <!-- ## Annotate ORF with ORFannotate
