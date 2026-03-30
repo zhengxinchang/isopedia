@@ -351,7 +351,7 @@ Core options:
 - `-m, --manifest <MANIFEST>`
 - `-t, --threads <THREADS>` (default: `4`)
 
-### `isopedia download`
+### `isopedia download` (beta)
 
 Core options:
 
