@@ -56,6 +56,8 @@ isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz # 0 recored
 ```
 
 
+Overview of Isopedia's query framework and supported output types. All query modes run on a standard laptop.
+
 ![What you can get from isopedia](./img/workflow.png)
 
 
