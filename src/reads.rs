@@ -1,9 +1,7 @@
 use crate::constants::BUF_SIZE_4M;
 use crate::utils::{self, hash_vec};
-use bio_types::strand::ReqStrand;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 

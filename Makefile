@@ -14,16 +14,16 @@ build-musl:
 build-docker:
 	bash ./build_linux_dist.sh
 
-build-conda: build-targz
-	export version=$(VERSION) && \
-	conda build conda_recipe/
+# build-conda: build-targz
+# 	export version=$(VERSION) && \
+# 	conda build conda_recipe/
 
-build-targz: build-docker build build-musl
+local-release: build-docker build build-musl
 	tar -zcvf ver_release/isopedia-$(VERSION).musl.tar.gz -C target/x86_64-unknown-linux-musl/release/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py isopedia-splice-viz-temp.html
 	tar -zcvf ver_release/isopedia-$(VERSION).linux.tar.gz -C linux_build/ isopedia isopedia-tools -C /ssd1/stix-iso-devspace/isopedia-dev/script/ isopedia-splice-viz.py isopedia-splice-viz-temp.html
 
-pack:
-	git checkout main
+# pack:
+# 	git checkout main
 	
 
 debug:

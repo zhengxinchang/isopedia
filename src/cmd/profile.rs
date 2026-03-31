@@ -1,4 +1,3 @@
-use bio_types::strand::ReqStrand;
 use clap::Parser;
 use core::panic;
 use indexmap::IndexSet;
@@ -19,7 +18,7 @@ use crate::{
 };
 use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
-use serde::{Deserialize, Serialize};
+use serde::{ Serialize};
 use crate::strand::Strand;
 // use std::fmt::Display;
 
