@@ -1,6 +1,6 @@
 use crate::chromosome::ChromMapping;
 use crate::constants::*;
-use crate::pnir_archive::PNIRArchiveCache;
+use crate::ptir_archive::PTIRArchiveCache;
 use crate::tmpidx::TmpIndex;
 use crate::tools::ToolCmdValidate;
 use clap::Parser;
@@ -107,7 +107,7 @@ pub fn view_archive(cli: &ViewArgs) {
     let writer = std::fs::File::create(&cli.output).unwrap();
     let mut writer = std::io::BufWriter::new(writer);
 
-    let mut archive = PNIRArchiveCache::new(
+    let mut archive = PTIRArchiveCache::new(
         &cli.idx.join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb,
         cli.cached_chunk_number,

@@ -10,7 +10,7 @@ use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
     meta::Meta,
     myio::{DBInfos, Header},
-    pnir_archive::PNIRArchiveCache,
+    ptir_archive::PTIRArchiveCache,
     results::TableOutput,
     utils::greetings2,
 };
@@ -195,7 +195,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
 
     info!("Loading index file");
 
-    let mut archive_cache = PNIRArchiveCache::new(
+    let mut archive_cache = PTIRArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
         cli.cached_chunk_num,                   // max 4 chunks in cache ~2GB

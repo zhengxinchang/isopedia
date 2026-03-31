@@ -10,22 +10,22 @@ use std::{
 use anyhow::Result;
 use lru::LruCache;
 
-use crate::{pnir::PNIR, tmpidx::PNIROffsetPtr};
+use crate::{ptir::PTIR, tmpidx::PTIROffsetPtr};
 
-pub struct PNIRArchiveWriter {
+pub struct PTIRArchiveWriter {
     writer: BufWriter<File>,
     buf: Vec<u8>,
 }
 
-impl PNIRArchiveWriter {
-    pub fn create(path: &Path) -> PNIRArchiveWriter {
+impl PTIRArchiveWriter {
+    pub fn create(path: &Path) -> PTIRArchiveWriter {
         let file = File::create(path).expect("Failed to open file");
         let writer = BufWriter::with_capacity(10 * 1024 * 1024, file);
         let buf = Vec::with_capacity(1024 * 1024); // 1MB buffer
-        PNIRArchiveWriter { writer, buf }
+        PTIRArchiveWriter { writer, buf }
     }
 
-    pub fn dump_to_disk(&mut self, record: &PNIR) -> u32 {
+    pub fn dump_to_disk(&mut self, record: &PTIR) -> u32 {
         self.buf.clear();
         let byte_len = record.gz_encode(&mut self.buf);
         self.writer
@@ -40,7 +40,7 @@ impl PNIRArchiveWriter {
     }
 }
 
-pub struct PNIRArchiveCache {
+pub struct PTIRArchiveCache {
     file: File,
     chunk_size: u64,
     lru_order: Vec<u64>,
@@ -48,13 +48,13 @@ pub struct PNIRArchiveCache {
     buf: Vec<u8>,
 }
 
-impl PNIRArchiveCache {
-    pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> PNIRArchiveCache {
+impl PTIRArchiveCache {
+    pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> PTIRArchiveCache {
         let f = File::open(&file).expect(&format!(
             "Failed to open file {:?}",
             file.as_ref().display()
         ));
-        PNIRArchiveCache {
+        PTIRArchiveCache {
             file: f,
             chunk_size,
             lru_order: Vec::new(),
@@ -85,7 +85,7 @@ impl PNIRArchiveCache {
         Ok(arc_buf)
     }
 
-    pub fn load_from_disk(&mut self, offset: &PNIROffsetPtr) -> PNIR {
+    pub fn load_from_disk(&mut self, offset: &PTIROffsetPtr) -> PTIR {
         // info!("Reading record at offset: {:?}", offset);
         if self.buf.len() > 100 * 1024 * 1024 {
             // if buffer larger than 100MB, reset it
@@ -129,7 +129,7 @@ impl PNIRArchiveCache {
             self.buf.extend_from_slice(&chunk[local_start..local_end]);
         }
 
-        match PNIR::gz_decode(&self.buf) {
+        match PTIR::gz_decode(&self.buf) {
             Ok(record) => record,
             Err(_) => {
                 eprintln!("Failed to decode gzipped record");
