@@ -4,10 +4,10 @@ use crate::{
     dataset_info::DatasetInfo,
     global_stats::GlobalStats,
     gtf::Transcript,
-    pnir::PNIR,
-    pnir_archive::PNIRArchiveCache,
+    ptir::PTIR,
+    ptir_archive::PTIRArchiveCache,
     results::TableOutput,
-    tmpidx::PNIROffsetPtr,
+    tmpidx::PTIROffsetPtr,
     utils::{self, intersect_sorted, GetMemSize},
 };
 use ahash::HashMap;
@@ -83,7 +83,7 @@ impl ChromGroupedTxManager {
         &mut self,
         bpforest: &mut BPForest,
         cli: &AnnIsoCli,
-        archive_cache: &mut PNIRArchiveCache,
+        archive_cache: &mut PTIRArchiveCache,
         dbinfo: &DatasetInfo,
         tmp_tx_manager: &mut TmpOutputManager,
         global_stats: &mut GlobalStats,
@@ -309,9 +309,9 @@ impl GroupedTx {
 
     pub fn update_results(
         &mut self,
-        all_res: &Vec<Vec<PNIROffsetPtr>>,
+        all_res: &Vec<Vec<PTIROffsetPtr>>,
         all_res_mono_exonic: &Vec<SegmentedMonoExonSearchResult>,
-        pnir_archive_cache: &mut PNIRArchiveCache,
+        ptir_archive_cache: &mut PTIRArchiveCache,
         dbinfo: &DatasetInfo,
         cli: &AnnIsoCli,
     ) {
@@ -346,10 +346,10 @@ impl GroupedTx {
         for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
             // mono exonic need a special process
             if !tx_abd.is_mono_exonic {
-                let mut fsm_misoforms_candidates: Vec<&Vec<PNIROffsetPtr>> = Vec::new();
+                let mut fsm_misoforms_candidates: Vec<&Vec<PTIROffsetPtr>> = Vec::new();
                 // at least mapping with one sj to be considered as msjc
                 // key offset value offsetptr
-                let mut per_abd_partial_msjc_map: HashMap<u64, &PNIROffsetPtr> = HashMap::default();
+                let mut per_abd_partial_msjc_map: HashMap<u64, &PTIROffsetPtr> = HashMap::default();
 
                 for sj_pair in tx_abd.sj_pairs.iter() {
                     let sj_start_idx = self
@@ -388,7 +388,7 @@ impl GroupedTx {
 
                 // process fsm misoforms
                 for fsm in fsm_msjc_offsets.into_iter() {
-                    let fsm_msjc_rec = pnir_archive_cache.load_from_disk(&fsm);
+                    let fsm_msjc_rec = ptir_archive_cache.load_from_disk(&fsm);
 
                     tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
                     overall_fsm_ptrs.insert(fsm.offset);
@@ -408,7 +408,7 @@ impl GroupedTx {
                         let msjc = MSJC::new(
                             // offset,
                             dbinfo.get_size(),
-                            &pnir_archive_cache.load_from_disk(&msjc_ptr),
+                            &ptir_archive_cache.load_from_disk(&msjc_ptr),
                         );
                         self.msjcs.push(msjc);
                         let grouped_tx_msjc_idx = self.msjcs.len() - 1;
@@ -471,7 +471,7 @@ impl GroupedTx {
             ];
 
             for ptr in &mono_exon_result.ptrs {
-                let misoform = pnir_archive_cache.load_from_disk(&ptr);
+                let misoform = ptir_archive_cache.load_from_disk(&ptr);
 
                 let msjc = MSJC::new(
                     // ptr.offset,
@@ -606,9 +606,9 @@ impl GroupedTx {
 }
 
 pub fn find_partial_msjc_excluding_terminal_sites<'a>(
-    a: &'a Vec<PNIROffsetPtr>,
-    b: &'a Vec<PNIROffsetPtr>,
-    collection: &mut HashMap<u64, &'a PNIROffsetPtr>,
+    a: &'a Vec<PTIROffsetPtr>,
+    b: &'a Vec<PTIROffsetPtr>,
+    collection: &mut HashMap<u64, &'a PTIROffsetPtr>,
 ) {
     let mut i = 0;
     let mut j = 0;
@@ -634,7 +634,7 @@ pub fn find_partial_msjc_excluding_terminal_sites<'a>(
     }
 }
 
-pub fn find_fsm(vecs: Vec<&Vec<PNIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PNIROffsetPtr> {
+pub fn find_fsm(vecs: Vec<&Vec<PTIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PTIROffsetPtr> {
     if vecs.is_empty() {
         return vec![];
     }
@@ -720,7 +720,7 @@ impl TxAbundance {
     /// Add the evidence count from a FSM misoform to the fsm_abundance of this transcript
     /// Further check if each read is compatible with transcript start and end, if not,
     /// then the evidence count from this misoform will not be added to the fsm_abundance
-    pub fn update_fsm_evidence_count(&mut self, misoform: &PNIR, cli: &AnnIsoCli) {
+    pub fn update_fsm_evidence_count(&mut self, misoform: &PTIR, cli: &AnnIsoCli) {
         // if mono exonic, then no need to check start and end compatibility, directly add the evidence count
         if self.is_mono_exonic || cli.no_check_tss_tes {
             for sid in 0..self.sample_size {
@@ -1306,7 +1306,7 @@ pub struct MSJC {
 }
 
 impl MSJC {
-    pub fn new(sample_size: usize, misoform: &PNIR) -> MSJC {
+    pub fn new(sample_size: usize, misoform: &PTIR) -> MSJC {
         let mut nonzero_indices = Vec::new();
         let mut cov_vec = Vec::new();
 

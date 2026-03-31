@@ -339,7 +339,7 @@ impl TableOutput {
             // dbg!(&sample_total_evidence_vec);
             // dbg!(&sample_name_vec);
 
-            let confidence = crate::pnir::PNIR::get_confidence_value(
+            let confidence = crate::ptir::PTIR::get_confidence_value(
                 &acc_sample_evidence_arr,
                 sample_total_evidence_vec.len(),
                 &sample_total_evidence_vec,

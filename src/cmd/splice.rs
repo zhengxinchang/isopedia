@@ -2,7 +2,7 @@ use crate::bptree::BPForest;
 use crate::breakpoints::{self, SpliceBreakPointPair};
 use crate::dataset_info::DatasetInfo;
 use crate::myio::{self, DBInfos, Line};
-use crate::pnir::PNIR;
+use crate::ptir::PTIR;
 use crate::results::TableOutput;
 use crate::utils::greetings2;
 use crate::{constants::*, meta, utils};
@@ -133,7 +133,7 @@ pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
     info!("loading metadata");
     let meta = meta::Meta::parse(cli.idxdir.join(META_FILE_NAME), None)?;
 
-    let mut archive_cache = crate::pnir_archive::PNIRArchiveCache::new(
+    let mut archive_cache = crate::ptir_archive::PTIRArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // chunk size
         cli.cached_chunk_number,                // number of chunks
@@ -237,7 +237,7 @@ pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
 
                 out_line.update_format_str(SPLICE_FORMAT);
 
-                let record: PNIR = archive_cache.load_from_disk(&offset);
+                let record: PTIR = archive_cache.load_from_disk(&offset);
                 // read_record_from_mmap(&archive_mmap, &offset, &mut archive_buf);
                 if cli.verbose {
                     dbg!(&record);

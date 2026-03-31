@@ -14,8 +14,8 @@ use crate::{
     gene_index::GeneIntervalTree,
     meta::Meta,
     myio::*,
-    pnir::PNIR,
-    pnir_archive::PNIRArchiveCache,
+    ptir::PTIR,
+    ptir_archive::PTIRArchiveCache,
     results::TableOutput,
     utils::{self, greetings2},
 };
@@ -294,7 +294,7 @@ fn annotate_single_fusion(
     fusionbrkpt_out: &mut TableOutput,
     cli: &AnnFusionCli,
     forest: &mut BPForest,
-    archive_cache: &mut PNIRArchiveCache,
+    archive_cache: &mut PTIRArchiveCache,
     dbinfo: &DatasetInfo,
 ) -> Result<()> {
     info!(
@@ -369,7 +369,7 @@ fn annotate_single_fusion(
     // check if the left portion is supported
     let unique_right = right_target.into_iter().collect::<HashSet<_>>();
     for target in unique_right {
-        let merged_isoform: PNIR = archive_cache.load_from_disk(&target);
+        let merged_isoform: PTIR = archive_cache.load_from_disk(&target);
         let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
             &breakpoints.left_chr,
             breakpoints.left_start,
@@ -430,7 +430,7 @@ pub fn annotate_single_fusion_detailed(
     // fusionbrkpt_out: &mut TableOutput,
     cli: &AnnFusionCli,
     forest: &mut BPForest,
-    archive_cache: &mut PNIRArchiveCache,
+    archive_cache: &mut PTIRArchiveCache,
     meta: &Meta,
     dbinfo: &DatasetInfo,
 ) -> Result<()> {
@@ -551,7 +551,7 @@ pub fn annotate_single_fusion_detailed(
     }
 
     for target_right in right_target {
-        let merged_isoform: PNIR = archive_cache.load_from_disk(&target_right);
+        let merged_isoform: PTIR = archive_cache.load_from_disk(&target_right);
 
         let fusion_read_records = merged_isoform.cast_to_fusion_records(
             &q_l_chr,
@@ -623,7 +623,7 @@ pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
 
     let meta = Meta::parse(&cli.idxdir.join(META_FILE_NAME), None)?;
 
-    let mut archive_cache = PNIRArchiveCache::new(
+    let mut archive_cache = PTIRArchiveCache::new(
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
         cli.cached_chunk_number,                // max 4 chunks in cache ~2GB
@@ -775,7 +775,7 @@ pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
                 }
 
                 for rec_ptr in targets {
-                    let isoform: PNIR = archive_cache.load_from_disk(&rec_ptr);
+                    let isoform: PTIR = archive_cache.load_from_disk(&rec_ptr);
 
                     let candidates = isoform.to_fusion_candidates();
 
