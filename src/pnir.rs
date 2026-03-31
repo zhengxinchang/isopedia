@@ -7,7 +7,8 @@ use crate::{
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     myio::SampleChip,
-    reads::{AggrRead, Segment, Strand},
+    reads::{AggrRead, Segment},
+    strand::Strand,
     utils::{self, calc_cpm},
 };
 use flate2::bufread::GzEncoder;

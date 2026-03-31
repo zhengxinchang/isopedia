@@ -1,3 +1,4 @@
+use bio_types::strand::ReqStrand;
 use clap::Parser;
 use core::panic;
 use indexmap::IndexSet;
@@ -19,57 +20,65 @@ use crate::{
 use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use crate::strand::Strand;
+// use std::fmt::Display;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Strand {
-    Plus,
-    Minus,
-}
+// #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+// pub enum Strand {
+//     Plus,
+//     Minus,
+// }
 
-impl Display for Strand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Strand::Plus => write!(f, "+"),
-            Strand::Minus => write!(f, "-"),
-        }
-    }
-}
+// impl Display for Strand {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Strand::Plus => write!(f, "+"),
+//             Strand::Minus => write!(f, "-"),
+//         }
+//     }
+// }
 
-impl Strand {
-    pub fn from_string(s: &str) -> Self {
-        match s {
-            "+" => Strand::Plus,
-            "-" => Strand::Minus,
-            other => panic!("Invalid strand {:?}", other),
-        }
-    }
+// impl Strand {
+//     pub fn from_string(s: &str) -> Self {
+//         match s {
+//             "+" => Strand::Plus,
+//             "-" => Strand::Minus,
+//             other => panic!("Invalid strand {:?}", other),
+//         }
+//     }
 
-    #[allow(unused)]
-    pub fn from_num_string(s: &str) -> Self {
-        match s {
-            "0" => Strand::Plus,
-            "1" => Strand::Minus,
-            other => panic!("Invalid strand {:?}", other),
-        }
-    }
+//     #[allow(unused)]
+//     pub fn from_num_string(s: &str) -> Self {
+//         match s {
+//             "0" => Strand::Plus,
+//             "1" => Strand::Minus,
+//             other => panic!("Invalid strand {:?}", other),
+//         }
+//     }
 
-    #[allow(unused)]
-    pub fn from_u8(n: u8) -> Self {
-        match n {
-            0 => Strand::Plus,
-            1 => Strand::Minus,
-            other => panic!("Invalid strand {:?}", other),
-        }
-    }
+//     #[allow(unused)]
+//     pub fn from_u8(n: u8) -> Self {
+//         match n {
+//             0 => Strand::Plus,
+//             1 => Strand::Minus,
+//             other => panic!("Invalid strand {:?}", other),
+//         }
+//     }
 
-    pub fn to_string(&self) -> String {
-        match self {
-            Strand::Plus => "+".to_string(),
-            Strand::Minus => "-".to_string(),
-        }
-    }
-}
+//     pub fn to_string(&self) -> String {
+//         match self {
+//             Strand::Plus => "+".to_string(),
+//             Strand::Minus => "-".to_string(),
+//         }
+//     }
+
+//     pub fn from_bam_strand(s: ReqStrand) -> Self {
+//         match s {
+//             ReqStrand::Forward => Strand::Plus,
+//             ReqStrand::Reverse => Strand::Minus,
+//         }
+//     }
+// }
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia profile")]
@@ -283,14 +292,16 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
             chrom_set.insert(chrom.clone());
 
             let strand = record.strand().to_owned(); // MUST move out of match, Because of mutable borrow by strand().
+            let my_strand = Strand::from_bam_strand(strand);
             let mut left = record.pos() as u32;
             let mut right = record.pos() as u32;
-            let mut isoform = SingleRead::new(
+            let mut single_read = SingleRead::new(
                 chrom.clone(),
                 record.mapq(),
                 1,
                 record.seq().len() as u64,
                 left as u64,
+                my_strand,
             );
             // process the main CIGAR
 
@@ -309,11 +320,11 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
                         right += *n;
                     }
                     Cigar::RefSkip(n) => {
-                        isoform.add_segment(
+                        single_read.add_segment(
                             chrom.clone(),
                             left as u64,
                             right as u64,
-                            &strand,
+                            &my_strand,
                             false,
                         );
                         left = right + n;
@@ -324,9 +335,9 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
             });
             // handle the last segment in main CIGAR
             // record.tname()
-            isoform.add_segment(chrom.clone(), left as u64, right as u64, &strand, false);
+            single_read.add_segment(chrom.clone(), left as u64, right as u64, &my_strand, false);
             // update ref span
-            isoform.update_right(right as u64);
+            single_read.update_right(right as u64);
             // process the supplementary alignment
             match record.aux("SA".as_bytes()) {
                 Err(_) => {}
@@ -355,7 +366,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
                                         right += tmp_num_string.parse::<u64>().unwrap();
                                         tmp_num_string.clear();
                                     } else if c == 'N' {
-                                        isoform.add_supp_segment(
+                                        single_read.add_supp_segment(
                                             chrom2.clone(),
                                             left,
                                             right,
@@ -370,7 +381,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
                                     }
                                     // handle the last segment
                                 });
-                                isoform.add_supp_segment(
+                                single_read.add_supp_segment(
                                     chrom2.clone(),
                                     left,
                                     right,
@@ -386,20 +397,20 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
 
             // add read name to single read
             if cli.rname {
-                isoform.add_info(
+                single_read.add_info(
                     "RN".to_string(),
                     String::from_utf8(record.qname().to_vec()).expect("can not parse read name"),
                 );
             }
 
-            isoform.process();
+            single_read.process();
 
-            match agg_isoform_map.get_mut(&isoform.signature) {
+            match agg_isoform_map.get_mut(&single_read.signature) {
                 Some(agg_isoform) => {
-                    agg_isoform.add_read(isoform);
+                    agg_isoform.add_read(single_read);
                 }
                 None => {
-                    let agg_isoform = AggrRead::new(isoform);
+                    let agg_isoform = AggrRead::new(single_read);
                     agg_isoform_map.insert(agg_isoform.signature, agg_isoform);
                 }
             }
