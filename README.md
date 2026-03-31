@@ -7,6 +7,9 @@ It provides two key capabilities:
 - Population-level transcript quantification and frequency profiling.
 - Isoform diversity exploration, including fusion and splice-junction analysis.
 
+preprint: [https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full](https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full)
+
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
