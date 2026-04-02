@@ -195,21 +195,18 @@ isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 | `trans_id` | Transcript ID |
 | `gene_id` | Gene ID |
 | `confidence` | Confidence score across cohort |
-| `detected(total:fsm:em)` | Detection status for total/FSM/EM |
+| `detected(total:fsm:em)` | Detection status for total/FSM/EM; The detected status column follows the format "Overall detected:FSM detected:EM detected". FSM detected indicates whether the sample has evidence from a full-splice match, and EM detected indicates whether the sample has evidence from EM estimation. Overall detected is set to "yes" if either FSM detected or EM detected is "yes". Entries with "no:no:no" can be excluded to quickly filter for transcripts with detection support.|
 | `min_read` | Minimum read threshold used |
 | `n_pos_samples(total:fsm:em/sample_size)` | Positive sample counts and sample size |
 | `attributes` | Original GTF attributes |
-| `FORMAT` | Per-sample field format |
+| `FORMAT` | Per-sample field format. Current `FORMAT` string: `CPM:COUNT:FSM_CPM:FSM_COUNT:EM_CPM:EM_COUNT:INFO`. Per-sample values include abundance/count components for total, FSM, and EM estimates.|
 | `sample_*` | Per-sample values |
 
-Current `FORMAT` string in output header:
-
-- `CPM:COUNT:FSM_CPM:FSM_COUNT:EM_CPM:EM_COUNT:INFO`
-
-Per-sample values include abundance/count components for total, FSM, and EM estimates.
 
 
 **Please note that CPM values are calculated by normalizing across all input transcript queries, as Isopedia expects the input GTF to represent a complete transcriptome. If you query only a subset of transcripts, the CPM values will not be meaningful.**
+
+
 
 ### Fusion Query and Discovery
 
