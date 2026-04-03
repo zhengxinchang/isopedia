@@ -1183,13 +1183,13 @@ impl TxAbundanceView {
             .map(|(&fsm, em)| fsm + em)
             .collect::<Vec<f32>>();
 
-        let confscore = utils::calc_confidence_f32(
+        let ranking_score = utils::calc_ranking_score_f32(
             &u32_arr,
             dbinfo.get_size(),
             &global_stats.fsm_em_tx_abd_total,
         );
 
-        tableout.write_bytes(confscore.to_string().as_bytes())?;
+        tableout.write_bytes(ranking_score.to_string().as_bytes())?;
         tableout.write_bytes(b"\t")?;
 
         global_stats.update_sample_level_stats(&self, cli);

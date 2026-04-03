@@ -339,12 +339,12 @@ impl TableOutput {
             // dbg!(&sample_total_evidence_vec);
             // dbg!(&sample_name_vec);
 
-            let confidence = crate::ptir::PTIR::get_confidence_value(
+            let ranking_score = crate::ptir::PTIR::get_ranking_score(
                 &acc_sample_evidence_arr,
                 sample_total_evidence_vec.len(),
                 &sample_total_evidence_vec,
             );
-            line.field_vec[7] = format!("{}", confidence); // confidence is at index 7
+            line.field_vec[7] = format!("{}", ranking_score); // ranking score is at index 7
         }
         info!("Finished");
         Ok(())

@@ -212,7 +212,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     out_header.add_column("exon_count")?;
     out_header.add_column("trans_id")?;
     out_header.add_column("gene_id")?;
-    out_header.add_column("confidence")?;
+    out_header.add_column("ranking_score")?;
     out_header.add_column("detected(total:fsm:em)")?;
     out_header.add_column("min_read")?;
     out_header.add_column("n_pos_samples(total:fsm:em/sample_size)")?;
