@@ -89,15 +89,15 @@ pub struct AnnIsoCli {
     pub min_em_abundance: f32,
 
     /// No check TSS and TES
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, hide=true)]
     pub no_check_tss_tes: bool,
 
     /// Maximum allowed degradation bp for TSS
-    #[arg(long, default_value_t = 2000)]
+    #[arg(long, default_value_t = 2000, hide=true)]
     pub tss_degrad_bp: u64,
 
     /// Maximum allowed degradation bp for TES
-    #[arg(long, default_value_t = 8000)]
+    #[arg(long, default_value_t = 8000, hide=true)]
     pub tes_degrad_bp: u64,
 
     #[arg(
