@@ -89,15 +89,15 @@ pub struct AnnIsoCli {
     pub min_em_abundance: f32,
 
     /// No check TSS and TES
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, hide=true)]
     pub no_check_tss_tes: bool,
 
     /// Maximum allowed degradation bp for TSS
-    #[arg(long, default_value_t = 2000)]
+    #[arg(long, default_value_t = 2000, hide=true)]
     pub tss_degrad_bp: u64,
 
     /// Maximum allowed degradation bp for TES
-    #[arg(long, default_value_t = 8000)]
+    #[arg(long, default_value_t = 8000, hide=true)]
     pub tes_degrad_bp: u64,
 
     #[arg(
@@ -212,7 +212,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     out_header.add_column("exon_count")?;
     out_header.add_column("trans_id")?;
     out_header.add_column("gene_id")?;
-    out_header.add_column("confidence")?;
+    out_header.add_column("ranking_score")?;
     out_header.add_column("detected(total:fsm:em)")?;
     out_header.add_column("min_read")?;
     out_header.add_column("n_pos_samples(total:fsm:em/sample_size)")?;

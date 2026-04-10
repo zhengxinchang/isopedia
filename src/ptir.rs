@@ -7,7 +7,8 @@ use crate::{
     dataset_info::DatasetInfo,
     fusion::{FusionAggrReads, FusionSingleRead},
     myio::SampleChip,
-    reads::{AggrRead, Segment, Strand},
+    reads::{AggrRead, Segment},
+    strand::Strand,
     utils::{self, calc_cpm},
 };
 use flate2::bufread::GzEncoder;
@@ -581,13 +582,13 @@ impl PTIR {
         }
     }
 
-    /// Function to get the confidence value of the isoform based on the evidence
-    pub fn get_confidence_value(
+    /// Function to get the ranking score of the isoform based on the evidence
+    pub fn get_ranking_score(
         evidence_arr: &Vec<u32>,
         total_size: usize,
         sample_total_evidence_vec: &Vec<u32>,
     ) -> f64 {
-        utils::calc_confidence(evidence_arr, total_size, sample_total_evidence_vec)
+        utils::calc_ranking_score(evidence_arr, total_size, sample_total_evidence_vec)
     }
 
     /// get partial report for splice junction searching
@@ -838,18 +839,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_confidence_value() {
+    fn test_get_ranking_score() {
         let evidence_arr = vec![999, 0, 0, 0];
         let mut dataset_info = DatasetInfo::new();
         dataset_info.sample_size = evidence_arr.len();
         dataset_info.sample_total_evidence_vec = vec![10000, 20000, 30000, 40000];
 
-        let confidence = PTIR::get_confidence_value(
+        let ranking_score = PTIR::get_ranking_score(
             &evidence_arr,
             dataset_info.get_size(),
             &dataset_info.sample_total_evidence_vec,
         );
 
-        dbg!(confidence);
+        dbg!(ranking_score);
     }
 }

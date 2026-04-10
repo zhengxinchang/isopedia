@@ -1,61 +1,60 @@
 use crate::constants::BUF_SIZE_4M;
 use crate::utils::{self, hash_vec};
-use bio_types::strand::ReqStrand;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Strand {
-    Plus,
-    Minus,
-}
+// #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+// pub enum Strand {
+//     Plus,
+//     Minus,
+// }
 
-impl Display for Strand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Strand::Plus => write!(f, "+"),
-            Strand::Minus => write!(f, "-"),
-        }
-    }
-}
+// impl Display for Strand {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Strand::Plus => write!(f, "+"),
+//             Strand::Minus => write!(f, "-"),
+//         }
+//     }
+// }
 
-impl PartialEq for Strand {
-    fn ne(&self, other: &Self) -> bool {
-        match self {
-            Strand::Plus => match other {
-                Strand::Plus => false,
-                Strand::Minus => true,
-            },
-            Strand::Minus => match other {
-                Strand::Plus => true,
-                Strand::Minus => false,
-            },
-        }
-    }
+// impl PartialEq for Strand {
+//     fn ne(&self, other: &Self) -> bool {
+//         match self {
+//             Strand::Plus => match other {
+//                 Strand::Plus => false,
+//                 Strand::Minus => true,
+//             },
+//             Strand::Minus => match other {
+//                 Strand::Plus => true,
+//                 Strand::Minus => false,
+//             },
+//         }
+//     }
 
-    fn eq(&self, other: &Self) -> bool {
-        core::mem::discriminant(self) == core::mem::discriminant(other)
-    }
-}
+//     fn eq(&self, other: &Self) -> bool {
+//         core::mem::discriminant(self) == core::mem::discriminant(other)
+//     }
+// }
 
-impl Strand {
-    pub fn from_string(s: &str) -> Self {
-        match s {
-            "+" => Strand::Plus,
-            "-" => Strand::Minus,
-            other => panic!("Invalid strand {:?}", other),
-        }
-    }
-    pub fn to_string(&self) -> String {
-        match self {
-            Strand::Plus => "+".to_string(),
-            Strand::Minus => "-".to_string(),
-        }
-    }
-}
+// impl Strand {
+//     pub fn from_string(s: &str) -> Self {
+//         match s {
+//             "+" => Strand::Plus,
+//             "-" => Strand::Minus,
+//             other => panic!("Invalid strand {:?}", other),
+//         }
+//     }
+//     pub fn to_string(&self) -> String {
+//         match self {
+//             Strand::Plus => "+".to_string(),
+//             Strand::Minus => "-".to_string(),
+//         }
+//     }
+// }
+use crate::strand::Strand;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Segment {
@@ -151,7 +150,7 @@ pub struct SingleRead {
 }
 
 impl SingleRead {
-    pub fn new(chrom: String, mapq: u8, supp_raw_read: u32, readlen: u64, start: u64) -> Self {
+    pub fn new(chrom: String, mapq: u8, supp_raw_read: u32, readlen: u64, start: u64,strand: Strand) -> Self {
         Self {
             chrom: chrom,
             seg_size: 0,
@@ -163,7 +162,7 @@ impl SingleRead {
             right: 0,
             pri_seg_size: 0,
             signature: 0,
-            strand: Strand::Plus,
+            strand: strand,
             info: Vec::new(),
         }
     }
@@ -177,16 +176,16 @@ impl SingleRead {
         chrom: String,
         start: u64,
         end: u64,
-        strand: &ReqStrand,
+        strand: &Strand,
         is_supp: bool,
     ) {
-        let strand = match strand {
-            ReqStrand::Forward => Strand::Plus,
-            ReqStrand::Reverse => Strand::Minus,
-        };
+        // let strand = match strand {
+        //     ReqStrand::Forward => Strand::Plus,
+        //     ReqStrand::Reverse => Strand::Minus,
+        // };
 
         self.segment_list
-            .push(Segment::new(chrom, start, end, strand, is_supp));
+            .push(Segment::new(chrom, start, end, *strand, is_supp));
         self.seg_size += 1;
         self.pri_seg_size += 1;
     }

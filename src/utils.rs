@@ -221,7 +221,7 @@ pub fn add_prefix(s: &str, prefix: &Option<&str>) -> String {
     }
 }
 
-pub fn calc_confidence(
+pub fn calc_ranking_score(
     evidence_arr: &Vec<u32>,
     total_size: usize,
     sample_total_evidence_vec: &Vec<u32>,
@@ -252,7 +252,7 @@ pub fn calc_confidence(
 
     // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
 
-    sorted_evidence.sort_unstable_by(|a, b| b.cmp(a)); // sort in descending order
+    sorted_evidence.sort_unstable(); // sort in descending order
                                                        // dbg!(&sorted_evidence);
 
     let mut tmp = 0;
@@ -274,7 +274,7 @@ pub fn calc_confidence(
     }
 }
 
-pub fn calc_confidence_f32(
+pub fn calc_ranking_score_f32(
     evidence_arr: &Vec<f32>,
     total_size: usize,
     sample_total_evidence_vec: &Vec<f32>,
@@ -305,8 +305,8 @@ pub fn calc_confidence_f32(
 
     // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
 
-    sorted_evidence.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)); // sort in descending order
-                                                                                                    // dbg!(&sorted_evidence);
+    // sorted_evidence.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)); // sort in descending order
+    sorted_evidence.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut tmp = 0.0;
     for (i, &e) in sorted_evidence.iter().enumerate() {

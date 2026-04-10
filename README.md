@@ -194,7 +194,7 @@ isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 | `exon_count` | Exon count |
 | `trans_id` | Transcript ID |
 | `gene_id` | Gene ID |
-| `confidence` | Confidence score across cohort |
+| `ranking_score` | Ranking score across cohort |
 | `detected(total:fsm:em)` | Detection status for total/FSM/EM; The detected status column follows the format "Overall detected:FSM detected:EM detected". FSM detected indicates whether the sample has evidence from a full-splice match, and EM detected indicates whether the sample has evidence from EM estimation. Overall detected is set to "yes" if either FSM detected or EM detected is "yes". Entries with "no:no:no" can be excluded to quickly filter for transcripts with detection support.|
 | `min_read` | Minimum read threshold used |
 | `n_pos_samples(total:fsm:em/sample_size)` | Positive sample counts and sample size |
