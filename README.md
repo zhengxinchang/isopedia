@@ -35,8 +35,9 @@ Isopedia has two binaries:
 - `isopedia-tools`: helper utilities
 
 ```bash
-# install isopedia from conda
-conda install -c bioconda isopedia
+# download the latest release from GitHub
+curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia-v1.6.6-linux-x86_64/isopedia
 
 # clone the repo and enter toy example directory
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
@@ -363,19 +364,18 @@ Core options:
 
 ## How to Install Isopedia
 
-We offer three ways to install isopedia:
+We offer two ways to install isopedia:
 
-### 1. Install from conda (for most of the users)
+### 1. Download latest release (recommended)
+
+Download the pre-built binary from the [GitHub Releases page](https://github.com/zhengxinchang/isopedia/releases/latest):
 
 ```bash
-conda install -c bioconda isopedia
+curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia-v1.6.6-linux-x86_64/isopedia
 ```
 
-### 2. Latest release (for users who don't have conda)
-
-- https://github.com/zhengxinchang/isopedia/releases
-
-### 3. Build from source (for users want to build from source)
+### 2. Build from source (for users want to build from source)
 
 Rust and Cargo are required.
 
