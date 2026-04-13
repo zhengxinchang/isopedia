@@ -277,6 +277,15 @@ python script/isopedia-splice-viz.py \
   `dist_to_matched_sj`, `n_exons`, `start_pos_left`, `start_pos_right`,
   `end_pos_left`, `end_pos_right`, `splice_junctions`, then per-sample values.
 
+Additional explaination:
+```
+start_pos_left: the smallest observed start position among all reads supporting this isoform
+start_pos_right: the largest observed start position among all reads supporting this isoform
+end_pos_left: the smallest observed end position among all reads supporting this isoform
+end_pos_right: the largest observed end position among all reads supporting this isoform
+```
+
+
 `splice` per-sample `FORMAT`:
 
 - `COUNT:CPM:START|END|STRAND`

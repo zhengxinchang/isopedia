@@ -35,7 +35,7 @@ pub enum ToolsCommands {
 
     #[allow(non_camel_case_types)]
     #[command(about = "Merge replicates file from isopedia profile")]
-    profile(MergeArgs),
+    merge(MergeArgs),
 
     #[allow(non_camel_case_types)]
     #[command(about = "Split a large manifest file into smaller shards")]
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
                 view_chroms(&view_args);
             }
         }
-        ToolsCommands::profile(merge_args) => {
+        ToolsCommands::merge(merge_args) => {
             if !merge_args.validate() {
                 std::process::exit(1);
             }
