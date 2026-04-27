@@ -55,7 +55,7 @@ impl GlobalStats {
             });
     }
     pub fn get_fsm_tx_by_sample_idx(&self, idx: usize) -> usize {
-        self.sample_posi_tx_count_fsm_em[idx]
+        self.sample_posi_tx_count_fsm[idx]
     }
     pub fn get_em_tx_by_sample_idx(&self, idx: usize) -> usize {
         self.sample_posi_tx_count_em[idx]
