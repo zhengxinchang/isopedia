@@ -16,7 +16,7 @@ use crate::{
 };
 use anyhow::Result;
 use clap::Parser;
-use log::{error, info};
+use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 
@@ -89,15 +89,15 @@ pub struct AnnIsoCli {
     pub min_em_abundance: f32,
 
     /// No check TSS and TES
-    #[arg(long, default_value_t = false, hide=true)]
+    #[arg(long, default_value_t = false, hide = true)]
     pub no_check_tss_tes: bool,
 
     /// Maximum allowed degradation bp for TSS
-    #[arg(long, default_value_t = 2000, hide=true)]
+    #[arg(long, default_value_t = 2000, hide = true)]
     pub tss_degrad_bp: u64,
 
     /// Maximum allowed degradation bp for TES
-    #[arg(long, default_value_t = 8000, hide=true)]
+    #[arg(long, default_value_t = 8000, hide = true)]
     pub tes_degrad_bp: u64,
 
     #[arg(
@@ -187,6 +187,29 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     let mut gtf = TranscriptChunker::new(gtfreader);
 
     let gtf_by_chrom = gtf.get_all_transcripts_by_chrom();
+
+    let missing_chroms: Vec<&String> = gtf_by_chrom
+        .iter()
+        .map(|(chrom, _)| chrom)
+        .filter(|chrom| forest.chrom_mapping.get_chrom_idx(chrom).is_none())
+        .collect();
+
+    if !missing_chroms.is_empty() {
+        warn!(
+            "The following query chromosomes are not present in the index and will return no matches: {}",
+            missing_chroms
+                .iter()
+                .map(|chrom| chrom.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
+        if missing_chroms.len() == gtf_by_chrom.len() {
+            warn!(
+                "None of the query chromosomes are present in the index; all annotation rates will be 0."
+            );
+        }
+    }
 
     info!(
         "Loaded {} transcripts from gtf file",
@@ -334,9 +357,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
             sample_name, fsm_count, fsm_pct, em_count, em_pct, fsm_em_count, fsm_em_pct
         );
     }
-    info!(
-        "Save output to file {:?}", tableout.get_out_path().unwrap()
-    );
+    info!("Save output to file {:?}", tableout.get_out_path().unwrap());
 
     info!("Finished!");
     Ok(())
