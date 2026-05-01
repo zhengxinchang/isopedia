@@ -145,6 +145,14 @@ impl ProfileStats {
 }
 
 impl ProfileCli {
+    fn is_cram_input(&self) -> bool {
+        self.bam
+            .as_ref()
+            .and_then(|path| path.extension().and_then(|ext| ext.to_str()))
+            .map(|ext| ext.eq_ignore_ascii_case("cram"))
+            .unwrap_or(false)
+    }
+
     pub fn validate(&self) {
         let mut is_ok = true;
 
@@ -181,6 +189,11 @@ impl ProfileCli {
             let bam_path = self.bam.as_ref().unwrap();
             if !bam_path.exists() {
                 error!("--bam: input file {} does not exist", bam_path.display());
+                is_ok = false;
+            }
+
+            if self.is_cram_input() && self.reference.is_none() {
+                error!("--reference must be provided for CRAM input: {}", bam_path.display());
                 is_ok = false;
             }
 
@@ -243,7 +256,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
         let bam_path = &cli.bam.as_ref().unwrap();
         let mut bam_reader = bam::Reader::from_path(bam_path).expect("Failed to open BAM file");
 
-        if (&bam_path.ends_with(".cram")) & (&cli.reference.is_some()) {
+        if cli.is_cram_input() {
             bam_reader
                 .set_reference(
                     cli.reference
@@ -451,6 +464,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
             chrom_set.insert(rec.chrom.clone());
 
             total_count += 1;
+            n_record += 1;
             if total_count % batch_size == 0 {
                 info!(
                     "Processing {} records",
