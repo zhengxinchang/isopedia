@@ -8,6 +8,7 @@ use rust_htslib::bam::{
     Read, Record,
 };
 use rustc_hash::FxHashMap;
+use std::fs;
 use std::path::PathBuf;
 
 use crate::{
@@ -20,64 +21,6 @@ use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
 use serde::{ Serialize};
 use crate::strand::Strand;
-// use std::fmt::Display;
-
-// #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-// pub enum Strand {
-//     Plus,
-//     Minus,
-// }
-
-// impl Display for Strand {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Strand::Plus => write!(f, "+"),
-//             Strand::Minus => write!(f, "-"),
-//         }
-//     }
-// }
-
-// impl Strand {
-//     pub fn from_string(s: &str) -> Self {
-//         match s {
-//             "+" => Strand::Plus,
-//             "-" => Strand::Minus,
-//             other => panic!("Invalid strand {:?}", other),
-//         }
-//     }
-
-//     #[allow(unused)]
-//     pub fn from_num_string(s: &str) -> Self {
-//         match s {
-//             "0" => Strand::Plus,
-//             "1" => Strand::Minus,
-//             other => panic!("Invalid strand {:?}", other),
-//         }
-//     }
-
-//     #[allow(unused)]
-//     pub fn from_u8(n: u8) -> Self {
-//         match n {
-//             0 => Strand::Plus,
-//             1 => Strand::Minus,
-//             other => panic!("Invalid strand {:?}", other),
-//         }
-//     }
-
-//     pub fn to_string(&self) -> String {
-//         match self {
-//             Strand::Plus => "+".to_string(),
-//             Strand::Minus => "-".to_string(),
-//         }
-//     }
-
-//     pub fn from_bam_strand(s: ReqStrand) -> Self {
-//         match s {
-//             ReqStrand::Forward => Strand::Plus,
-//             ReqStrand::Reverse => Strand::Minus,
-//         }
-//     }
-// }
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia profile")]
@@ -98,7 +41,7 @@ pub struct ProfileCli {
     pub bam: Option<PathBuf>,
 
     /// Input file in GTF format
-    #[arg(short = 'g', long = "gtf")]
+    #[arg(short = 'g', long = "gtf", hide=true)]
     pub gtf: Option<PathBuf>,
 
     /// Reference file for CRAMs. Must provide for CRAM format input
@@ -122,16 +65,83 @@ pub struct ProfileCli {
     pub rname: bool,
 
     /// Include transcript IDs in the output, only for GTF input
-    #[arg(long = "tid", default_value_t = false)]
+    #[arg(long = "tid", default_value_t = false, hide=true)]
     pub tid: bool,
 
     /// Include gene IDs in the output, only for GTF input
-    #[arg(long = "gid", default_value_t = false)]
+    #[arg(long = "gid", default_value_t = false, hide=true)]
     pub gid: bool,
+
+    /// Output alignment stats with the name of output.stats.txt
+    #[arg(long = "stats", default_value_t = false)]
+    pub stats: bool,
 
     /// Verbose mode
     #[arg(long, default_value_t = false)]
     pub verbose: bool,
+
+}
+
+pub struct ProfileStats {
+    mapq: [u32; 62],
+}
+
+impl ProfileStats {
+    pub fn new() -> Self {
+        ProfileStats { mapq: [0u32; 62] }
+    }
+
+    pub fn add_mapq(&mut self, mapq: u8) {
+        let mapq_idx = usize::min(mapq as usize, 61);
+        self.mapq[mapq_idx] += 1;
+    }
+
+    pub fn get_stats(&self) -> String {
+        let mut report = "MAPQ Hist:\n".to_string();
+        let total_count: u32 = self.mapq.iter().sum();
+
+        report.push_str(&format!(
+            "Total alignments counted: {}\n",
+            total_count.to_formatted_string(&Locale::en)
+        ));
+
+        if total_count == 0 {
+            report.push_str("No alignments available for MAPQ statistics.\n");
+            return report;
+        }
+
+        let max_count = *self.mapq.iter().max().unwrap_or(&0);
+        let max_bar_width = 50usize;
+
+        for (idx, count) in self.mapq.iter().enumerate() {
+            if *count == 0 {
+                continue;
+            }
+
+            let pct = (*count as f64) * 100.0 / (total_count as f64);
+            let bar_len = if max_count > 0 {
+                ((*count as f64) / (max_count as f64) * (max_bar_width as f64)).round() as usize
+            } else {
+                0
+            };
+            let bar = "*".repeat(bar_len.max(1));
+            let mapq_label = if idx == 61 {
+                ">60".to_string()
+            } else {
+                idx.to_string()
+            };
+
+            report.push_str(&format!(
+                "{:>4}: {:>12} ({:>6.2}%) {}\n",
+                mapq_label,
+                count.to_formatted_string(&Locale::en),
+                pct,
+                bar
+            ));
+        }
+
+        report
+    }
 }
 
 impl ProfileCli {
@@ -213,12 +223,15 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
 
     let mut chrom_set: IndexSet<String> = IndexSet::new();
     let mut agg_isoform_map: FxHashMap<u64, AggrRead> = FxHashMap::default();
+    let mut profile_stats = ProfileStats::new();
 
     let mut n_record = 0u32;
     // let mut batches = 0;
     let mut total_count = 0;
     let batch_size = 1000000; // 1 million records per batch
-    let mut skipped_records = 0;
+    let mut skipped_unmapped = 0;
+    let mut skipped_secondary = 0;
+    let mut skipped_low_mapq = 0;
 
     let mut mywriter = MyGzWriter::new(&cli.output).expect(&format!(
         "Can not create output file {} .",
@@ -263,19 +276,23 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
             }
 
             if record.is_unmapped() {
-                skipped_records += 1;
+                skipped_unmapped += 1;
                 continue;
             }
 
             if record.is_secondary() {
                 if !cli.use_secondary {
-                    skipped_records += 1;
+                    skipped_secondary += 1;
                     continue;
                 }
             }
 
+            if cli.stats {
+                profile_stats.add_mapq(record.mapq());
+            }
+
             if record.mapq() < cli.mapq {
-                skipped_records += 1;
+                skipped_low_mapq += 1;
                 continue;
             }
 
@@ -503,11 +520,41 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
         n_record.to_formatted_string(&Locale::en)
     );
     // info!("Total records : {}", n_record);
+    let skipped_records = skipped_unmapped + skipped_secondary + skipped_low_mapq;
     info!(
-        "Total records skipped: {}",
+        "Filtered records summary: unmapped={}, low_mapq(< {})={}, secondary(disabled by --use-secondary)={}",
+        skipped_unmapped.to_formatted_string(&Locale::en),
+        cli.mapq,
+        skipped_low_mapq.to_formatted_string(&Locale::en),
+        skipped_secondary.to_formatted_string(&Locale::en)
+    );
+    info!(
+        "Total records filtered out: {}",
         skipped_records.to_formatted_string(&Locale::en)
     );
-    info!("The skipped records are due to unmapped, low mapping quality(--mapq), or secondary alignments(--use-secondary).");
+
+    if cli.stats {
+        let stats_path = cli.output.with_file_name(format!(
+            "{}.stats.txt",
+            cli.output
+                .file_name()
+                .expect("output file name is missing")
+                .to_string_lossy()
+        ));
+        let mut stats_report = profile_stats.get_stats();
+        stats_report.push('\n');
+        stats_report.push_str(&format!(
+            "Filter summary:\nunmapped: {}\nlow_mapq(< {}): {}\nsecondary(disabled by --use-secondary): {}\ntotal_filtered: {}\n",
+            skipped_unmapped.to_formatted_string(&Locale::en),
+            cli.mapq,
+            skipped_low_mapq.to_formatted_string(&Locale::en),
+            skipped_secondary.to_formatted_string(&Locale::en),
+            skipped_records.to_formatted_string(&Locale::en)
+        ));
+        fs::write(&stats_path, stats_report)?;
+        info!("Alignment stats written to {}", stats_path.display());
+    }
+
     info!("Finished");
     Ok(())
 }
