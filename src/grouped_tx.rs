@@ -30,10 +30,7 @@ pub struct ChromGroupedTxManager {
     sample_size: usize,
 }
 
-
-
 impl ChromGroupedTxManager {
-    
     pub fn new(chrom: &str, sample_size: usize) -> Self {
         ChromGroupedTxManager {
             chrom: chrom.to_string(),
@@ -185,7 +182,7 @@ impl ChromGroupedTxManager {
             for grouped_tx in chunk.iter_mut() {
                 for txbd in grouped_tx.tx_abundances.iter() {
                     global_stats.update_fsm_tx_abd_total(&txbd.fsm_abundance);
-                    global_stats.update_em_tx_abd_total(&txbd.abundance_cur);
+                    global_stats.update_em_tx_abd_total(&txbd.abundance_cur, cli.min_em_abundance);
                 }
                 tmp_tx_manager.dump_grouped_tx(grouped_tx);
             }
@@ -1121,13 +1118,21 @@ impl TxAbundanceView {
         })
     }
 
-    /// count number of samples with (fsm_abundance + em_abundance) >= min_read
-    /// this is the overall threadshold for both em and fsm
-    pub fn get_positive_samples_fsm_em(&self, min_read: f32) -> usize {
+    pub fn effective_em_abundance(&self, sample_idx: usize, min_em_abundance: f32) -> f32 {
+        let em = self.em_abundance[sample_idx];
+        if em >= min_em_abundance {
+            em
+        } else {
+            0.0
+        }
+    }
+
+    /// Count samples positive by either FSM or reported EM abundance.
+    pub fn get_positive_samples_fsm_em(&self, min_read: f32, min_em_abundance: f32) -> usize {
         let mut count = 0;
-        for (abd1, abd2) in self.em_abundance.iter().zip(&self.fsm_abundance) {
-            let total = abd1 + abd2;
-            if total >= min_read {
+        for (sid, fsm) in self.fsm_abundance.iter().enumerate() {
+            let em = self.effective_em_abundance(sid, min_em_abundance);
+            if *fsm >= min_read || em >= min_read {
                 count += 1;
             }
         }
@@ -1144,10 +1149,10 @@ impl TxAbundanceView {
         count
     }
 
-    pub fn get_positive_samples_em_only(&self, min_read: f32) -> usize {
+    pub fn get_positive_samples_em_only(&self, min_read: f32, min_em_abundance: f32) -> usize {
         let mut count = 0;
-        for abd in &self.em_abundance {
-            if *abd >= min_read {
+        for sid in 0..self.em_abundance.len() {
+            if self.effective_em_abundance(sid, min_em_abundance) >= min_read {
                 count += 1;
             }
         }
@@ -1180,7 +1185,8 @@ impl TxAbundanceView {
             .fsm_abundance
             .iter()
             .zip(&self.em_abundance)
-            .map(|(&fsm, em)| fsm + em)
+            .enumerate()
+            .map(|(sid, (&fsm, _))| fsm + self.effective_em_abundance(sid, cli.min_em_abundance))
             .collect::<Vec<f32>>();
 
         let ranking_score = utils::calc_ranking_score_f32(
@@ -1194,9 +1200,11 @@ impl TxAbundanceView {
 
         global_stats.update_sample_level_stats(&self, cli);
 
-        let positive_samples_all = self.get_positive_samples_fsm_em(cli.min_read as f32);
+        let positive_samples_all =
+            self.get_positive_samples_fsm_em(cli.min_read as f32, cli.min_em_abundance);
         let positive_samples_fsm = self.get_positive_samples_fsm_only(cli.min_read as f32);
-        let positive_samples_em = self.get_positive_samples_em_only(cli.min_read as f32);
+        let positive_samples_em =
+            self.get_positive_samples_em_only(cli.min_read as f32, cli.min_em_abundance);
 
         if positive_samples_all != 0 {
             tableout.write_bytes(b"yes")?;
@@ -1236,10 +1244,7 @@ impl TxAbundanceView {
         tableout.write_format_str()?;
         for sid in 0..dbinfo.get_size() {
             let fsm = self.fsm_abundance[sid];
-            let em = match self.em_abundance[sid] >= cli.min_em_abundance {
-                true => self.em_abundance[sid],
-                false => 0.0,
-            };
+            let em = self.effective_em_abundance(sid, cli.min_em_abundance);
 
             let total_abd = fsm + em;
             let total_cov = global_stats.fsm_em_tx_abd_total[sid];
@@ -1299,7 +1304,6 @@ pub struct MSJC {
     is_mono_exon_merged: bool,
     mono_exon_total_length: u64,
     mono_exon_merged_cnt: u64,
-
     // // 用于 mono-exon merge 加速: sid -> index in nonzero_sample_indices
     // 长度为 sample_size, 值为 u32::MAX 表示不存在
     // sid_to_pos: Vec<u32>,
@@ -1351,7 +1355,6 @@ impl MSJC {
     }
 
     pub fn add_mono_exon_msjc(&mut self, msjc: &MSJC) {
-
         for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
             match self.nonzero_sample_indices.binary_search(&sid) {
                 Ok(pos) => {
@@ -1981,5 +1984,43 @@ impl GetMemSize for ChromGroupedTxManager {
         }
         // + std::mem::size_of_val(&self._position_to_group_idx);
         size
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tx_view(fsm_abundance: Vec<f32>, em_abundance: Vec<f32>) -> TxAbundanceView {
+        TxAbundanceView {
+            _orig_idx: 0,
+            orig_tx_id: Vec::new(),
+            orig_gene_id: Vec::new(),
+            orig_tx_len: 0,
+            orig_n_exon: 0,
+            orig_chrom: Vec::new(),
+            orig_start: 0,
+            orig_end: 0,
+            orig_attrs: Vec::new(),
+            fsm_abundance,
+            em_abundance,
+        }
+    }
+
+    #[test]
+    fn positive_samples_use_or_not_fsm_plus_em_sum() {
+        let txview = tx_view(vec![1.0, 2.0, 0.0], vec![1.0, 0.0, 2.0]);
+
+        assert_eq!(txview.get_positive_samples_fsm_em(2.0, 0.0), 2);
+        assert_eq!(txview.get_positive_samples_fsm_only(2.0), 1);
+        assert_eq!(txview.get_positive_samples_em_only(2.0, 0.0), 1);
+    }
+
+    #[test]
+    fn positive_samples_ignore_unreported_em_abundance() {
+        let txview = tx_view(vec![0.0, 0.0], vec![1.5, 2.0]);
+
+        assert_eq!(txview.get_positive_samples_em_only(1.0, 2.0), 1);
+        assert_eq!(txview.get_positive_samples_fsm_em(1.0, 2.0), 1);
     }
 }

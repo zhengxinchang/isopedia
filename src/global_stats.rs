@@ -28,10 +28,15 @@ impl GlobalStats {
         }
     }
 
-    pub fn update_em_tx_abd_total(&mut self, em_vec: &Vec<f32>) {
+    pub fn update_em_tx_abd_total(&mut self, em_vec: &Vec<f32>, min_em_abundance: f32) {
         for (i, count) in em_vec.iter().enumerate() {
-            self.em_tx_abd_total[i] += *count;
-            self.fsm_em_tx_abd_total[i] += *count;
+            let count = if *count >= min_em_abundance {
+                *count
+            } else {
+                0.0
+            };
+            self.em_tx_abd_total[i] += count;
+            self.fsm_em_tx_abd_total[i] += count;
         }
     }
 
@@ -41,15 +46,16 @@ impl GlobalStats {
             .iter()
             .enumerate()
             .for_each(|(i, abd)| {
+                let em_abd = txview.effective_em_abundance(i, cli.min_em_abundance);
                 if *abd >= cli.min_read as f32 {
                     self.sample_posi_tx_count_fsm[i] += 1;
                 }
 
-                if txview.em_abundance[i] >= cli.min_read as f32 {
+                if em_abd >= cli.min_read as f32 {
                     self.sample_posi_tx_count_em[i] += 1;
                 }
 
-                if *abd >= cli.min_read as f32 || txview.em_abundance[i] >= cli.min_read as f32 {
+                if *abd >= cli.min_read as f32 || em_abd >= cli.min_read as f32 {
                     self.sample_posi_tx_count_fsm_em[i] += 1;
                 }
             });
@@ -62,5 +68,20 @@ impl GlobalStats {
     }
     pub fn get_fsm_em_tx_by_sample_idx(&self, idx: usize) -> usize {
         self.sample_posi_tx_count_fsm_em[idx]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn em_totals_ignore_unreported_abundance() {
+        let mut stats = GlobalStats::new(3);
+
+        stats.update_em_tx_abd_total(&vec![0.5, 1.0, 1.5], 1.0);
+
+        assert_eq!(stats.em_tx_abd_total, vec![0.0, 1.0, 1.5]);
+        assert_eq!(stats.fsm_em_tx_abd_total, vec![0.0, 1.0, 1.5]);
     }
 }
