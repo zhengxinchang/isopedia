@@ -193,11 +193,11 @@ impl TableOutput {
 
         Ok(())
     }
-    
+
     pub fn get_out_path(&self) -> Option<String> {
         self.writer.as_ref().map(|w| w.path().to_string())
     }
-    
+
     fn load_elements<P: AsRef<Path>>(path: P) -> Result<(Header, DBInfos, Meta, Vec<Line>, String)>
     where
         Self: Sized,

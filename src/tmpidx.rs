@@ -169,7 +169,6 @@ impl TmpIndex {
             .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
 
-
         let data_mmaps = merged_data_file_list
             .iter()
             .map(|path| {

@@ -253,7 +253,7 @@ pub fn calc_ranking_score(
     // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
 
     sorted_evidence.sort_unstable(); // sort in descending order
-                                                       // dbg!(&sorted_evidence);
+                                     // dbg!(&sorted_evidence);
 
     let mut tmp = 0;
     for (i, &e) in sorted_evidence.iter().enumerate() {
