@@ -2,6 +2,8 @@ use indexmap::IndexMap;
 use log::info;
 use serde::{Deserialize, Serialize};
 
+use crate::utils::trim_chr_prefix_to_upper;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ChromMapping {
     pub name2id: IndexMap<String, u16>,
@@ -17,12 +19,14 @@ impl ChromMapping {
     }
 
     pub fn add_chrom(&mut self, chrom: String) -> u16 {
-        if let Some(idx) = self.name2id.get(&chrom) {
+        let normalized = trim_chr_prefix_to_upper(&chrom);
+
+        if let Some(idx) = self.name2id.get(&normalized) {
             *idx
         } else {
             let idx = self.id2name.len() as u16;
-            self.name2id.insert(chrom.clone(), idx);
-            self.id2name.insert(idx, chrom);
+            self.name2id.insert(normalized.clone(), idx);
+            self.id2name.insert(idx, normalized);
             idx
         }
     }
@@ -32,7 +36,22 @@ impl ChromMapping {
     }
 
     pub fn get_chrom_idx(&self, name: &str) -> Option<u16> {
-        self.name2id.get(name).map(|idx| *idx)
+        if let Some(idx) = self.name2id.get(name) {
+            return Some(*idx);
+        }
+
+        let normalized = trim_chr_prefix_to_upper(name);
+        if let Some(idx) = self.name2id.get(&normalized) {
+            return Some(*idx);
+        }
+
+        self.name2id.iter().find_map(|(stored_name, idx)| {
+            if trim_chr_prefix_to_upper(stored_name) == normalized {
+                Some(*idx)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn get_size(&self) -> usize {
@@ -72,6 +91,22 @@ impl ChromMapping {
 
     pub fn decode(bytes: &[u8]) -> ChromMapping {
         bincode::deserialize(bytes).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ChromMapping;
+
+    #[test]
+    fn chrom_mapping_normalizes_on_insert_and_lookup() {
+        let mut mapping = ChromMapping::new();
+        let idx = mapping.add_chrom("Chr1".to_string());
+
+        assert_eq!(mapping.get_chrom_idx("Chr1"), Some(idx));
+        assert_eq!(mapping.get_chrom_idx("chr1"), Some(idx));
+        assert_eq!(mapping.get_chrom_idx("1"), Some(idx));
+        assert_eq!(mapping.get_chrom_name(idx), "1");
     }
 }
 
