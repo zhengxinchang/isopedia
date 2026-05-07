@@ -9,6 +9,7 @@ use crate::tmpidx::TmpIdxChunker;
 use crate::tmpidx::TmpIndex;
 use crate::utils::intersect_sorted;
 use crate::utils::GetMemSize;
+// Used only for in-memory set operations; on-disk B+tree data uses explicit byte encoding.
 use ahash::HashSet;
 // use ahash::HashSetExt;
 use anyhow::Result;
@@ -785,7 +786,9 @@ impl BPTree {
                     return vec![]; // no such node
                 }
 
-                n = cache.get_node_by_id(child_id).expect("Can not get next node");
+                n = cache
+                    .get_node_by_id(child_id)
+                    .expect("Can not get next node");
             }
         };
 
@@ -842,7 +845,9 @@ impl BPTree {
                     return vec![]; // no such node
                 }
 
-                n = cache.get_node_by_id(child_id).expect("Can not get next node");
+                n = cache
+                    .get_node_by_id(child_id)
+                    .expect("Can not get next node");
             }
         };
 

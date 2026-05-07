@@ -5,6 +5,7 @@
 use crate::cmd::isoform::AnnIsoCli;
 use crate::isoformarchive::ArchiveCache;
 use crate::tmpidx::MergedIsoformOffsetPtr;
+// Used only for in-memory dedup during assembly; never persisted.
 use ahash::HashSet;
 pub struct Assembler {
     pub matrix: Vec<u32>, // flattened matrix

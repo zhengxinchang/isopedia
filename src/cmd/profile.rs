@@ -11,6 +11,7 @@ use rustc_hash::FxHashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::strand::Strand;
 use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
     myio::MyGzWriter,
@@ -19,8 +20,7 @@ use crate::{
 };
 use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
-use serde::{ Serialize};
-use crate::strand::Strand;
+use serde::Serialize;
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia profile")]
@@ -41,7 +41,7 @@ pub struct ProfileCli {
     pub bam: Option<PathBuf>,
 
     /// Input file in GTF format
-    #[arg(short = 'g', long = "gtf", hide=true)]
+    #[arg(short = 'g', long = "gtf", hide = true)]
     pub gtf: Option<PathBuf>,
 
     /// Reference file for CRAMs. Must provide for CRAM format input
@@ -65,11 +65,11 @@ pub struct ProfileCli {
     pub rname: bool,
 
     /// Include transcript IDs in the output, only for GTF input
-    #[arg(long = "tid", default_value_t = false, hide=true)]
+    #[arg(long = "tid", default_value_t = false, hide = true)]
     pub tid: bool,
 
     /// Include gene IDs in the output, only for GTF input
-    #[arg(long = "gid", default_value_t = false, hide=true)]
+    #[arg(long = "gid", default_value_t = false, hide = true)]
     pub gid: bool,
 
     /// Output alignment stats with the name of output.stats.txt
@@ -79,7 +79,6 @@ pub struct ProfileCli {
     /// Verbose mode
     #[arg(long, default_value_t = false)]
     pub verbose: bool,
-
 }
 
 pub struct ProfileStats {
@@ -193,7 +192,10 @@ impl ProfileCli {
             }
 
             if self.is_cram_input() && self.reference.is_none() {
-                error!("--reference must be provided for CRAM input: {}", bam_path.display());
+                error!(
+                    "--reference must be provided for CRAM input: {}",
+                    bam_path.display()
+                );
                 is_ok = false;
             }
 

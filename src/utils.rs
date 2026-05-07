@@ -1,10 +1,13 @@
-use ahash::RandomState;
+// use ahash::RandomState;
 use anyhow::Result;
 use log::error;
 use serde::Serialize;
 use std::fs;
+use std::hash::BuildHasher;
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::{fs::File, hash::Hash, path::Path};
+use xxhash_rust::xxh3::Xxh3Builder;
 
 use crate::constants::*;
 
@@ -43,10 +46,16 @@ pub fn pad_chrom_prefix(chrom: &str) -> String {
     }
 }
 
+static HASHER: LazyLock<Xxh3Builder> = LazyLock::new(|| Xxh3Builder::new().with_seed(9336));
+
 pub fn hash_vec<T: Hash>(value: &T) -> u64 {
-    let hasher_builder = RandomState::with_seeds(9336, 5920, 6784, 4496);
-    hasher_builder.hash_one(value)
+    HASHER.hash_one(value)
 }
+
+// pub fn hash_vec<T: Hash>(value: &T) -> u64 {
+//     let hasher_builder = RandomState::with_seeds(9336, 5920, 6784, 4496);
+//     hasher_builder.hash_one(value)
+// }
 
 pub fn is_overlap(a: &Vec<f64>, b: &Vec<f64>) -> bool {
     if a.is_empty() || b.is_empty() {
@@ -253,7 +262,7 @@ pub fn calc_ranking_score(
     // let avg_reads = evidence_arr.iter().sum::<u32>() as f64 / (n as f64);
 
     sorted_evidence.sort_unstable(); // sort in descending order
-                                                       // dbg!(&sorted_evidence);
+                                     // dbg!(&sorted_evidence);
 
     let mut tmp = 0;
     for (i, &e) in sorted_evidence.iter().enumerate() {

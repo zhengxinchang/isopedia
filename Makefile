@@ -5,7 +5,7 @@ VERSION := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.package
 
 
 build:
-	cargo build --release
+	cargo fmt &&cargo build --release
 	
 
 build-musl:

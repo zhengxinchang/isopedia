@@ -1,5 +1,6 @@
 use crate::{reads::SingleRead, utils::trim_chr_prefix_to_upper};
 // use bio_types::strand::ReqStrand;
+use crate::strand::Strand as MyStrand;
 use core::panic;
 use flate2::read::MultiGzDecoder;
 use noodles_gtf::{self as GTF, io::Reader as gtfReader, record::Strand};
@@ -7,7 +8,6 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Read, Seek},
 };
-use crate::strand::Strand as MyStrand;
 // // need pack into a u64
 // pub struct TranscriptMini {
 //     // pub idx: u32, // 27bit range: 0 ~ 134,217,727
@@ -170,7 +170,6 @@ impl Transcript {
     /// Convert Transcript to SingleRead
     /// Used in indexing GTF files instead of parsing reads from BAM files
     pub fn to_single_read(&self) -> SingleRead {
-
         let strand = match self.strand {
             Strand::Forward => MyStrand::Plus,
             Strand::Reverse => MyStrand::Minus,
@@ -184,8 +183,6 @@ impl Transcript {
             self.start,
             strand,
         );
-
-
 
         for exon in &self.exons {
             sr.add_segment(self.chrom.clone(), exon.0, exon.1, &strand, false);

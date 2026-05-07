@@ -1,5 +1,6 @@
 use crate::constants::{BUF_SIZE_4M, BUF_SIZE_64M};
 use crate::constants::{MAGIC, ORDER};
+// Used only for in-memory chunk bookkeeping; tmpidx on-disk records are written explicitly.
 use ahash::HashSet;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -168,7 +169,6 @@ impl TmpIndex {
         let merged_data_file_list = (0..self.chunks)
             .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
-
 
         let data_mmaps = merged_data_file_list
             .iter()

@@ -150,7 +150,14 @@ pub struct SingleRead {
 }
 
 impl SingleRead {
-    pub fn new(chrom: String, mapq: u8, supp_raw_read: u32, readlen: u64, start: u64,strand: Strand) -> Self {
+    pub fn new(
+        chrom: String,
+        mapq: u8,
+        supp_raw_read: u32,
+        readlen: u64,
+        start: u64,
+        strand: Strand,
+    ) -> Self {
         Self {
             chrom: chrom,
             seg_size: 0,

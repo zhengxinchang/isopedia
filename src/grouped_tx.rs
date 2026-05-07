@@ -10,6 +10,7 @@ use crate::{
     tmpidx::PTIROffsetPtr,
     utils::{self, intersect_sorted, GetMemSize},
 };
+// Used only for in-memory grouping/lookup; tmp output is written via explicit encoding.
 use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
@@ -30,10 +31,7 @@ pub struct ChromGroupedTxManager {
     sample_size: usize,
 }
 
-
-
 impl ChromGroupedTxManager {
-    
     pub fn new(chrom: &str, sample_size: usize) -> Self {
         ChromGroupedTxManager {
             chrom: chrom.to_string(),
@@ -1299,7 +1297,6 @@ pub struct MSJC {
     is_mono_exon_merged: bool,
     mono_exon_total_length: u64,
     mono_exon_merged_cnt: u64,
-
     // // 用于 mono-exon merge 加速: sid -> index in nonzero_sample_indices
     // 长度为 sample_size, 值为 u32::MAX 表示不存在
     // sid_to_pos: Vec<u32>,
@@ -1351,7 +1348,6 @@ impl MSJC {
     }
 
     pub fn add_mono_exon_msjc(&mut self, msjc: &MSJC) {
-
         for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
             match self.nonzero_sample_indices.binary_search(&sid) {
                 Ok(pos) => {
