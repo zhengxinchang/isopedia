@@ -179,7 +179,7 @@ Example:
 
 ```bash
 # input GTF must be sorted
-gffread -T -o- origin.gtf | sort -k1,1 -k4,4n | gffread - -o query.sorted.gtf
+gffread -T -o- origin.gtf | sort -k1,1 -k4,4n | gffread -T - -o query.sorted.gtf
 
 isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 ```
