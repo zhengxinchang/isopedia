@@ -70,7 +70,7 @@ t3:build
 	target/release/isopedia index  -i test/HG002_idx/ -m test/HG002.manifest.txt
 
 t4:build
-	/usr/bin/time -v target/release/isopedia isoform -i test/HG002_idx/ -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz --asm
+	/usr/bin/time -v target/release/isopedia isoform -i test/HG002_idx/ -g test/gencode.v47.basic.annotation.gtf -o test/test.output.gz -f 0
 
 t40:build
 	/usr/bin/time -v target/release/isopedia isoform -i test/HG002_idx/ -g test/gencode.v47.basic.annotation.mini.gtf  -o test/test.output.mini.gz --asm
@@ -92,12 +92,12 @@ t43:build
 	 -o test/test.assembled2.output.gz --info
 
 tlarge:build
-	/usr/bin/time -v  target/release/isopedia isoform  -i /hdd1/isopedia_datadownload/isopedia_index \
+	/usr/bin/time -v  target/release/isopedia isoform -f 0 -i /hdd1/isopedia_datadownload/isopedia_index \
 	 -g /ssd1/stix-iso-devspace/isopedia-dev/test/gencode.v49.annotation.gtf \
 	 -o test/test.em.output2.gz 
 
 tlarge1:build
-	/usr/bin/time -v  target/release/isopedia isoform --asm -n 8  -i /hdd1/isopedia_datadownload/isopedia_index -c 10 \
+	/usr/bin/time -v  target/release/isopedia isoform  -i /hdd1/isopedia_datadownload/isopedia_index -f 0 \
 	 -g test/chr1.gtf \
 	 -o test/test.em.output.chr1.gz 
 
