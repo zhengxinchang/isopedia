@@ -301,7 +301,8 @@ Core options:
 - `-i, --idxdir <IDXDIR>`
 - `-g, --gtf <GTF>`
 - `-o, --output <OUTPUT>`
-- `-f, --flank <FLANK>` (default: `10`)
+- `-f, --flank <FLANK>` (default: `0`; multi-exon junction matching tolerance)
+- `-F, --mono-exon-wobble <MONO_EXON_WOBBLE>` (default: `50`; expands the mono-exon candidate search interval by this many bp on each side, and requires both read ends to be within this distance of the annotated ends for FSM)
 - `-m, --min-read <MIN_READ>` (default: `1`)
 - `--info`
 - `-n, --num-threads <NUM_THREADS>` (default: `4`)

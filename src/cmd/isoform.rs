@@ -44,9 +44,13 @@ pub struct AnnIsoCli {
     #[arg(short, long)]
     pub gtf: PathBuf,
 
-    /// Flanking size (in bases) before and after the position
+    /// Maximum deviation (bp) for matching multi-exon splice-junction positions
     #[arg(short, long, default_value_t = 0)]
     pub flank: u64,
+
+    /// Expand mono-exon searches by this many bp on each side; FSM requires both read ends within this distance of the annotated ends
+    #[arg(short = 'F', long, default_value_t = 50)]
+    pub mono_exon_wobble: u64,
 
     /// Minimum number of reads required to define a positive sample
     #[arg(short, long, default_value_t = 1)]

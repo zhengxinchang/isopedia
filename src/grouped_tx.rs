@@ -147,7 +147,7 @@ impl ChromGroupedTxManager {
                     &self.chrom,
                     &mono_queries,
                     &grouped_tx.mono_exonic_tx_indices,
-                    cli.flank,
+                    cli.mono_exon_wobble,
                     cli.cached_nodes,
                     &cli,
                 );
@@ -1445,7 +1445,7 @@ impl MSJC {
             .unwrap()
             .0
             .abs_diff(txabd.orig_start)
-            > cli.flank as u64
+            > cli.mono_exon_wobble
         {
             return false;
         }
@@ -1456,7 +1456,7 @@ impl MSJC {
             .unwrap()
             .1
             .abs_diff(txabd.orig_end)
-            > cli.flank as u64
+            > cli.mono_exon_wobble
         {
             return false;
         }
@@ -2004,6 +2004,51 @@ impl GetMemSize for ChromGroupedTxManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn mono_exon_wobble_controls_fsm_matching() {
+        let mut cli = AnnIsoCli::parse_from([
+            "isopedia isoform",
+            "--idxdir",
+            "index",
+            "--gtf",
+            "query.gtf",
+            "--output",
+            "result.tsv",
+            "--mono-exon-wobble",
+            "50",
+        ]);
+        let tx = Transcript {
+            origin_idx: 0,
+            chrom: "1".to_string(),
+            start: 100,
+            end: 200,
+            splice_junc: vec![(100, 200)],
+            exons: vec![(100, 200)],
+            is_mono_exonic: true,
+            gene_id: "gene".to_string(),
+            tx_id: "tx".to_string(),
+            records: Vec::new(),
+            strand: Strand::Forward,
+        };
+        let txabd = TxAbundance::new(0, 1, &tx, &cli);
+        let mut msjc = MSJC::new_mono_exon_merged(1);
+
+        msjc.splice_junctions_vec = vec![(150, 250)];
+        assert!(msjc.check_mono_exon_fsm(&txabd, &cli));
+        msjc.splice_junctions_vec = vec![(151, 250)];
+        assert!(!msjc.check_mono_exon_fsm(&txabd, &cli));
+        msjc.splice_junctions_vec = vec![(150, 251)];
+        assert!(!msjc.check_mono_exon_fsm(&txabd, &cli));
+
+        cli.mono_exon_wobble = 0;
+        cli.flank = 1000;
+        msjc.splice_junctions_vec = vec![(100, 200)];
+        assert!(msjc.check_mono_exon_fsm(&txabd, &cli));
+        msjc.splice_junctions_vec = vec![(101, 200)];
+        assert!(!msjc.check_mono_exon_fsm(&txabd, &cli));
+    }
 
     #[test]
     fn terminal_wob_bounds_follow_transcript_strand() {
