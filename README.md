@@ -306,7 +306,7 @@ Core options:
 - `--info`
 - `-n, --num-threads <NUM_THREADS>` (default: `4`)
 - EM options: `--em-max-iter`, `--em-conv-min-diff`, `--em-chunk-size`, `--em-effective-len-coef`, `--em-damping-factor`, `--min-em-abundance`
-- TSS/TES options: `--no-check-tss-tes`, `--tss-degrad-bp`, `--tes-degrad-bp`, `--terminal-tolerance-bp`
+- TSS/TES options: `--no-check-tss-tes`, `--tss-wob`, `--tes-wob`. The wobble values are maximum absolute deviations in bp and apply in both directions around the annotated TSS and TES.
 - Cache options: `-c, --cached-nodes`, `--cached-chunk-num`, `--cached-chunk-size-mb`
 - `--output-tmp-shard-counts`
 - `--verbose`

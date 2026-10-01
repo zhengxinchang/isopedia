@@ -45,7 +45,7 @@ pub struct AnnIsoCli {
     pub gtf: PathBuf,
 
     /// Flanking size (in bases) before and after the position
-    #[arg(short, long, default_value_t = 10)]
+    #[arg(short, long, default_value_t = 0)]
     pub flank: u64,
 
     /// Minimum number of reads required to define a positive sample
@@ -89,23 +89,24 @@ pub struct AnnIsoCli {
     pub min_em_abundance: f32,
 
     /// No check TSS and TES
-    #[arg(long, default_value_t = false, hide = true)]
+    #[arg(long, default_value_t = false)]
     pub no_check_tss_tes: bool,
 
-    /// Maximum allowed degradation bp for TSS
-    #[arg(long, default_value_t = 2000, hide = true)]
-    pub tss_degrad_bp: u64,
-
-    /// Maximum allowed degradation bp for TES
-    #[arg(long, default_value_t = 8000, hide = true)]
-    pub tes_degrad_bp: u64,
-
+    /// Maximum absolute deviation between read and annotated TSS positions
     #[arg(
         long,
-        default_value_t = 10,
-        help = "Maximum allowed deviation (bp) beyond annotated TSS and TES.\nIsoforms whose TSS and TES fall outside the annotation but within this tolerance are still classified as FSM."
+        default_value_t = 50,
+        help = "Maximum allowed absolute deviation (bp) between read and annotated TSS positions. The tolerance applies in both directions."
     )]
-    pub terminal_tolerance_bp: u64,
+    pub tss_wob: u64,
+
+    /// Maximum absolute deviation between read and annotated TES positions
+    #[arg(
+        long,
+        default_value_t = 50,
+        help = "Maximum allowed absolute deviation (bp) between read and annotated TES positions. The tolerance applies in both directions."
+    )]
+    pub tes_wob: u64,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]

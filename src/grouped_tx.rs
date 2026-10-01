@@ -682,6 +682,27 @@ pub struct TxAbundance {
 }
 
 impl TxAbundance {
+    fn terminal_wob_bounds(
+        orig_start: u64,
+        orig_end: u64,
+        is_plus_strand: bool,
+        tss_wob: u64,
+        tes_wob: u64,
+    ) -> (u64, u64, u64, u64) {
+        let (start_wob, end_wob) = if is_plus_strand {
+            (tss_wob, tes_wob)
+        } else {
+            (tes_wob, tss_wob)
+        };
+
+        (
+            orig_start.saturating_sub(start_wob),
+            orig_start.saturating_add(start_wob),
+            orig_end.saturating_sub(end_wob),
+            orig_end.saturating_add(end_wob),
+        )
+    }
+
     pub fn new(txid: usize, sample_size: usize, tx: &Transcript, cli: &AnnIsoCli) -> TxAbundance {
         // calclulate pt
         let nsj = tx.splice_junc.len() + cli.em_effective_len_coef; // J + 1
@@ -728,21 +749,13 @@ impl TxAbundance {
         } else {
             // for multisplice junction transcripts, check the compatibility of each read with transcript start and end
 
-            let (start_left, start_right, end_left, end_right) = if self.orig_is_plus_strand {
-                (
-                    self.orig_start.saturating_sub(cli.terminal_tolerance_bp),
-                    self.orig_start + cli.tss_degrad_bp,
-                    self.orig_end.saturating_sub(cli.tes_degrad_bp),
-                    self.orig_end + cli.terminal_tolerance_bp,
-                )
-            } else {
-                (
-                    self.orig_start.saturating_sub(cli.terminal_tolerance_bp),
-                    self.orig_start + cli.tes_degrad_bp,
-                    self.orig_end.saturating_sub(cli.tss_degrad_bp),
-                    self.orig_end + cli.terminal_tolerance_bp,
-                )
-            };
+            let (start_left, start_right, end_left, end_right) = Self::terminal_wob_bounds(
+                self.orig_start,
+                self.orig_end,
+                self.orig_is_plus_strand,
+                cli.tss_wob,
+                cli.tes_wob,
+            );
 
             for sample_idx in 0..self.sample_size {
                 let offset = misoform.sample_offset_arr[sample_idx];
@@ -1991,6 +2004,26 @@ impl GetMemSize for ChromGroupedTxManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminal_wob_bounds_follow_transcript_strand() {
+        assert_eq!(
+            TxAbundance::terminal_wob_bounds(100, 500, true, 20, 80),
+            (80, 120, 420, 580)
+        );
+        assert_eq!(
+            TxAbundance::terminal_wob_bounds(100, 500, false, 20, 80),
+            (20, 180, 480, 520)
+        );
+    }
+
+    #[test]
+    fn terminal_wob_bounds_saturate_at_coordinate_limits() {
+        assert_eq!(
+            TxAbundance::terminal_wob_bounds(10, u64::MAX - 10, true, 20, 20),
+            (0, 30, u64::MAX - 30, u64::MAX)
+        );
+    }
 
     fn tx_view(fsm_abundance: Vec<f32>, em_abundance: Vec<f32>) -> TxAbundanceView {
         TxAbundanceView {
