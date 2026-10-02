@@ -29,3 +29,8 @@ ver_release/
 linux_build/
 downloads/.snakemake/
 .snakemake/
+!/test/
+/test/*
+!/test/benchmark_identification.smk
+test/
+ROADMAP.md

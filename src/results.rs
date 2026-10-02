@@ -1,4 +1,6 @@
+use crate::cmd::isoform::ISOFORM_FORMAT;
 use crate::constants::FORMAT_STR_NAME;
+use crate::grouped_tx::calc_isoform_ranking_score;
 use crate::meta::Meta;
 use crate::myio::MyGzWriter;
 use crate::myio::{DBInfos, GeneralOutputIO, Header, Line, MyGzReader};
@@ -249,8 +251,138 @@ impl TableOutput {
     }
 }
 
+#[cfg(test)]
+mod isoform_merge_tests {
+    use super::*;
+    use crate::myio::SampleChip;
+
+    fn table(sample_name: &str, direct: u64, em: f32) -> TableOutput {
+        let mut header = Header::new();
+        for column in [
+            "chrom",
+            "start",
+            "end",
+            "length",
+            "exon_count",
+            "trans_id",
+            "gene_id",
+            "ranking_score",
+            "detected",
+            "min_read",
+            "n_pos_samples/sample_size",
+            "attributes",
+        ] {
+            header.add_column(column).unwrap();
+        }
+        header.add_sample_name(sample_name).unwrap();
+        let mut db_infos = DBInfos::new();
+        db_infos.add_sample_evidence(sample_name, 100);
+        let line = Line {
+            field_vec: [
+                "chr1", "100", "500", "400", "2", "tx", "gene", "0", "no", "1", "0/1", "attrs",
+            ]
+            .iter()
+            .map(|x| x.to_string())
+            .collect(),
+            format_str: Some(ISOFORM_FORMAT.to_string()),
+            sample_vec: vec![SampleChip {
+                sample_name: None,
+                init_string: vec![
+                    direct.to_string(),
+                    "0".into(),
+                    "0".into(),
+                    "0".into(),
+                    direct.to_string(),
+                    "0".into(),
+                    em.to_string(),
+                    "0".into(),
+                    "0".into(),
+                    "0".into(),
+                    "0".into(),
+                    "0".into(),
+                    "0".into(),
+                ],
+            }],
+        };
+        TableOutput {
+            header,
+            db_infos,
+            meta: Meta::new_empty(vec![sample_name.to_string()]),
+            lines: vec![line],
+            format_str: ISOFORM_FORMAT.to_string(),
+            writer: None,
+        }
+    }
+
+    #[test]
+    fn merge_isoform_uses_direct_support_not_em() {
+        let mut left = table("s1", 1, 0.0);
+        let right = table("s2", 0, 5.0);
+        left.merge_isoform(&right).unwrap();
+        assert_eq!(left.lines[0].field_vec[8], "yes");
+        assert_eq!(left.lines[0].field_vec[10], "1/2");
+        assert_eq!(left.lines[0].sample_vec.len(), 2);
+        assert_eq!(left.lines[0].sample_vec[0].init_string[4], "1");
+        assert_eq!(left.lines[0].sample_vec[1].init_string[5], "0");
+        let score = left.lines[0].field_vec[7].parse::<f64>().unwrap();
+        assert!((score - 2500.0).abs() < 1e-8);
+    }
+
+    #[test]
+    fn merge_isoform_rejects_old_order_or_short_format_before_mutation() {
+        let mut left = table("s1", 1, 0.0);
+        let mut old = table("s2", 1, 0.0);
+        old.format_str = "RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES".to_string();
+        old.lines[0].format_str = Some(old.format_str.clone());
+        old.lines[0].sample_vec[0].init_string.truncate(11);
+        assert!(left.merge_isoform(&old).is_err());
+        assert_eq!(left.lines[0].sample_vec.len(), 1);
+
+        let mut previous_13 = table("s2", 1, 0.0);
+        previous_13.format_str = "RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY".to_string();
+        previous_13.lines[0].format_str = Some(previous_13.format_str.clone());
+        assert!(left.merge_isoform(&previous_13).is_err());
+        assert_eq!(left.lines[0].sample_vec.len(), 1);
+
+        let mut short = table("s2", 1, 0.0);
+        short.lines[0].sample_vec[0].init_string.pop();
+        assert!(left.merge_isoform(&short).is_err());
+        assert_eq!(left.lines[0].sample_vec.len(), 1);
+    }
+
+    #[test]
+    fn merge_isoform_rejects_duplicate_samples_without_mutation() {
+        let mut left = table("s1", 1, 0.0);
+        let right = table("s1", 2, 0.0);
+        assert!(left.merge_isoform(&right).is_err());
+        assert_eq!(left.header.sample_names, vec!["s1"]);
+        assert_eq!(left.db_infos.sample_total_evidence_map.len(), 1);
+        assert_eq!(left.lines[0].sample_vec.len(), 1);
+    }
+
+    #[test]
+    fn new_isoform_format_round_trips_through_table_loader() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("isoform.tsv.gz");
+        table("s1", 2, 1.5).save_to_file(&path).unwrap();
+        let loaded = TableOutput::load(&path).unwrap();
+        assert_eq!(loaded.format_str, ISOFORM_FORMAT);
+        assert_eq!(loaded.format_str.split(':').count(), 13);
+        assert_eq!(loaded.lines[0].sample_vec[0].init_string.len(), 13);
+        assert_eq!(loaded.lines[0].sample_vec[0].init_string[0], "2");
+        assert_eq!(loaded.lines[0].sample_vec[0].init_string[4], "2");
+        assert_eq!(loaded.lines[0].sample_vec[0].init_string[5], "0");
+        assert_eq!(loaded.lines[0].sample_vec[0].init_string[6], "1.5");
+    }
+}
+
 impl TableOutput {
     pub fn merge_isoform(&mut self, other: &Self) -> Result<()> {
+        if self.format_str != ISOFORM_FORMAT || other.format_str != ISOFORM_FORMAT {
+            return Err(anyhow::anyhow!(
+                "Cannot merge isoform tables with old or different FORMAT fields"
+            ));
+        }
         if self.header.columns != other.header.columns {
             return Err(anyhow::anyhow!(
                 "Cannot merge tables with different headers"
@@ -263,88 +395,70 @@ impl TableOutput {
             ));
         }
 
-        self.meta.merge(&other.meta)?;
-        self.header.merge(&other.header)?;
-        self.db_infos.merge(&other.db_infos)?;
-
-        // dbg!(&self.db_infos);
-
-        let (sample_name_vec, sample_total_evidence_vec) = self.db_infos.get_total_evidence_vec();
-        info!(
-            "Merging output tables with {} samples: {:?}",
-            sample_name_vec.len(),
-            sample_name_vec
-        );
-        // dbg!(&sample_total_evidence_vec);
-        for (i, line) in self.lines.iter_mut().enumerate() {
-            let other_line = &other.lines[i];
-
-            //custom merge function for line to handle isoform specific fields
-
-            let mut self_fixed_fields = Vec::new();
-            let mut other_fixed_fields = Vec::new();
-            for j in vec![0, 1, 2, 3, 4, 5, 6, 11] {
-                self_fixed_fields.push(line.field_vec[j].clone());
-                other_fixed_fields.push(other_line.field_vec[j].clone());
+        let mut merged_counts = Vec::with_capacity(self.lines.len());
+        for (i, (line, other_line)) in self.lines.iter().zip(&other.lines).enumerate() {
+            if line.field_vec.len() != 12
+                || other_line.field_vec.len() != 12
+                || line.sample_vec.len() != self.db_infos.sample_total_evidence_map.len()
+                || other_line.sample_vec.len() != other.db_infos.sample_total_evidence_map.len()
+            {
+                return Err(anyhow::anyhow!(
+                    "Invalid isoform fields or sample count at line {}",
+                    i + 1
+                ));
             }
-
-            if self_fixed_fields != other_fixed_fields {
+            if (0..=6)
+                .chain(std::iter::once(11))
+                .any(|j| line.field_vec[j] != other_line.field_vec[j])
+            {
                 return Err(anyhow::anyhow!(
                     "Cannot merge lines with different fixed fields at line {}",
                     i + 1
                 ));
             }
-
             if line.field_vec[9] != other_line.field_vec[9] {
                 return Err(anyhow::anyhow!(
                     "Cannot merge lines with different 'min_read' field at line {}",
                     i + 1
                 ));
             }
-
-            let self_pos_sample_parts = line.field_vec[10]
-                .split('/')
-                .map(|s| s.parse::<u64>().unwrap())
-                .collect::<Vec<u64>>();
-            let other_pos_sample_parts = other_line.field_vec[10]
-                .split('/')
-                .map(|s| s.parse::<u64>().unwrap())
-                .collect::<Vec<u64>>();
-
-            let merged_parts = self_pos_sample_parts
-                .iter()
-                .zip(other_pos_sample_parts.iter())
-                .map(|(a, b)| a + b)
-                .collect::<Vec<u64>>();
-            // update the is_detected field
-            if merged_parts[0] > 0 {
-                line.field_vec[8] = "Yes".to_string();
-            } else {
-                line.field_vec[8] = "No".to_string();
+            let min_read = line.field_vec[9].parse::<u64>()?;
+            if min_read == 0 {
+                return Err(anyhow::anyhow!("Invalid min_read=0 at line {}", i + 1));
             }
-            // update the pos/sample field
-            line.field_vec[10] = format!("{}/{}", merged_parts[0], merged_parts[1]);
+            let mut counts =
+                Vec::with_capacity(line.sample_vec.len() + other_line.sample_vec.len());
+            for sample in line.sample_vec.iter().chain(&other_line.sample_vec) {
+                if sample.init_string.len() != 13 {
+                    return Err(anyhow::anyhow!(
+                        "Expected 13 sample fields at line {}",
+                        i + 1
+                    ));
+                }
+                counts.push(sample.init_string[0].parse::<u64>()?);
+            }
+            merged_counts.push((counts, min_read));
+        }
 
-            // merge the sample fields
+        let mut merged_meta = self.meta.clone();
+        let mut merged_header = self.header.clone();
+        let mut merged_db_infos = self.db_infos.clone();
+        merged_meta.merge(&other.meta)?;
+        merged_header.merge(&other.header)?;
+        merged_db_infos.merge(&other.db_infos)?;
+        let (_, sample_total_evidence_vec) = merged_db_infos.get_total_evidence_vec();
+        self.meta = merged_meta;
+        self.header = merged_header;
+        self.db_infos = merged_db_infos;
+        for ((line, other_line), (counts, min_read)) in
+            self.lines.iter_mut().zip(&other.lines).zip(merged_counts)
+        {
+            let positive = counts.iter().filter(|&&count| count >= min_read).count();
+            line.field_vec[7] =
+                calc_isoform_ranking_score(&counts, &sample_total_evidence_vec).to_string();
+            line.field_vec[8] = if positive > 0 { "yes" } else { "no" }.to_string();
+            line.field_vec[10] = format!("{}/{}", positive, counts.len());
             line.sample_vec.extend(other_line.sample_vec.clone());
-
-            let mut acc_sample_evidence_arr = Vec::new();
-            for sample in &line.sample_vec {
-                // dbg!(&sample);
-                acc_sample_evidence_arr.push(sample.init_string[1].parse::<u32>().unwrap());
-                // evidence is at index 1
-            }
-
-            // dbg!(&acc_sample_evidence_arr);
-            // dbg!(&sample_total_evidence_vec);
-            // dbg!(&sample_name_vec);
-
-            let ranking_score = crate::ptir::PTIR::get_ranking_score(
-                &acc_sample_evidence_arr,
-                sample_total_evidence_vec.len(),
-                &sample_total_evidence_vec,
-            );
-            line.field_vec[7] = format!("{}", ranking_score); // ranking score is at index 7
         }
         info!("Finished");
         Ok(())
