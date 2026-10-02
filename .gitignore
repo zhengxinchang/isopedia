@@ -23,7 +23,7 @@
 **/.vscode/
 !src/output.rs
 !src/**/output.rs 
-ROADMAP.txt
+ROADMAP.md
 test_script/
 ver_release/
 linux_build/
