@@ -11,7 +11,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,7 +34,7 @@ jobs:
             exit 1
           fi
 
-  build-and-release:
+  build-linux:
     needs: verify
     runs-on: ubuntu-latest
     steps:
@@ -45,13 +44,13 @@ jobs:
       - name: Build Docker image
         run: docker build -t isopedia-build .
 
-      - name: Extract binaries
+      - name: Extract binary
         run: |
           docker create --name isopedia-builder isopedia-build
           docker cp isopedia-builder:/linux_build ./linux_build
           docker rm isopedia-builder
 
-      - name: Package binaries
+      - name: Package
         run: |
           cp script/isopedia-splice-viz.py linux_build/
           cp script/isopedia-splice-viz-temp.html linux_build/
@@ -59,9 +58,87 @@ jobs:
           cd linux_build
           tar czf ../isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz *
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x86_64
+          path: isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz
+
+  build-macos:
+    needs: verify
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: macos-cargo-
+
+      - name: Install native dependencies
+        run: brew install pkg-config
+
+      - name: Build
+        env:
+          # hts-sys/static does not enable static linking in lzma-sys.
+          LZMA_API_STATIC: '1'
+        run: |
+          export LIBCLANG_PATH="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+          export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          cargo build --release --locked
+
+      - name: Verify binaries
+        run: |
+          for binary in target/release/isopedia target/release/isopedia-tools; do
+            otool -L "$binary"
+            if otool -L "$binary" | grep -E '/opt/homebrew/|/usr/local/|/Users/runner/'; then
+              echo "Binary depends on a library outside the macOS system directories"
+              exit 1
+            fi
+            "$binary" --help > /dev/null
+          done
+
+      - name: Package
+        run: |
+          mkdir macos_build
+          cp target/release/isopedia target/release/isopedia-tools macos_build/
+          cp script/isopedia-splice-viz.py macos_build/
+          cp script/isopedia-splice-viz-temp.html macos_build/
+          cp LICENSE macos_build/
+          cd macos_build
+          tar czf ../isopedia-${{ github.ref_name }}-macos-aarch64.tar.gz *
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-aarch64
+          path: isopedia-${{ github.ref_name }}-macos-aarch64.tar.gz
+
+  release:
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz
+          files: |
+            isopedia-${{ github.ref_name }}-linux-x86_64.tar.gz
+            isopedia-${{ github.ref_name }}-macos-aarch64.tar.gz
           body_path: RELEASE_NOTES.md
-
