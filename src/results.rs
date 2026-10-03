@@ -1,6 +1,5 @@
 use crate::cmd::isoform::ISOFORM_FORMAT;
 use crate::constants::FORMAT_STR_NAME;
-use crate::grouped_tx::calc_isoform_ranking_score;
 use crate::meta::Meta;
 use crate::myio::MyGzWriter;
 use crate::myio::{DBInfos, GeneralOutputIO, Header, Line, MyGzReader};
@@ -324,8 +323,7 @@ mod isoform_merge_tests {
         assert_eq!(left.lines[0].sample_vec.len(), 2);
         assert_eq!(left.lines[0].sample_vec[0].init_string[4], "1");
         assert_eq!(left.lines[0].sample_vec[1].init_string[5], "0");
-        let score = left.lines[0].field_vec[7].parse::<f64>().unwrap();
-        assert!((score - 2500.0).abs() < 1e-8);
+        assert_eq!(left.lines[0].field_vec[7], "NA");
     }
 
     #[test]
@@ -446,7 +444,6 @@ impl TableOutput {
         merged_meta.merge(&other.meta)?;
         merged_header.merge(&other.header)?;
         merged_db_infos.merge(&other.db_infos)?;
-        let (_, sample_total_evidence_vec) = merged_db_infos.get_total_evidence_vec();
         self.meta = merged_meta;
         self.header = merged_header;
         self.db_infos = merged_db_infos;
@@ -454,8 +451,7 @@ impl TableOutput {
             self.lines.iter_mut().zip(&other.lines).zip(merged_counts)
         {
             let positive = counts.iter().filter(|&&count| count >= min_read).count();
-            line.field_vec[7] =
-                calc_isoform_ranking_score(&counts, &sample_total_evidence_vec).to_string();
+            line.field_vec[7] = "NA".to_string();
             line.field_vec[8] = if positive > 0 { "yes" } else { "no" }.to_string();
             line.field_vec[10] = format!("{}/{}", positive, counts.len());
             line.sample_vec.extend(other_line.sample_vec.clone());

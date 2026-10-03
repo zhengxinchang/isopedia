@@ -301,11 +301,16 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
                 let mem_before = sys.process(pid).unwrap().memory() / 1024 / 1024;
 
                 let mut chrom_manager = ChromGroupedTxManager::new(&chrom, index_info.get_size());
-                chrom_manager.add_transcript_by_chrom(&tx_vec, cli);
-                drop(tx_vec);
-                chrom_manager.process_tx_groups(forest, cli, archive_cache, &index_info, |chunk| {
-                    sender.send(chunk).expect("temporary output writer stopped");
-                });
+                chrom_manager.process_transcripts(
+                    tx_vec,
+                    forest,
+                    cli,
+                    archive_cache,
+                    &index_info,
+                    |chunk| {
+                        sender.send(chunk).expect("temporary output writer stopped");
+                    },
+                );
                 forest.clear_all_caches();
                 archive_cache.clear_cache();
                 chrom_manager.clear();
@@ -342,10 +347,17 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     {
         tmp_tx_manger.finish();
         info!("Sorting final output table");
+        let mut line = Vec::new();
         while let Some(tx_abd_view) = tmp_tx_manger.next() {
             // info!("writeing transcript {}", tx_abd.orig_tx_id);
             // let mut line = tx_abd.to_output_line(&global_stats, &dataset_info, &cli);
-            tx_abd_view.write_line_directly(&mut global_stats, &index_info, cli, &mut tableout)?;
+            tx_abd_view.write_line_directly(
+                &mut global_stats,
+                &index_info,
+                cli,
+                &mut line,
+                &mut tableout,
+            )?;
             // tableout.add_line(&mut line)?;
             // tx_abd.write_line_directly( &global_stats, &dataset_info, &cli,&mut tableout)?;
             // info!("writen transcript {} done", tx_abd.orig_tx_id);

@@ -31,6 +31,21 @@ pub struct ChromGroupedTxManager {
     sample_size: usize,
 }
 
+fn overlapping_spans(transcripts: Vec<Transcript>) -> impl Iterator<Item = Vec<Transcript>> {
+    let mut transcripts = transcripts.into_iter().peekable();
+    std::iter::from_fn(move || {
+        let first = transcripts.next()?;
+        let mut end = first.end;
+        let mut span = vec![first];
+        while transcripts.peek().map_or(false, |next| next.start <= end) {
+            let next = transcripts.next().unwrap();
+            end = end.max(next.end);
+            span.push(next);
+        }
+        Some(span)
+    })
+}
+
 impl ChromGroupedTxManager {
     pub fn new(chrom: &str, sample_size: usize) -> Self {
         ChromGroupedTxManager {
@@ -45,60 +60,80 @@ impl ChromGroupedTxManager {
         self.group_queries.shrink_to_fit();
     }
 
-    pub fn add_transcript_by_chrom(&mut self, tx_v: &Vec<Transcript>, cli: &AnnIsoCli) {
-        let mut merged_intervals: Vec<(u64, u64, Vec<&Transcript>)> = Vec::new();
-
-        let curr_tx = tx_v
-            .first()
-            .unwrap_or_else(|| panic!("No transcript found for chromosome {}", self.chrom));
-
-        let mut curr_mrg_tx = (curr_tx.start, curr_tx.end, vec![curr_tx]);
-
-        for tx in tx_v.iter().skip(1) {
-            if tx.start <= curr_mrg_tx.1 {
-                // overlap
-                curr_mrg_tx.1 = curr_mrg_tx.1.max(tx.end);
-                curr_mrg_tx.2.push(tx);
-            } else {
-                // no overlap, push current and start new
-                merged_intervals.push(curr_mrg_tx);
-                curr_mrg_tx = (tx.start, tx.end, vec![tx]);
-            }
-        }
-
-        // push last
-        merged_intervals.push(curr_mrg_tx);
-
-        for (idx, (_start, _end, txs)) in merged_intervals.iter().enumerate() {
-            let mut grouped_tx =
-                GroupedTx::from_grouped_txs(self.sample_size, txs, idx as u32, cli);
-            grouped_tx.id = idx as u32;
-            self.group_queries.push(grouped_tx);
-        }
-    }
-
-    pub fn process_tx_groups<F: FnMut(Vec<Vec<TxAbundance>>)>(
+    pub fn process_transcripts<F: FnMut(Vec<Vec<TxAbundance>>)>(
         &mut self,
+        tx_v: Vec<Transcript>,
         bpforest: &mut BPForest,
         cli: &AnnIsoCli,
         archive_cache: &mut PTIRArchiveCache,
         dbinfo: &DatasetInfo,
         mut dump_chunk: F,
     ) {
-        let total_groups = self.group_queries.len();
-        let mut processed_cnt = 0;
+        let mut total_groups = 0;
+        let mut end = 0;
+        for tx in &tx_v {
+            if total_groups == 0 || tx.start > end {
+                total_groups += 1;
+                end = tx.end;
+            } else {
+                end = end.max(tx.end);
+            }
+        }
 
+        let mut processed_cnt = 0;
+        for (idx, span) in overlapping_spans(tx_v).enumerate() {
+            let txs: Vec<&Transcript> = span.iter().collect();
+            let grouped_tx = GroupedTx::from_grouped_txs(self.sample_size, &txs, idx as u32, cli);
+            drop(txs);
+            drop(span);
+            self.group_queries.push(grouped_tx);
+
+            if self.group_queries.len() == cli.em_chunk_size {
+                self.process_tx_groups(
+                    bpforest,
+                    cli,
+                    archive_cache,
+                    dbinfo,
+                    &mut processed_cnt,
+                    total_groups,
+                    &mut dump_chunk,
+                );
+            }
+        }
+        if !self.group_queries.is_empty() {
+            self.process_tx_groups(
+                bpforest,
+                cli,
+                archive_cache,
+                dbinfo,
+                &mut processed_cnt,
+                total_groups,
+                dump_chunk,
+            );
+        }
+    }
+
+    fn process_tx_groups<F: FnMut(Vec<Vec<TxAbundance>>)>(
+        &mut self,
+        bpforest: &mut BPForest,
+        cli: &AnnIsoCli,
+        archive_cache: &mut PTIRArchiveCache,
+        dbinfo: &DatasetInfo,
+        processed_cnt: &mut usize,
+        total_groups: usize,
+        mut dump_chunk: F,
+    ) {
         let cli_arc = std::sync::Arc::new(cli.clone());
 
         for (chunk_idx, chunk) in self.group_queries.chunks_mut(cli.em_chunk_size).enumerate() {
             let start = std::time::Instant::now();
 
             for grouped_tx in chunk.iter_mut() {
-                processed_cnt += 1;
-                if processed_cnt % 100 == 0 || processed_cnt == total_groups {
+                *processed_cnt += 1;
+                if *processed_cnt % 100 == 0 || *processed_cnt == total_groups {
                     info!(
                         "Chromosome {}: processing {}/{} groups",
-                        self.chrom, processed_cnt, total_groups
+                        self.chrom, *processed_cnt, total_groups
                     );
                 }
 
@@ -194,6 +229,7 @@ impl ChromGroupedTxManager {
                 duration
             );
         }
+        self.group_queries.clear();
     }
 }
 
@@ -699,43 +735,6 @@ fn full_junction_chain_matches(read: &[(u64, u64)], tx: &[(u64, u64)], flank: u6
             .all(|(a, b)| a.0.abs_diff(b.0) <= flank && a.1.abs_diff(b.1) <= flank)
 }
 
-pub(crate) fn calc_isoform_ranking_score(counts: &[u64], totals: &[u32]) -> f64 {
-    if counts.is_empty() || counts.len() != totals.len() {
-        return 0.0;
-    }
-    let total: f64 = counts.iter().map(|&x| x as f64).sum();
-    if total == 0.0 {
-        return 0.0;
-    }
-
-    let mut sorted = counts.to_vec();
-    sorted.sort_unstable();
-    let weighted_sum: f64 = sorted
-        .iter()
-        .enumerate()
-        .map(|(i, &count)| (i + 1) as f64 * count as f64)
-        .sum();
-    let n = counts.len() as f64;
-    let gini = 2.0 * weighted_sum / (n * total) - (n + 1.0) / n;
-
-    let log_cpms: Vec<f64> = counts
-        .iter()
-        .zip(totals)
-        .filter_map(|(&count, &denom)| {
-            if count > 0 && denom > 0 {
-                Some((count as f64 / denom as f64 * 1_000_000.0).ln())
-            } else {
-                None
-            }
-        })
-        .collect();
-    if log_cpms.is_empty() {
-        return 0.0;
-    }
-    let positive_fraction = log_cpms.len() as f64 / n;
-    positive_fraction * (log_cpms.iter().sum::<f64>() / log_cpms.len() as f64).exp() * (1.0 - gini)
-}
-
 fn isoform_cpm(count: f64, total_evidence: u32) -> f64 {
     if total_evidence == 0 {
         0.0
@@ -1174,7 +1173,6 @@ pub struct TxAbundanceView {
     orig_end: u64,
     orig_attrs: Vec<u8>,
     pub fsm_counts: Vec<(u32, FsmCounts)>,
-    sample_size: usize,
     pub em_abundance: Vec<f32>,
 }
 
@@ -1309,7 +1307,6 @@ impl TxAbundanceView {
             orig_end,
             orig_attrs: orig_attrs.to_vec(),
             fsm_counts,
-            sample_size,
             em_abundance,
         })
     }
@@ -1335,49 +1332,39 @@ impl TxAbundanceView {
         global_stats: &mut GlobalStats,
         dbinfo: &DatasetInfo,
         cli: &AnnIsoCli,
+        line: &mut Vec<u8>,
         tableout: &mut TableOutput,
     ) -> Result<()> {
-        tableout.write_bytes(&self.orig_chrom)?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(self.orig_start.to_string().as_bytes())?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(self.orig_end.to_string().as_bytes())?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(self.orig_tx_len.to_string().as_bytes())?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(self.orig_n_exon.to_string().as_bytes())?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(&self.orig_tx_id)?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(&self.orig_gene_id)?;
-        tableout.write_bytes(b"\t")?;
-        // Keep only one per-row dense vector to reuse the unchanged ranking formula.
-        let mut ranking_counts = vec![0; self.sample_size];
-        for &(sid, counts) in &self.fsm_counts {
-            ranking_counts[sid as usize] = counts.jc as u64;
-        }
-        let ranking_score =
-            calc_isoform_ranking_score(&ranking_counts, &dbinfo.sample_total_evidence_vec);
-
-        tableout.write_bytes(ranking_score.to_string().as_bytes())?;
-        tableout.write_bytes(b"\t")?;
+        line.clear();
+        line.extend_from_slice(&self.orig_chrom);
+        write!(
+            line,
+            "\t{}\t{}\t{}\t{}\t",
+            self.orig_start, self.orig_end, self.orig_tx_len, self.orig_n_exon
+        )?;
+        line.extend_from_slice(&self.orig_tx_id);
+        line.push(b'\t');
+        line.extend_from_slice(&self.orig_gene_id);
+        line.extend_from_slice(b"\tNA\t");
 
         global_stats.update_sample_level_stats(&self, cli);
 
         let positive_samples = self.get_positive_samples(cli.min_read);
         if positive_samples != 0 {
-            tableout.write_bytes(b"yes")?;
+            line.extend_from_slice(b"yes");
         } else {
-            tableout.write_bytes(b"no")?;
+            line.extend_from_slice(b"no");
         }
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(cli.min_read.to_string().as_bytes())?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(format!("{}/{}", positive_samples, dbinfo.get_size()).as_bytes())?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(&self.orig_attrs)?;
-        tableout.write_bytes(b"\t")?;
-        tableout.write_format_str()?;
+        write!(
+            line,
+            "\t{}\t{}/{}\t",
+            cli.min_read,
+            positive_samples,
+            dbinfo.get_size()
+        )?;
+        line.extend_from_slice(&self.orig_attrs);
+        line.push(b'\t');
+        line.extend_from_slice(tableout.format_str.as_bytes());
         let mut fsm_cursor = self.fsm_counts.iter().peekable();
         for sid in 0..dbinfo.get_size() {
             let counts = if fsm_cursor
@@ -1390,6 +1377,11 @@ impl TxAbundanceView {
             };
             let fsm = counts.jc as u64;
             let em = self.effective_em_abundance(sid, cli.min_em_abundance) as f64;
+            // Only positive zero is textually identical to the full formatting path.
+            if counts == FsmCounts::default() && em.to_bits() == 0 {
+                line.extend_from_slice(b"\t0:0:0:0:0:0:0:0:0:0:0:0:0");
+                continue;
+            }
             let total_evidence = dbinfo.sample_total_evidence_vec[sid];
             let fraction = |count: u64| {
                 if fsm == 0 {
@@ -1398,7 +1390,8 @@ impl TxAbundanceView {
                     count as f64 / fsm as f64
                 }
             };
-            let sample = format!(
+            write!(
+                line,
                 "\t{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
                 fsm,
                 counts.tss,
@@ -1413,11 +1406,10 @@ impl TxAbundanceView {
                 fraction(counts.tss as u64),
                 fraction(counts.tes as u64),
                 fraction(counts.tss_tes as u64),
-            );
-            tableout.write_bytes(sample.as_bytes())?;
+            )?;
         }
-        tableout.write_bytes(b"\n")?;
-        Ok(())
+        line.push(b'\n');
+        tableout.write_bytes(line)
     }
 }
 
@@ -2198,6 +2190,26 @@ mod tests {
         }
     }
 
+    #[test]
+    fn overlapping_spans_keep_transitive_and_touching_transcripts_together() {
+        let transcripts = [(10, 20), (20, 25), (24, 40), (41, 50), (41, 55), (57, 60)]
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (start, end))| {
+                let mut tx = test_tx(true);
+                tx.start = start;
+                tx.end = end;
+                tx.origin_idx = idx as u32;
+                tx
+            })
+            .collect();
+        let groups: Vec<Vec<u32>> = overlapping_spans(transcripts)
+            .map(|span| span.into_iter().map(|tx| tx.origin_idx).collect())
+            .collect();
+        assert_eq!(groups, vec![vec![0, 1, 2], vec![3, 4], vec![5]]);
+        assert_eq!(overlapping_spans(Vec::new()).count(), 0);
+    }
+
     fn test_ptir(ends: &[(u64, u64)]) -> PTIR {
         PTIR {
             signature: 0,
@@ -2437,7 +2449,7 @@ mod tests {
         assert_eq!(tx.fsm_count(0), FsmCounts::default());
         assert_eq!(tx.fsm_count(3).jc, 3);
         let view = TxAbundanceView::from_bytes(&tx.to_bytes()).unwrap();
-        assert_eq!(view.sample_size, 4);
+        assert_eq!(view.em_abundance.len(), 4);
         assert_eq!(view.fsm_counts, tx.fsm_counts);
     }
 
@@ -2560,8 +2572,25 @@ mod tests {
             Meta::new_empty(vec!["s".to_string()]),
             ISOFORM_FORMAT.to_string(),
         );
-        view.write_line_directly(&mut GlobalStats::new(1), &dbinfo, &cli, &mut output)
-            .unwrap();
+        let mut line = Vec::new();
+        view.write_line_directly(
+            &mut GlobalStats::new(1),
+            &dbinfo,
+            &cli,
+            &mut line,
+            &mut output,
+        )
+        .unwrap();
+        let first_line = line.clone();
+        view.write_line_directly(
+            &mut GlobalStats::new(1),
+            &dbinfo,
+            &cli,
+            &mut line,
+            &mut output,
+        )
+        .unwrap();
+        assert_eq!(line, first_line);
         output.finish().unwrap();
         drop(output);
 
@@ -2570,6 +2599,7 @@ mod tests {
         reader.read_to_string(&mut text).unwrap();
         let row = text.lines().find(|line| !line.starts_with('#')).unwrap();
         let fields: Vec<_> = row.split('\t').collect();
+        assert_eq!(fields[7], "NA");
         assert_eq!(fields[12], ISOFORM_FORMAT);
         assert_eq!(fields[12].split(':').count(), 13);
         assert_eq!(
@@ -2786,7 +2816,6 @@ mod tests {
     }
 
     fn tx_view(rc_fsm_jc: Vec<u64>, em_abundance: Vec<f32>) -> TxAbundanceView {
-        let sample_size = rc_fsm_jc.len();
         let fsm_counts = rc_fsm_jc
             .into_iter()
             .enumerate()
@@ -2811,7 +2840,6 @@ mod tests {
             orig_end: 0,
             orig_attrs: Vec::new(),
             fsm_counts,
-            sample_size,
             em_abundance,
         }
     }
@@ -2836,9 +2864,57 @@ mod tests {
     }
 
     #[test]
-    fn ranking_and_cpm_handle_zero_evidence() {
-        assert_eq!(calc_isoform_ranking_score(&[0, 0], &[0, 0]), 0.0);
-        assert!((calc_isoform_ranking_score(&[1], &[100]) - 10_000.0).abs() < 1e-8);
+    fn cpm_handles_zero_evidence() {
         assert_eq!(isoform_cpm(1.0, 0), 0.0);
+    }
+
+    #[test]
+    fn zero_sample_fast_path_matches_original_format() {
+        let legacy = format!(
+            "\t{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+            0, 0, 0, 0, 0, 0, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64
+        );
+        assert_eq!(legacy, "\t0:0:0:0:0:0:0:0:0:0:0:0:0");
+    }
+
+    #[test]
+    fn output_handles_sparse_fsm_em_and_zero_denominators() {
+        let mut cli = test_cli();
+        cli.min_em_abundance = 0.001;
+        let mut view = tx_view(vec![0, 0, 2, 0, 0], vec![0.0, 1.5, 0.0, 0.5, 0.00001]);
+        view.fsm_counts[0].1.tss = 1;
+        view.fsm_counts[0].1.tss_tes = 1;
+        let mut dbinfo = DatasetInfo::new();
+        for (sid, total) in [100, 100, 0, 0, 100].into_iter().enumerate() {
+            dbinfo.add_sample(format!("s{sid}"), None);
+            dbinfo.sample_total_evidence_vec.push(total);
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut output = TableOutput::new(
+            dir.path().join("out.gz"),
+            Header::new(),
+            DBInfos::new(),
+            Meta::new_empty(vec![]),
+            ISOFORM_FORMAT.to_string(),
+        );
+        let mut line = Vec::new();
+        view.write_line_directly(
+            &mut GlobalStats::new(5),
+            &dbinfo,
+            &cli,
+            &mut line,
+            &mut output,
+        )
+        .unwrap();
+        let text = String::from_utf8(line).unwrap();
+        let fields: Vec<_> = text.trim_end().split('\t').collect();
+        assert_eq!(fields[7], "NA");
+        assert_eq!(fields[8], "yes");
+        assert_eq!(fields[10], "1/5");
+        assert_eq!(fields[13], "0:0:0:0:0:0:0:0:0:0:0:0:0");
+        assert_eq!(fields[14], "0:0:0:0:0:0:1.5:0:0:15000:0:0:0");
+        assert_eq!(fields[15], "2:1:0:1:0:2:0:0:0:0:0.5:0:0.5");
+        assert_eq!(fields[16], "0:0:0:0:0:0:0.5:0:0:0:0:0:0");
+        assert_eq!(fields[17], fields[13]);
     }
 }
