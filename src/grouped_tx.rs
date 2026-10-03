@@ -77,13 +77,13 @@ impl ChromGroupedTxManager {
         }
     }
 
-    pub fn process_tx_groups(
+    pub fn process_tx_groups<F: FnMut(Vec<Vec<TxAbundance>>)>(
         &mut self,
         bpforest: &mut BPForest,
         cli: &AnnIsoCli,
         archive_cache: &mut PTIRArchiveCache,
         dbinfo: &DatasetInfo,
-        tmp_tx_manager: &mut TmpOutputManager,
+        mut dump_chunk: F,
     ) {
         let total_groups = self.group_queries.len();
         let mut processed_cnt = 0;
@@ -179,9 +179,11 @@ impl ChromGroupedTxManager {
                 grouped_tx.post_cleanup(cli);
             });
 
-            for grouped_tx in chunk.iter_mut() {
-                tmp_tx_manager.dump_grouped_tx(grouped_tx);
-            }
+            let completed: Vec<Vec<TxAbundance>> = chunk
+                .iter_mut()
+                .map(|grouped_tx| std::mem::take(&mut grouped_tx.tx_abundances))
+                .collect();
+            dump_chunk(completed);
 
             let duration = start.elapsed();
 
@@ -378,9 +380,12 @@ impl GroupedTx {
                 if !rec.is_mono_exonic() {
                     continue;
                 }
-                let msjc = MSJC::new(dbinfo.get_size(), &rec);
                 for &tx_idx in &mono_result.mono_exon_tx_indices {
-                    if msjc.check_mono_exon_fsm(&self.tx_abundances[tx_idx], cli) {
+                    let tx_abd = &self.tx_abundances[tx_idx];
+                    let mono_bounds = rec.splice_junctions_vec[0];
+                    if mono_bounds.0.abs_diff(tx_abd.orig_start) <= cli.mono_exon_wobble
+                        && mono_bounds.1.abs_diff(tx_abd.orig_end) <= cli.mono_exon_wobble
+                    {
                         overall_fsm_ptrs.insert(ptr.offset);
                         if seen_mono_fsm.insert((tx_idx, ptr.offset)) {
                             // A mono-exon PTIR has identical read and stored interval ends.
@@ -390,6 +395,21 @@ impl GroupedTx {
                             tx_abd.update_fsm_evidence_count(&rec, cli, exact);
                         }
                     }
+                }
+            }
+        }
+
+        if dbinfo.sample_total_evidence_vec.len() == dbinfo.get_size() {
+            for tx in &self.tx_abundances {
+                for &(sid, counts) in &tx.fsm_counts {
+                    let total = dbinfo.sample_total_evidence_vec[sid as usize];
+                    assert!(
+                        counts.jc <= total,
+                        "FSM count exceeds indexed sample evidence"
+                    );
+                    assert!(counts.tss <= counts.jc && counts.tes <= counts.jc);
+                    assert!(counts.tss_tes <= counts.tss && counts.tss_tes <= counts.tes);
+                    assert!(counts.exact <= counts.jc);
                 }
             }
         }
@@ -496,14 +516,9 @@ impl GroupedTx {
                 }
                 let misoform = ptir_archive_cache.load_from_disk(&ptr);
 
-                let msjc = MSJC::new(
-                    // ptr.offset,
-                    dbinfo.get_size(),
-                    &misoform,
-                );
-
                 // ignore non-mono-exonic misoforms
                 if misoform.is_mono_exonic() {
+                    let msjc = MSJC::new(dbinfo.get_size(), &misoform);
                     // iterately through all transcripts in the grouped tx
                     for (mrgd_msjc_vec_idx, tx_idx) in
                         mono_exon_result.mono_exon_tx_indices.iter().enumerate()
@@ -729,6 +744,27 @@ fn isoform_cpm(count: f64, total_evidence: u32) -> f64 {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FsmCounts {
+    pub jc: u32,
+    pub tss: u32,
+    pub tes: u32,
+    pub tss_tes: u32,
+    pub exact: u32,
+}
+
+impl FsmCounts {
+    fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            jc: self.jc.checked_add(other.jc)?,
+            tss: self.tss.checked_add(other.tss)?,
+            tes: self.tes.checked_add(other.tes)?,
+            tss_tes: self.tss_tes.checked_add(other.tss_tes)?,
+            exact: self.exact.checked_add(other.exact)?,
+        })
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TxAbundance {
     pub id: usize, // idx in the grouped_tx
@@ -743,11 +779,7 @@ pub struct TxAbundance {
     pub orig_attrs: String,
     pub orig_is_plus_strand: bool,
     pub sj_pairs: Vec<(u64, u64)>, // splice junction positions
-    pub rc_fsm_jc: Vec<u64>,
-    pub rc_fsm_jc_tss: Vec<u64>,
-    pub rc_fsm_jc_tes: Vec<u64>,
-    pub rc_fsm_jc_tss_tes: Vec<u64>,
-    pub rc_fsm_jc_exact: Vec<u64>,
+    pub fsm_counts: Vec<(u32, FsmCounts)>,
     pub abundance_cur: Vec<f32>, // sample size length
     pub abundance_prev: Vec<f32>,
     pub is_mono_exonic: bool,
@@ -802,11 +834,7 @@ impl TxAbundance {
             orig_attrs: tx.get_attributes(),
             orig_is_plus_strand: is_plus_strand,
             sj_pairs: tx.get_splice_junction_pairs(),
-            rc_fsm_jc: vec![0; sample_size],
-            rc_fsm_jc_tss: vec![0; sample_size],
-            rc_fsm_jc_tes: vec![0; sample_size],
-            rc_fsm_jc_tss_tes: vec![0; sample_size],
-            rc_fsm_jc_exact: vec![0; sample_size],
+            fsm_counts: Vec::new(),
             abundance_cur: vec![0.1; sample_size],
             abundance_prev: vec![0.1; sample_size],
             sample_size,
@@ -816,6 +844,33 @@ impl TxAbundance {
             alive_samples_bitmap: vec![0; (sample_size + 7) / 8], // initialize all samples as alive
             is_mono_exonic: tx.is_mono_exonic,
             covered_sj_bits: vec![0; (tx.get_splice_junction_pairs().len() + 7) / 8], // each splice junction has two positions
+        }
+    }
+
+    pub fn fsm_count(&self, sid: usize) -> FsmCounts {
+        let sid = u32::try_from(sid).expect("sample index exceeds u32");
+        self.fsm_counts
+            .binary_search_by_key(&sid, |(sample_id, _)| *sample_id)
+            .map(|idx| self.fsm_counts[idx].1)
+            .unwrap_or_default()
+    }
+
+    fn add_fsm_counts(&mut self, sid: usize, delta: FsmCounts) {
+        if delta.jc == 0 {
+            return;
+        }
+        assert!(sid < self.sample_size, "sample index out of bounds");
+        let sid = u32::try_from(sid).expect("sample index exceeds u32");
+        match self
+            .fsm_counts
+            .binary_search_by_key(&sid, |(sample_id, _)| *sample_id)
+        {
+            Ok(idx) => {
+                let previous = self.fsm_counts[idx].1;
+                self.fsm_counts[idx].1 =
+                    previous.checked_add(delta).expect("FSM count exceeds u32");
+            }
+            Err(idx) => self.fsm_counts.insert(idx, (sid, delta)),
         }
     }
 
@@ -830,30 +885,50 @@ impl TxAbundance {
         );
 
         for sid in 0..self.sample_size {
+            let evidence = misoform.sample_evidence_arr[sid];
+            if evidence == 0 {
+                continue;
+            }
             let start = misoform.sample_offset_arr[sid] as usize;
-            let end = start + misoform.sample_evidence_arr[sid] as usize;
-            for read in &misoform.isoform_reads_slim_vec[start..end] {
-                self.rc_fsm_jc[sid] += 1;
-                if exact {
-                    self.rc_fsm_jc_exact[sid] += 1;
-                }
-                let start_hit = start_left <= read.left && read.left <= start_right;
-                let end_hit = end_left <= read.right && read.right <= end_right;
+            let end = start + evidence as usize;
+            let mut delta = FsmCounts {
+                jc: evidence,
+                exact: if exact { evidence } else { 0 },
+                ..FsmCounts::default()
+            };
+            if self.is_mono_exonic {
+                let (left, right) = misoform.splice_junctions_vec[0];
+                let start_hit = start_left <= left && left <= start_right;
+                let end_hit = end_left <= right && right <= end_right;
                 let (tss_hit, tes_hit) = if self.orig_is_plus_strand {
                     (start_hit, end_hit)
                 } else {
                     (end_hit, start_hit)
                 };
-                if tss_hit {
-                    self.rc_fsm_jc_tss[sid] += 1;
-                }
-                if tes_hit {
-                    self.rc_fsm_jc_tes[sid] += 1;
-                }
-                if tss_hit && tes_hit {
-                    self.rc_fsm_jc_tss_tes[sid] += 1;
+                delta.tss = if tss_hit { evidence } else { 0 };
+                delta.tes = if tes_hit { evidence } else { 0 };
+                delta.tss_tes = if tss_hit && tes_hit { evidence } else { 0 };
+            } else {
+                for read in &misoform.isoform_reads_slim_vec[start..end] {
+                    let start_hit = start_left <= read.left && read.left <= start_right;
+                    let end_hit = end_left <= read.right && read.right <= end_right;
+                    let (tss_hit, tes_hit) = if self.orig_is_plus_strand {
+                        (start_hit, end_hit)
+                    } else {
+                        (end_hit, start_hit)
+                    };
+                    if tss_hit {
+                        delta.tss += 1;
+                    }
+                    if tes_hit {
+                        delta.tes += 1;
+                    }
+                    if tss_hit && tes_hit {
+                        delta.tss_tes += 1;
+                    }
                 }
             }
+            self.add_fsm_counts(sid, delta);
         }
     }
 
@@ -1071,7 +1146,7 @@ impl TxAbundance {
                 if cli.verbose {
                     info!(
                         "TxAbundance id {}, tx_id {:?}, sample {} fsm {} em prev {:.6} em cur {:.6},diff {:.6} rel_diff {:.6}",
-                        self.id, self.orig_tx_id, sid, self.rc_fsm_jc[sid], prev, cur, diff, rel_diff
+                        self.id, self.orig_tx_id, sid, self.fsm_count(sid).jc, prev, cur, diff, rel_diff
                     );
                 }
                 if rel_diff > tol {
@@ -1098,11 +1173,8 @@ pub struct TxAbundanceView {
     orig_start: u64,
     orig_end: u64,
     orig_attrs: Vec<u8>,
-    pub rc_fsm_jc: Vec<u64>,
-    pub rc_fsm_jc_tss: Vec<u64>,
-    pub rc_fsm_jc_tes: Vec<u64>,
-    pub rc_fsm_jc_tss_tes: Vec<u64>,
-    pub rc_fsm_jc_exact: Vec<u64>,
+    pub fsm_counts: Vec<(u32, FsmCounts)>,
+    sample_size: usize,
     pub em_abundance: Vec<f32>,
 }
 
@@ -1126,15 +1198,17 @@ impl TxAbundanceView {
         buf.extend_from_slice(&(txabd.orig_attrs.len() as u32).to_le_bytes());
         buf.extend_from_slice(txabd.orig_attrs.as_bytes());
 
-        for counts in [
-            &txabd.rc_fsm_jc,
-            &txabd.rc_fsm_jc_tss,
-            &txabd.rc_fsm_jc_tes,
-            &txabd.rc_fsm_jc_tss_tes,
-            &txabd.rc_fsm_jc_exact,
-        ] {
-            buf.extend_from_slice(&(counts.len() as u32).to_le_bytes());
-            for &v in counts {
+        buf.extend_from_slice(&u32::try_from(txabd.sample_size).unwrap().to_le_bytes());
+        buf.extend_from_slice(&u32::try_from(txabd.fsm_counts.len()).unwrap().to_le_bytes());
+        for &(sid, counts) in &txabd.fsm_counts {
+            for v in [
+                sid,
+                counts.jc,
+                counts.tss,
+                counts.tes,
+                counts.tss_tes,
+                counts.exact,
+            ] {
                 buf.extend_from_slice(&v.to_le_bytes());
             }
         }
@@ -1182,24 +1256,42 @@ impl TxAbundanceView {
 
         pos += len as usize;
 
-        fn read_counts(data: &[u8], pos: &mut usize) -> Result<Vec<u64>> {
-            let len = u32::from_le_bytes(data[*pos..*pos + 4].try_into()?) as usize;
-            *pos += 4;
-            let mut counts = Vec::with_capacity(len);
-            for _ in 0..len {
-                counts.push(u64::from_le_bytes(data[*pos..*pos + 8].try_into()?));
-                *pos += 8;
-            }
-            Ok(counts)
+        let sample_size = u32::from_le_bytes(data[pos..pos + 4].try_into()?) as usize;
+        pos += 4;
+        let nonzero = u32::from_le_bytes(data[pos..pos + 4].try_into()?) as usize;
+        pos += 4;
+        anyhow::ensure!(nonzero <= sample_size, "invalid sparse FSM count");
+        let mut fsm_counts = Vec::with_capacity(nonzero);
+        let mut prev_sid = None;
+        for _ in 0..nonzero {
+            let mut next_u32 = || -> Result<u32> {
+                let value = u32::from_le_bytes(
+                    data.get(pos..pos + 4)
+                        .ok_or_else(|| anyhow::anyhow!("truncated sparse FSM count"))?
+                        .try_into()?,
+                );
+                pos += 4;
+                Ok(value)
+            };
+            let sid = next_u32()? as usize;
+            anyhow::ensure!(
+                sid < sample_size && prev_sid.is_none_or(|prev| prev < sid),
+                "invalid sparse FSM sample id"
+            );
+            prev_sid = Some(sid);
+            let counts = FsmCounts {
+                jc: next_u32()?,
+                tss: next_u32()?,
+                tes: next_u32()?,
+                tss_tes: next_u32()?,
+                exact: next_u32()?,
+            };
+            fsm_counts.push((sid as u32, counts));
         }
-        let rc_fsm_jc = read_counts(data, &mut pos)?;
-        let rc_fsm_jc_tss = read_counts(data, &mut pos)?;
-        let rc_fsm_jc_tes = read_counts(data, &mut pos)?;
-        let rc_fsm_jc_tss_tes = read_counts(data, &mut pos)?;
-        let rc_fsm_jc_exact = read_counts(data, &mut pos)?;
 
         let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
         pos += 4;
+        anyhow::ensure!(len as usize == sample_size, "EM sample size mismatch");
         let mut em_abundance = Vec::with_capacity(len as usize);
         for _ in 0..len {
             em_abundance.push(f32::from_le_bytes(data[pos..pos + 4].try_into()?));
@@ -1216,11 +1308,8 @@ impl TxAbundanceView {
             orig_start,
             orig_end,
             orig_attrs: orig_attrs.to_vec(),
-            rc_fsm_jc,
-            rc_fsm_jc_tss,
-            rc_fsm_jc_tes,
-            rc_fsm_jc_tss_tes,
-            rc_fsm_jc_exact,
+            fsm_counts,
+            sample_size,
             em_abundance,
         })
     }
@@ -1235,9 +1324,9 @@ impl TxAbundanceView {
     }
 
     pub fn get_positive_samples(&self, min_read: u32) -> usize {
-        self.rc_fsm_jc
+        self.fsm_counts
             .iter()
-            .filter(|&&count| count >= min_read as u64)
+            .filter(|(_, counts)| counts.jc >= min_read)
             .count()
     }
 
@@ -1262,8 +1351,13 @@ impl TxAbundanceView {
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(&self.orig_gene_id)?;
         tableout.write_bytes(b"\t")?;
+        // Keep only one per-row dense vector to reuse the unchanged ranking formula.
+        let mut ranking_counts = vec![0; self.sample_size];
+        for &(sid, counts) in &self.fsm_counts {
+            ranking_counts[sid as usize] = counts.jc as u64;
+        }
         let ranking_score =
-            calc_isoform_ranking_score(&self.rc_fsm_jc, &dbinfo.sample_total_evidence_vec);
+            calc_isoform_ranking_score(&ranking_counts, &dbinfo.sample_total_evidence_vec);
 
         tableout.write_bytes(ranking_score.to_string().as_bytes())?;
         tableout.write_bytes(b"\t")?;
@@ -1284,8 +1378,17 @@ impl TxAbundanceView {
         tableout.write_bytes(&self.orig_attrs)?;
         tableout.write_bytes(b"\t")?;
         tableout.write_format_str()?;
+        let mut fsm_cursor = self.fsm_counts.iter().peekable();
         for sid in 0..dbinfo.get_size() {
-            let fsm = self.rc_fsm_jc[sid];
+            let counts = if fsm_cursor
+                .peek()
+                .is_some_and(|(sample_id, _)| *sample_id as usize == sid)
+            {
+                fsm_cursor.next().unwrap().1
+            } else {
+                FsmCounts::default()
+            };
+            let fsm = counts.jc as u64;
             let em = self.effective_em_abundance(sid, cli.min_em_abundance) as f64;
             let total_evidence = dbinfo.sample_total_evidence_vec[sid];
             let fraction = |count: u64| {
@@ -1298,18 +1401,18 @@ impl TxAbundanceView {
             let sample = format!(
                 "\t{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
                 fsm,
-                self.rc_fsm_jc_tss[sid],
-                self.rc_fsm_jc_tes[sid],
-                self.rc_fsm_jc_tss_tes[sid],
-                self.rc_fsm_jc_exact[sid],
-                fsm - self.rc_fsm_jc_exact[sid],
+                counts.tss,
+                counts.tes,
+                counts.tss_tes,
+                counts.exact,
+                fsm - counts.exact as u64,
                 em,
                 isoform_cpm(fsm as f64, total_evidence),
-                isoform_cpm(self.rc_fsm_jc_tss_tes[sid] as f64, total_evidence),
+                isoform_cpm(counts.tss_tes as f64, total_evidence),
                 isoform_cpm(fsm as f64 + em, total_evidence),
-                fraction(self.rc_fsm_jc_tss[sid]),
-                fraction(self.rc_fsm_jc_tes[sid]),
-                fraction(self.rc_fsm_jc_tss_tes[sid]),
+                fraction(counts.tss as u64),
+                fraction(counts.tes as u64),
+                fraction(counts.tss_tes as u64),
             );
             tableout.write_bytes(sample.as_bytes())?;
         }
@@ -1730,12 +1833,11 @@ impl TmpOutputManager {
     }
 
     pub fn dump_grouped_tx(&mut self, grouped_tx: &mut GroupedTx) {
-        // for tx_abd in grouped_tx.tx_abundances.iter() {
-        //     // self.records.push(tx_abd.clone());
-
-        // }
-
         let txs: Vec<TxAbundance> = std::mem::take(&mut grouped_tx.tx_abundances);
+        self.dump_txs(txs);
+    }
+
+    pub fn dump_txs(&mut self, txs: Vec<TxAbundance>) {
         self.records.extend(txs);
 
         if self.records.len() >= self.shard_capacity {
@@ -1983,12 +2085,7 @@ impl PartialOrd for HeapEntry {
 impl GetMemSize for TxAbundance {
     fn get_mem_size(&self) -> usize {
         let size = std::mem::size_of_val(&self.id)
-            + std::mem::size_of_val(&0u64)
-                * (self.rc_fsm_jc.len()
-                    + self.rc_fsm_jc_tss.len()
-                    + self.rc_fsm_jc_tes.len()
-                    + self.rc_fsm_jc_tss_tes.len()
-                    + self.rc_fsm_jc_exact.len())
+            + std::mem::size_of::<(u32, FsmCounts)>() * self.fsm_counts.capacity()
             + std::mem::size_of_val(&0f32) * self.abundance_cur.len()
             + std::mem::size_of_val(&0f32) * self.abundance_prev.len()
             + std::mem::size_of_val(&self.sample_size)
@@ -2187,8 +2284,8 @@ mod tests {
                     "outside" => (0, 0),
                     _ => unreachable!(),
                 };
-                assert_eq!(tx.rc_fsm_jc, vec![total]);
-                assert_eq!(tx.rc_fsm_jc_exact, vec![exact]);
+                assert_eq!(tx.fsm_count(0).jc, total);
+                assert_eq!(tx.fsm_count(0).exact, exact);
             }
         }
 
@@ -2207,10 +2304,10 @@ mod tests {
             .collect();
         let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
         group.update_results(&all_res, &vec![], &mut cache, &dbinfo, &strict_cli);
-        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![2]);
-        assert_eq!(group.tx_abundances[0].rc_fsm_jc_exact, vec![2]);
-        assert_eq!(group.tx_abundances[1].rc_fsm_jc, vec![0]);
-        assert_eq!(group.tx_abundances[2].rc_fsm_jc, vec![0]);
+        assert_eq!(group.tx_abundances[0].fsm_count(0).jc, 2);
+        assert_eq!(group.tx_abundances[0].fsm_count(0).exact, 2);
+        assert_eq!(group.tx_abundances[1].fsm_count(0).jc, 0);
+        assert_eq!(group.tx_abundances[2].fsm_count(0).jc, 0);
     }
 
     #[test]
@@ -2252,8 +2349,8 @@ mod tests {
         let mut dbinfo = DatasetInfo::new();
         dbinfo.add_sample("s".to_string(), None);
         group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
-        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![2]);
-        assert_eq!(group.tx_abundances[0].rc_fsm_jc_exact, vec![1]);
+        assert_eq!(group.tx_abundances[0].fsm_count(0).jc, 2);
+        assert_eq!(group.tx_abundances[0].fsm_count(0).exact, 1);
     }
 
     #[test]
@@ -2267,10 +2364,10 @@ mod tests {
             &cli,
             true,
         );
-        assert_eq!(plus.rc_fsm_jc, vec![4]);
-        assert_eq!(plus.rc_fsm_jc_tss, vec![2]);
-        assert_eq!(plus.rc_fsm_jc_tes, vec![2]);
-        assert_eq!(plus.rc_fsm_jc_tss_tes, vec![1]);
+        assert_eq!(plus.fsm_count(0).jc, 4);
+        assert_eq!(plus.fsm_count(0).tss, 2);
+        assert_eq!(plus.fsm_count(0).tes, 2);
+        assert_eq!(plus.fsm_count(0).tss_tes, 1);
 
         cli.no_check_tss_tes = true;
         let mut minus = TxAbundance::new(0, 1, &test_tx(false), &cli);
@@ -2279,42 +2376,155 @@ mod tests {
             &cli,
             false,
         );
-        assert_eq!(minus.rc_fsm_jc, vec![4]);
-        assert_eq!(minus.rc_fsm_jc_tss, vec![2]);
-        assert_eq!(minus.rc_fsm_jc_tes, vec![2]);
-        assert_eq!(minus.rc_fsm_jc_tss_tes, vec![1]);
-        assert_eq!(plus.rc_fsm_jc_exact, vec![4]);
-        assert_eq!(minus.rc_fsm_jc_exact, vec![0]);
+        assert_eq!(minus.fsm_count(0).jc, 4);
+        assert_eq!(minus.fsm_count(0).tss, 2);
+        assert_eq!(minus.fsm_count(0).tes, 2);
+        assert_eq!(minus.fsm_count(0).tss_tes, 1);
+        assert_eq!(plus.fsm_count(0).exact, 4);
+        assert_eq!(minus.fsm_count(0).exact, 0);
     }
 
     #[test]
     fn direct_counts_survive_temporary_encoding() {
         let cli = test_cli();
         let mut tx = TxAbundance::new(0, 1, &test_tx(true), &cli);
-        tx.rc_fsm_jc = vec![4];
-        tx.rc_fsm_jc_tss = vec![2];
-        tx.rc_fsm_jc_tes = vec![3];
-        tx.rc_fsm_jc_tss_tes = vec![1];
-        tx.rc_fsm_jc_exact = vec![3];
+        tx.add_fsm_counts(
+            0,
+            FsmCounts {
+                jc: 4,
+                tss: 2,
+                tes: 3,
+                tss_tes: 1,
+                exact: 3,
+            },
+        );
         tx.abundance_cur = vec![1.25];
         let view = TxAbundanceView::from_bytes(&TxAbundanceView::encode(&tx)).unwrap();
-        assert_eq!(view.rc_fsm_jc, vec![4]);
-        assert_eq!(view.rc_fsm_jc_tss, vec![2]);
-        assert_eq!(view.rc_fsm_jc_tes, vec![3]);
-        assert_eq!(view.rc_fsm_jc_tss_tes, vec![1]);
-        assert_eq!(view.rc_fsm_jc_exact, vec![3]);
+        assert_eq!(view.fsm_counts, tx.fsm_counts);
         assert_eq!(view.em_abundance, vec![1.25]);
+    }
+
+    #[test]
+    fn sparse_counts_keep_sorted_samples_and_zero_fill_round_trip() {
+        let cli = test_cli();
+        let mut tx = TxAbundance::new(0, 4, &test_tx(true), &cli);
+        tx.add_fsm_counts(
+            3,
+            FsmCounts {
+                jc: 2,
+                exact: 1,
+                ..FsmCounts::default()
+            },
+        );
+        tx.add_fsm_counts(
+            1,
+            FsmCounts {
+                jc: 3,
+                tss: 2,
+                ..FsmCounts::default()
+            },
+        );
+        tx.add_fsm_counts(
+            3,
+            FsmCounts {
+                jc: 1,
+                exact: 1,
+                ..FsmCounts::default()
+            },
+        );
+        assert_eq!(tx.fsm_counts.len(), 2);
+        assert_eq!(tx.fsm_counts[0].0, 1);
+        assert_eq!(tx.fsm_count(0), FsmCounts::default());
+        assert_eq!(tx.fsm_count(3).jc, 3);
+        let view = TxAbundanceView::from_bytes(&tx.to_bytes()).unwrap();
+        assert_eq!(view.sample_size, 4);
+        assert_eq!(view.fsm_counts, tx.fsm_counts);
+    }
+
+    #[test]
+    fn sparse_decode_rejects_duplicate_sample_ids() {
+        let cli = test_cli();
+        let mut tx = TxAbundance::new(0, 3, &test_tx(true), &cli);
+        tx.add_fsm_counts(
+            0,
+            FsmCounts {
+                jc: 1,
+                ..FsmCounts::default()
+            },
+        );
+        tx.add_fsm_counts(
+            2,
+            FsmCounts {
+                jc: 1,
+                ..FsmCounts::default()
+            },
+        );
+        let mut bytes = tx.to_bytes();
+        let sparse_start = bytes.len() - (4 + 3 * 4) - (8 + 2 * 24);
+        let second_sid = sparse_start + 8 + 24;
+        bytes[second_sid..second_sid + 4].copy_from_slice(&0u32.to_le_bytes());
+        assert!(TxAbundanceView::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "FSM count exceeds u32")]
+    fn sparse_counts_reject_overflow() {
+        let cli = test_cli();
+        let mut tx = TxAbundance::new(0, 1, &test_tx(true), &cli);
+        tx.add_fsm_counts(
+            0,
+            FsmCounts {
+                jc: u32::MAX,
+                ..FsmCounts::default()
+            },
+        );
+        tx.add_fsm_counts(
+            0,
+            FsmCounts {
+                jc: 1,
+                ..FsmCounts::default()
+            },
+        );
+    }
+
+    #[test]
+    fn mono_batch_count_matches_identical_read_endpoints() {
+        let cli = test_cli();
+        let mut mono = test_tx(true);
+        mono.is_mono_exonic = true;
+        mono.exons = vec![(100, 500)];
+        mono.splice_junc = vec![(100, 500)];
+        let mut rec = test_ptir(&[(100, 500), (100, 500)]);
+        rec.splice_junctions_vec = vec![(100, 500)];
+        assert!(rec.is_mono_exonic());
+        let mut tx = TxAbundance::new(0, 1, &mono, &cli);
+        tx.update_fsm_evidence_count(&rec, &cli, true);
+        assert_eq!(
+            tx.fsm_count(0),
+            FsmCounts {
+                jc: 2,
+                tss: 2,
+                tes: 2,
+                tss_tes: 2,
+                exact: 2
+            }
+        );
     }
 
     #[test]
     fn sample_output_groups_rc_cpm_and_frac_in_format_order() {
         let cli = test_cli();
         let mut tx = TxAbundance::new(0, 1, &test_tx(true), &cli);
-        tx.rc_fsm_jc[0] = 5;
-        tx.rc_fsm_jc_tss[0] = 3;
-        tx.rc_fsm_jc_tes[0] = 4;
-        tx.rc_fsm_jc_tss_tes[0] = 2;
-        tx.rc_fsm_jc_exact[0] = 1;
+        tx.add_fsm_counts(
+            0,
+            FsmCounts {
+                jc: 5,
+                tss: 3,
+                tes: 4,
+                tss_tes: 2,
+                exact: 1,
+            },
+        );
         tx.abundance_cur[0] = 1.5;
         let view = TxAbundanceView::from_bytes(&tx.to_bytes()).unwrap();
 
@@ -2381,19 +2591,25 @@ mod tests {
             let mut tx = test_tx(true);
             tx.origin_idx = orig_idx;
             let mut group = GroupedTx::from_grouped_txs(2, &vec![&tx], 0, &cli);
-            group.tx_abundances[0].rc_fsm_jc[0] = total;
-            group.tx_abundances[0].rc_fsm_jc_exact[0] = exact;
+            group.tx_abundances[0].add_fsm_counts(
+                0,
+                FsmCounts {
+                    jc: total,
+                    exact,
+                    ..FsmCounts::default()
+                },
+            );
             manager.dump_grouped_tx(&mut group);
         }
         manager.finish();
         let views: Vec<_> = manager.by_ref().collect();
         assert_eq!(views.len(), 2);
         assert_eq!(views[0]._orig_idx, 1);
-        assert_eq!(views[0].rc_fsm_jc, vec![4, 0]);
-        assert_eq!(views[0].rc_fsm_jc_exact, vec![4, 0]);
+        assert_eq!(views[0].fsm_counts[0].1.jc, 4);
+        assert_eq!(views[0].fsm_counts[0].1.exact, 4);
         assert_eq!(views[1]._orig_idx, 2);
-        assert_eq!(views[1].rc_fsm_jc, vec![5, 0]);
-        assert_eq!(views[1].rc_fsm_jc_exact, vec![3, 0]);
+        assert_eq!(views[1].fsm_counts[0].1.jc, 5);
+        assert_eq!(views[1].fsm_counts[0].1.exact, 3);
         manager.clean_up().unwrap();
     }
 
@@ -2431,7 +2647,7 @@ mod tests {
         let mut dbinfo = DatasetInfo::new();
         dbinfo.add_sample("s".to_string(), None);
         group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
-        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![1]);
+        assert_eq!(group.tx_abundances[0].fsm_count(0).jc, 1);
         assert!(group.msjcs.is_empty());
     }
 
@@ -2460,7 +2676,7 @@ mod tests {
         let mut dbinfo = DatasetInfo::new();
         dbinfo.add_sample("s".to_string(), None);
         group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
-        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![0]);
+        assert_eq!(group.tx_abundances[0].fsm_count(0).jc, 0);
         assert_eq!(group.msjcs.len(), 1);
         assert_eq!(group.tx_abundances[0].msjc_ids.len(), 1);
     }
@@ -2499,8 +2715,8 @@ mod tests {
                 .iter()
                 .find(|tx| tx.orig_tx_id == "long")
                 .unwrap();
-            assert_eq!(short_abd.rc_fsm_jc, vec![1]);
-            assert_eq!(long_abd.rc_fsm_jc, vec![0]);
+            assert_eq!(short_abd.fsm_count(0).jc, 1);
+            assert_eq!(long_abd.fsm_count(0).jc, 0);
             assert!(group.msjcs.is_empty());
         }
     }
@@ -2570,7 +2786,20 @@ mod tests {
     }
 
     fn tx_view(rc_fsm_jc: Vec<u64>, em_abundance: Vec<f32>) -> TxAbundanceView {
-        let zeros = vec![0; rc_fsm_jc.len()];
+        let sample_size = rc_fsm_jc.len();
+        let fsm_counts = rc_fsm_jc
+            .into_iter()
+            .enumerate()
+            .filter_map(|(sid, count)| {
+                (count > 0).then_some((
+                    sid as u32,
+                    FsmCounts {
+                        jc: count as u32,
+                        ..FsmCounts::default()
+                    },
+                ))
+            })
+            .collect();
         TxAbundanceView {
             _orig_idx: 0,
             orig_tx_id: Vec::new(),
@@ -2581,11 +2810,8 @@ mod tests {
             orig_start: 0,
             orig_end: 0,
             orig_attrs: Vec::new(),
-            rc_fsm_jc,
-            rc_fsm_jc_tss: zeros.clone(),
-            rc_fsm_jc_tes: zeros.clone(),
-            rc_fsm_jc_tss_tes: zeros,
-            rc_fsm_jc_exact: vec![0; em_abundance.len()],
+            fsm_counts,
+            sample_size,
             em_abundance,
         }
     }

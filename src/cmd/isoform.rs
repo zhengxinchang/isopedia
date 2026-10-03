@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::mpsc::sync_channel;
 
 use crate::{
     // assemble::Assembler,
@@ -20,7 +21,7 @@ use log::{error, info, warn};
 use num_format::{Locale, ToFormattedString};
 use serde::Serialize;
 
-use rayon::ThreadPoolBuilder;
+use rayon::{prelude::*, ThreadPoolBuilder};
 use sysinfo::{Pid, ProcessRefreshKind, System};
 
 pub(crate) const ISOFORM_FORMAT: &str = "RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES";
@@ -198,7 +199,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
         .build_global()
         .expect("Can not allocate thread pool");
 
-    let mut forest = BPForest::init(&cli.idxdir);
+    let forest = BPForest::init(&cli.idxdir);
     let index_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 
     info!("Loading GTF file...");
@@ -239,11 +240,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
 
     info!("Loading index file");
 
-    let mut archive_cache = PTIRArchiveCache::new(
-        cli.idxdir.clone().join(MERGED_FILE_NAME),
-        cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
-        cli.cached_chunk_num,                   // max 4 chunks in cache ~2GB
-    );
+    drop(forest);
 
     let mut global_stats = GlobalStats::new(index_info.get_size());
 
@@ -267,71 +264,78 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
         out_header.add_sample_name(&name)?;
     }
 
+    info!("Initializing transcript groups on demand");
+    info!("Processing transcripts");
+    let tmp_path = cli.output.with_extension("tmp");
+    let mut tmp_tx_manger = std::thread::scope(|scope| {
+        let (sender, receiver) = sync_channel(2);
+        let writer = scope.spawn(|| {
+            let mut manager = TmpOutputManager::new(&tmp_path, cli);
+            for chunk in receiver {
+                for txs in chunk {
+                    manager.dump_txs(txs);
+                }
+            }
+            manager
+        });
+
+        gtf_by_chrom.into_par_iter().for_each_init(
+            || {
+                (
+                    BPForest::init(&cli.idxdir),
+                    PTIRArchiveCache::new(
+                        cli.idxdir.join(MERGED_FILE_NAME),
+                        cli.cached_chunk_size_mb * 1024 * 1024,
+                        cli.cached_chunk_num,
+                    ),
+                    System::new(),
+                )
+            },
+            |(forest, archive_cache, sys), (chrom, tx_vec)| {
+                let pid = Pid::from_u32(std::process::id());
+                sys.refresh_processes_specifics(
+                    sysinfo::ProcessesToUpdate::Some(&[pid]),
+                    true,
+                    ProcessRefreshKind::everything(),
+                );
+                let mem_before = sys.process(pid).unwrap().memory() / 1024 / 1024;
+
+                let mut chrom_manager = ChromGroupedTxManager::new(&chrom, index_info.get_size());
+                chrom_manager.add_transcript_by_chrom(&tx_vec, cli);
+                drop(tx_vec);
+                chrom_manager.process_tx_groups(forest, cli, archive_cache, &index_info, |chunk| {
+                    sender.send(chunk).expect("temporary output writer stopped");
+                });
+                forest.clear_all_caches();
+                archive_cache.clear_cache();
+                chrom_manager.clear();
+
+                sys.refresh_processes_specifics(
+                    sysinfo::ProcessesToUpdate::Some(&[pid]),
+                    true,
+                    ProcessRefreshKind::everything(),
+                );
+                let mem_after = sys.process(pid).unwrap().memory() / 1024 / 1024;
+                info!(
+                    "Chromosome {}: memory {}MB -> {}MB (delta: {:+}MB)",
+                    chrom,
+                    mem_before,
+                    mem_after,
+                    mem_after as i64 - mem_before as i64
+                );
+            },
+        );
+        drop(sender);
+        writer.join().expect("temporary output writer failed")
+    });
+
     let mut tableout = TableOutput::new(
         cli.output.clone(),
-        out_header.clone(),
-        db_infos.clone(),
-        meta.clone(),
+        out_header,
+        db_infos,
+        meta,
         ISOFORM_FORMAT.to_string(),
     );
-
-    info!("Initializing transcript groups");
-
-    let mut chrom_grouped_tx_managers: Vec<ChromGroupedTxManager> = gtf_by_chrom
-        .into_iter()
-        .map(|(chrom, tx_vec)| {
-            let mut manager = ChromGroupedTxManager::new(&chrom, index_info.get_size());
-            manager.add_transcript_by_chrom(&tx_vec, cli);
-            manager
-        })
-        .collect();
-
-    let mut tmp_tx_manger = TmpOutputManager::new(&cli.output.with_extension(&"tmp"), cli);
-
-    let mut sys = System::new_all();
-
-    let pid = Pid::from_u32(std::process::id());
-
-    info!("Processing transcripts");
-    for chrom_manager in chrom_grouped_tx_managers.iter_mut() {
-        sys.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::Some(&[pid]),
-            true,
-            ProcessRefreshKind::everything(),
-        );
-        let process = sys.process(pid).unwrap();
-        let mem_before = process.memory() / 1024 / 1024; // MB
-
-        chrom_manager.process_tx_groups(
-            &mut forest,
-            cli,
-            &mut archive_cache,
-            &index_info,
-            &mut tmp_tx_manger,
-        );
-
-        forest.clear_all_caches();
-
-        archive_cache.clear_cache();
-
-        chrom_manager.clear();
-
-        sys.refresh_processes_specifics(
-            sysinfo::ProcessesToUpdate::Some(&[pid]),
-            true,
-            ProcessRefreshKind::everything(),
-        );
-        let process = sys.process(pid).unwrap();
-        let mem_after = process.memory() / 1024 / 1024; // MB
-
-        info!(
-            "Chromosome {}: memory {}MB -> {}MB (delta: {:+}MB)",
-            chrom_manager.chrom,
-            mem_before,
-            mem_after,
-            mem_after as i64 - mem_before as i64
-        );
-    }
 
     info!("Finalizing temporary output");
 

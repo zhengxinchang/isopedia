@@ -12,9 +12,9 @@ impl GlobalStats {
     }
 
     pub fn update_sample_level_stats(&mut self, txview: &TxAbundanceView, cli: &AnnIsoCli) {
-        txview.rc_fsm_jc.iter().enumerate().for_each(|(i, &count)| {
-            if count >= cli.min_read as u64 {
-                self.sample_posi_tx_count_fsm[i] += 1;
+        txview.fsm_counts.iter().for_each(|(sid, counts)| {
+            if counts.jc >= cli.min_read {
+                self.sample_posi_tx_count_fsm[*sid as usize] += 1;
             }
         });
     }
