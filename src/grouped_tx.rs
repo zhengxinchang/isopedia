@@ -462,6 +462,7 @@ impl GroupedTx {
                 find_partial_msjc_excluding_terminal_sites(
                     &all_res[start_idx],
                     &all_res[end_idx],
+                    tx_abd.sj_pairs.len() * 2,
                     &mut per_abd_partial_msjc_map,
                 );
             }
@@ -473,46 +474,48 @@ impl GroupedTx {
                     continue;
                 }
 
-                let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
-                    msjc_idx
-                } else {
-                    let rec = ptir_archive_cache.load_from_disk(msjc_ptr);
-                    if rec.is_mono_exonic()
-                        || rec.splice_junctions_vec.is_empty()
-                        || rec.splice_junctions_vec.len() >= tx_abd.sj_pairs.len()
-                    {
-                        continue;
-                    }
-                    let msjc = MSJC::new(dbinfo.get_size(), &rec);
-                    let (matched, _, count) =
-                        msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
-                    if !matched || count != msjc.splice_junctions_vec.len() {
-                        continue;
-                    }
-                    self.msjcs.push(msjc);
-                    let grouped_tx_msjc_idx = self.msjcs.len() - 1;
-                    msjc_map_global.insert(offset, grouped_tx_msjc_idx);
-                    grouped_tx_msjc_idx
-                };
+                let (msjc_idx, first_match_pos, matched_count) =
+                    if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
+                        let msjc = &self.msjcs[msjc_idx];
+                        if msjc.splice_junctions_vec.is_empty()
+                            || msjc.splice_junctions_vec.len() >= tx_abd.sj_pairs.len()
+                        {
+                            continue;
+                        }
+                        let (matched, first_match_pos, count) =
+                            msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+                        if !matched || count != msjc.splice_junctions_vec.len() {
+                            continue;
+                        }
+                        (msjc_idx, first_match_pos, count)
+                    } else {
+                        let rec = ptir_archive_cache.load_from_disk(msjc_ptr);
+                        if rec.is_mono_exonic()
+                            || rec.splice_junctions_vec.is_empty()
+                            || rec.splice_junctions_vec.len() >= tx_abd.sj_pairs.len()
+                        {
+                            continue;
+                        }
+                        let msjc = MSJC::new(dbinfo.get_size(), &rec);
+                        let (matched, first_match_pos, count) =
+                            msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+                        if !matched || count != msjc.splice_junctions_vec.len() {
+                            continue;
+                        }
+                        self.msjcs.push(msjc);
+                        let grouped_tx_msjc_idx = self.msjcs.len() - 1;
+                        msjc_map_global.insert(offset, grouped_tx_msjc_idx);
+                        (grouped_tx_msjc_idx, first_match_pos, count)
+                    };
 
                 let msjc = &mut self.msjcs[msjc_idx];
-                if msjc.splice_junctions_vec.is_empty()
-                    || msjc.splice_junctions_vec.len() >= tx_abd.sj_pairs.len()
-                {
-                    continue;
-                }
-                let (is_all_matched, first_match_pos, matched_count) =
-                    msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
-
-                if is_all_matched && matched_count == msjc.splice_junctions_vec.len() {
-                    let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
-                    tx_abd.add_msjc(
-                        msjc_map_global[&offset],
-                        tx_local_id_in_this_msjc,
-                        first_match_pos as usize,
-                        matched_count,
-                    );
-                }
+                let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+                tx_abd.add_msjc(
+                    msjc_idx,
+                    tx_local_id_in_this_msjc,
+                    first_match_pos as usize,
+                    matched_count,
+                );
             }
         }
 
@@ -682,6 +685,7 @@ impl GroupedTx {
 pub fn find_partial_msjc_excluding_terminal_sites<'a>(
     a: &'a Vec<PTIROffsetPtr>,
     b: &'a Vec<PTIROffsetPtr>,
+    max_splice_sites: usize,
     collection: &mut HashMap<u64, &'a PTIROffsetPtr>,
 ) {
     let mut i = 0;
@@ -689,8 +693,8 @@ pub fn find_partial_msjc_excluding_terminal_sites<'a>(
 
     while i < a.len() && j < b.len() {
         if a[i].offset == b[j].offset {
-            // make sure n_splice_site are more than 0, if its 0 ,then its the read terminal
-            if a[i].n_splice_sites == 0 {
+            // Partial chains must be shorter than the query; zero marks a read terminal.
+            if a[i].n_splice_sites == 0 || a[i].n_splice_sites as usize >= max_splice_sites {
                 i += 1;
                 j += 1;
                 continue;
@@ -708,24 +712,25 @@ pub fn find_partial_msjc_excluding_terminal_sites<'a>(
     }
 }
 
-pub fn find_fsm(vecs: Vec<&Vec<PTIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PTIROffsetPtr> {
+pub fn find_fsm(mut vecs: Vec<&Vec<PTIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PTIROffsetPtr> {
     if vecs.is_empty() {
         return vec![];
     }
 
     let n_splice_sites = sj_pairs_n * 2; // each splice junction has two positions
-    let mut result = vecs[0].clone();
+    vecs.sort_unstable_by_key(|v| v.len());
+    let mut result: Vec<_> = vecs[0]
+        .iter()
+        .filter(|x| x.n_splice_sites as usize == n_splice_sites)
+        .cloned()
+        .collect();
 
     for v in vecs.iter().skip(1) {
-        result = intersect_sorted(&result, v);
-
         if result.is_empty() {
             break;
         }
+        result = intersect_sorted(&result, v);
     }
-
-    // filter out the MergedIsoformOffsetPtr dose not exeactly match n_splice
-    result.retain(|x| x.n_splice_sites as usize == n_splice_sites);
 
     result
 }
@@ -2257,6 +2262,101 @@ mod tests {
             &[(100, 200), (300, 400)],
             0
         ));
+    }
+
+    #[test]
+    fn partial_candidates_exclude_terminals_and_nonshorter_chains() {
+        let a: Vec<_> = [0, 2, 4, 6, 8]
+            .into_iter()
+            .enumerate()
+            .map(|(offset, sites)| PTIROffsetPtr::new(offset as u64, 10, sites))
+            .collect();
+        let b = a[..4].to_vec();
+        let mut candidates = HashMap::default();
+        for _ in 0..2 {
+            find_partial_msjc_excluding_terminal_sites(&a, &b, 6, &mut candidates);
+        }
+        let mut offsets: Vec<_> = candidates.keys().copied().collect();
+        offsets.sort_unstable();
+        assert_eq!(offsets, vec![1, 2]);
+
+        candidates.clear();
+        find_partial_msjc_excluding_terminal_sites(&a, &b, 2, &mut candidates);
+        assert!(candidates.is_empty());
+        let empty = Vec::new();
+        find_partial_msjc_excluding_terminal_sites(&a, &empty, 6, &mut candidates);
+        assert!(candidates.is_empty());
+    }
+
+    #[test]
+    fn fsm_intersection_preserves_exact_pointer_and_chain_length_matches() {
+        let a = vec![
+            PTIROffsetPtr::new(1, 10, 0),
+            PTIROffsetPtr::new(1, 10, 4),
+            PTIROffsetPtr::new(2, 10, 2),
+            PTIROffsetPtr::new(3, 10, 4),
+        ];
+        let b = vec![a[1].clone(), a[2].clone()];
+        let c = vec![a[0].clone(), a[1].clone(), a[2].clone()];
+        for lists in [vec![&a, &b, &c], vec![&b, &c, &a], vec![&c, &a, &b]] {
+            assert_eq!(find_fsm(lists, 2), vec![a[1].clone()]);
+        }
+        assert_eq!(find_fsm(vec![&a], 2), vec![a[1].clone(), a[3].clone()]);
+        assert!(find_fsm(vec![&a, &vec![]], 2).is_empty());
+        assert!(find_fsm(vec![&a, &b], 3).is_empty());
+        assert!(find_fsm(vec![], 2).is_empty());
+    }
+
+    #[test]
+    fn partial_matches_keep_per_transcript_positions_when_reusing_msjc() {
+        let mut cli = test_cli();
+        cli.flank = 0;
+        let mut first = test_tx(true);
+        first.tx_id = "first".to_string();
+        first.splice_junc = vec![(150, 300), (350, 400)];
+        let mut shifted = first.clone();
+        shifted.tx_id = "shifted".to_string();
+        shifted.splice_junc.insert(0, (110, 120));
+        let mut mismatch = first.clone();
+        mismatch.tx_id = "mismatch".to_string();
+        mismatch.splice_junc[0] = (151, 301);
+
+        let rec = test_ptir(&[(100, 500)]);
+        let mut bytes = Vec::new();
+        let len = rec.gz_encode(&mut bytes);
+        let mut archive = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut archive, &bytes).unwrap();
+        let ptr = PTIROffsetPtr::new(0, len, 2);
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+
+        for txs in [
+            vec![&first, &shifted, &mismatch],
+            vec![&mismatch, &shifted, &first],
+        ] {
+            let mut group = GroupedTx::from_grouped_txs(1, &txs, 0, &cli);
+            // Include false positives so both new and cached MSJCs need chain checks.
+            let all_res = group
+                .sj_pooled_positions_multi_exonic
+                .iter()
+                .map(|_| vec![ptr.clone()])
+                .collect();
+            let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+            group.update_results(&all_res, &vec![], &mut cache, &dbinfo, &cli);
+            assert_eq!(group.msjcs.len(), 1);
+            assert_eq!(group.msjcs[0].txids.len(), 2);
+            for tx in &group.tx_abundances {
+                let expected_bits = match tx.orig_tx_id.as_str() {
+                    "first" => 1,
+                    "shifted" => 2,
+                    "mismatch" => 0,
+                    _ => unreachable!(),
+                };
+                assert_eq!(tx.covered_sj_bits, vec![expected_bits]);
+                assert_eq!(tx.msjc_ids.len(), usize::from(expected_bits != 0));
+                assert_eq!(tx.fsm_count(0).jc, 0);
+            }
+        }
     }
 
     #[test]
