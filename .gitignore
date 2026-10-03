@@ -36,3 +36,4 @@ downloads/.snakemake/
 test/
 ROADMAP*.md
 localnote
+AGENTS.md
