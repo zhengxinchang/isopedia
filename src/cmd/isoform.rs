@@ -13,7 +13,7 @@ use crate::{
     myio::{DBInfos, Header},
     ptir_archive::PTIRArchiveCache,
     results::TableOutput,
-    utils::greetings2,
+    utils::{greetings2, log_wall_time, start_wall_timer},
 };
 use anyhow::Result;
 use clap::Parser;
@@ -188,6 +188,7 @@ impl AnnIsoCli {
 }
 
 pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
+    let started = start_wall_timer();
     greetings2(&cli);
     cli.validate();
     if cli.no_check_tss_tes {
@@ -392,5 +393,6 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     info!("Save output to file {:?}", tableout.get_out_path().unwrap());
 
     info!("Finished!");
+    log_wall_time("isoform", started);
     Ok(())
 }

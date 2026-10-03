@@ -1,15 +1,29 @@
 // use ahash::RandomState;
 use anyhow::Result;
-use log::error;
+use log::{error, info};
 use serde::Serialize;
 use std::fs;
 use std::hash::BuildHasher;
 use std::path::PathBuf;
 use std::sync::LazyLock;
+use std::time::Instant;
 use std::{fs::File, hash::Hash, path::Path};
 use xxhash_rust::xxh3::Xxh3Builder;
 
 use crate::constants::*;
+
+/// Start measuring elapsed wall time, including I/O and waiting.
+pub fn start_wall_timer() -> Instant {
+    Instant::now()
+}
+
+pub fn log_wall_time(command: &str, started: Instant) {
+    info!(
+        "{} wall time: {:.3} s",
+        command,
+        started.elapsed().as_secs_f64()
+    );
+}
 
 pub fn pack_u32(high: u32, low: u32) -> u64 {
     ((high as u64) << 32) | (low as u64)

@@ -17,7 +17,7 @@ use crate::{
     ptir::PTIR,
     ptir_archive::PTIRArchiveCache,
     results::TableOutput,
-    utils::{self, greetings2},
+    utils::{self, greetings2, log_wall_time, start_wall_timer},
 };
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -615,6 +615,7 @@ fn parse_fusion_bed_line(line: &str) -> Result<FusionBreakPointPair> {
 }
 
 pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
+    let started = start_wall_timer();
     greetings2(&cli);
     cli.validate();
 
@@ -824,5 +825,6 @@ pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
     }
 
     info!("Finished!");
+    log_wall_time("fusion", started);
     Ok(())
 }

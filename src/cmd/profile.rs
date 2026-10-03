@@ -16,7 +16,7 @@ use crate::{
     gtf::{open_gtf_reader, TranscriptChunker},
     myio::MyGzWriter,
     reads::{AggrRead, SingleRead},
-    utils::greetings2,
+    utils::{greetings2, log_wall_time, start_wall_timer},
 };
 use anyhow::Result;
 use num_format::{Locale, ToFormattedString};
@@ -228,6 +228,7 @@ impl ProfileCli {
 }
 
 pub fn run_profile(cli: &ProfileCli) -> Result<()> {
+    let started = start_wall_timer();
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
@@ -572,5 +573,6 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
     }
 
     info!("Finished");
+    log_wall_time("profile", started);
     Ok(())
 }

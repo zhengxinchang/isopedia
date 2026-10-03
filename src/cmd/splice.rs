@@ -4,7 +4,7 @@ use crate::dataset_info::DatasetInfo;
 use crate::myio::{self, DBInfos, Line};
 use crate::ptir::PTIR;
 use crate::results::TableOutput;
-use crate::utils::greetings2;
+use crate::utils::{greetings2, log_wall_time, start_wall_timer};
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
 use clap::Parser;
@@ -123,6 +123,7 @@ impl AnnSpliceCli {
 }
 
 pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
+    let started = start_wall_timer();
     greetings2(&cli);
     cli.validate();
 
@@ -263,5 +264,6 @@ pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
 
     info!("Finished!");
 
+    log_wall_time("splice", started);
     Ok(())
 }

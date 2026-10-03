@@ -8,7 +8,7 @@ use crate::{
     meta::Meta,
     myio::GeneralOutputIO,
     tmpidx::TmpIndex,
-    utils::greetings2,
+    utils::{greetings2, log_wall_time, start_wall_timer},
 };
 use anyhow::Result;
 use clap::Parser;
@@ -96,6 +96,7 @@ impl IndexCli {
 }
 
 pub fn run_index(cli: &IndexCli) -> Result<()> {
+    let started = start_wall_timer();
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
@@ -242,5 +243,6 @@ pub fn run_index(cli: &IndexCli) -> Result<()> {
         .expect("Failed to write updated chrom file");
 
     info!("Finished!");
+    log_wall_time("index", started);
     Ok(())
 }

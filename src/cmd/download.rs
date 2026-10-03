@@ -17,7 +17,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::constants::RMT_MANIFEST_URL1;
-use crate::utils::greetings2;
+use crate::utils::{greetings2, log_wall_time, start_wall_timer};
 
 #[derive(Parser, Debug, Serialize)]
 #[command(name = "isopedia download")]
@@ -112,12 +112,14 @@ impl DownloadCli {
 }
 
 pub fn run_download(cli: &DownloadCli) -> Result<()> {
+    let started = start_wall_timer();
     greetings2(cli);
     cli.validate();
 
     if cli.list {
         let manifest = load_manifest(cli.manifest.as_ref())?;
         print_manifest(&manifest.index);
+        log_wall_time("download", started);
         return Ok(());
     }
 
@@ -146,6 +148,7 @@ pub fn run_download(cli: &DownloadCli) -> Result<()> {
     let outpath = outdir.join(&item.name);
     download_item(&item, &outpath)?;
     info!("Downloaded to {}", outpath.display());
+    log_wall_time("download", started);
     Ok(())
 }
 

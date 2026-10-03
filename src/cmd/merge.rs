@@ -10,7 +10,7 @@ use crate::{
     ptir_archive::PTIRArchiveWriter,
     reads::{AggrRead, SingleSampleReader},
     tmpidx::{MergedIsoformOffsetPlusGenomeLoc, PTIROffsetPtr, TmpIndex},
-    utils::greetings2,
+    utils::{greetings2, log_wall_time, start_wall_timer},
 };
 use anyhow::Result;
 use clap::Parser;
@@ -135,6 +135,7 @@ impl Display for HeapItem<AggrRead> {
 }
 
 pub fn run_merge(cli: &MergeCli) -> Result<()> {
+    let started = start_wall_timer();
     // env::set_var("RUST_LOG", "info");
     // env_logger::init();
 
@@ -453,5 +454,6 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     dataset_info.save_to_file(&cli.outdir.join(DATASET_INFO_FILE_NAME))?;
 
     info!("Finished");
+    log_wall_time("merge", started);
     Ok(())
 }
