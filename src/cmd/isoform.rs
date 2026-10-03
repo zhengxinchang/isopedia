@@ -126,7 +126,7 @@ pub struct AnnIsoCli {
     pub cached_nodes: usize,
 
     /// Maximum number of cached isoform chunks in memory
-    #[arg(long, default_value_t = 4)]
+    #[arg(long, default_value_t = 8)]
     pub cached_chunk_num: usize,
 
     /// Cached isoform chunk size in Mb

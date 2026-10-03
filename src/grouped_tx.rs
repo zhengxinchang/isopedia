@@ -465,7 +465,10 @@ impl GroupedTx {
                     &mut per_abd_partial_msjc_map,
                 );
             }
-            for (offset, msjc_ptr) in per_abd_partial_msjc_map.into_iter() {
+            let mut candidates: Vec<_> = per_abd_partial_msjc_map.into_iter().collect();
+            // Read in archive order to avoid repeatedly evicting cached chunks.
+            candidates.sort_unstable_by_key(|(offset, _)| *offset);
+            for (offset, msjc_ptr) in candidates {
                 if overall_fsm_ptrs.contains(&offset) {
                     continue;
                 }
