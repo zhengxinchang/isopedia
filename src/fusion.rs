@@ -8,6 +8,7 @@ use crate::{
     results::TableOutput,
     utils::{hash_vec, is_overlap},
 };
+// Used only for in-memory aggregation state; not part of persisted output formats.
 use ahash::HashSet;
 use anyhow::Result;
 use rustc_hash::FxHashMap;
@@ -112,7 +113,8 @@ impl FusionAggrReads {
             .flat_map(|x| vec![x.0, x.1])
             .collect::<Vec<u64>>();
 
-        let results = gene_indexing.match_splice_sites(self.chr1.as_str(), &flat_main_splices, flank);
+        let results =
+            gene_indexing.match_splice_sites(self.chr1.as_str(), &flat_main_splices, flank);
 
         if let Some((mached_gene1, splice_sites, status)) = results {
             self.left_matched_gene = mached_gene1;
@@ -129,7 +131,8 @@ impl FusionAggrReads {
             .iter()
             .flat_map(|x| vec![x.0, x.1])
             .collect::<Vec<u64>>();
-        let results = gene_indexing.match_splice_sites(self.chr2.as_str(), &flat_supp_splices, flank);
+        let results =
+            gene_indexing.match_splice_sites(self.chr2.as_str(), &flat_supp_splices, flank);
 
         if let Some((matched_gene2, splice_sites, status)) = results {
             self.right_matched_gene = matched_gene2;

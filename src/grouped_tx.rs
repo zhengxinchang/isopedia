@@ -8,8 +8,9 @@ use crate::{
     ptir_archive::PTIRArchiveCache,
     results::TableOutput,
     tmpidx::PTIROffsetPtr,
-    utils::{self, intersect_sorted, GetMemSize},
+    utils::{intersect_sorted, GetMemSize},
 };
+// Used only for in-memory grouping/lookup; tmp output is written via explicit encoding.
 use ahash::HashMap;
 use anyhow::Result;
 use log::{debug, info, warn};
@@ -30,10 +31,7 @@ pub struct ChromGroupedTxManager {
     sample_size: usize,
 }
 
-
-
 impl ChromGroupedTxManager {
-    
     pub fn new(chrom: &str, sample_size: usize) -> Self {
         ChromGroupedTxManager {
             chrom: chrom.to_string(),
@@ -86,7 +84,6 @@ impl ChromGroupedTxManager {
         archive_cache: &mut PTIRArchiveCache,
         dbinfo: &DatasetInfo,
         tmp_tx_manager: &mut TmpOutputManager,
-        global_stats: &mut GlobalStats,
     ) {
         let total_groups = self.group_queries.len();
         let mut processed_cnt = 0;
@@ -149,7 +146,7 @@ impl ChromGroupedTxManager {
                     &self.chrom,
                     &mono_queries,
                     &grouped_tx.mono_exonic_tx_indices,
-                    cli.flank,
+                    cli.mono_exon_wobble,
                     cli.cached_nodes,
                     &cli,
                 );
@@ -183,10 +180,6 @@ impl ChromGroupedTxManager {
             });
 
             for grouped_tx in chunk.iter_mut() {
-                for txbd in grouped_tx.tx_abundances.iter() {
-                    global_stats.update_fsm_tx_abd_total(&txbd.fsm_abundance);
-                    global_stats.update_em_tx_abd_total(&txbd.abundance_cur);
-                }
                 tmp_tx_manager.dump_grouped_tx(grouped_tx);
             }
 
@@ -340,16 +333,10 @@ impl GroupedTx {
         }
         let mut overall_fsm_ptrs = HashSet::new();
 
-        // for each transcript, commpare all results to find 1) fsm 2) misoform offsets
-        // be careful about the tx_idx, its the universal idx in the grouped tx, not the local idx in mono exonic
-        // however, the order of those idx in mono exonic results is the same as the order in tx_abundances
-        for (tx_idx, tx_abd) in self.tx_abundances.iter_mut().enumerate() {
-            // mono exonic need a special process
+        // Classify all full chains before any partial chain enters EM.
+        for tx_abd in self.tx_abundances.iter_mut() {
             if !tx_abd.is_mono_exonic {
                 let mut fsm_misoforms_candidates: Vec<&Vec<PTIROffsetPtr>> = Vec::new();
-                // at least mapping with one sj to be considered as msjc
-                // key offset value offsetptr
-                let mut per_abd_partial_msjc_map: HashMap<u64, &PTIROffsetPtr> = HashMap::default();
 
                 for sj_pair in tx_abd.sj_pairs.iter() {
                     let sj_start_idx = self
@@ -363,77 +350,109 @@ impl GroupedTx {
 
                     fsm_misoforms_candidates.push(&all_res[*sj_start_idx]);
                     fsm_misoforms_candidates.push(&all_res[*sj_end_idx]);
-                    find_partial_msjc_excluding_terminal_sites(
-                        &all_res[*sj_start_idx],
-                        &all_res[*sj_end_idx],
-                        &mut per_abd_partial_msjc_map,
-                    );
                 }
 
                 let fsm_msjc_offsets = find_fsm(fsm_misoforms_candidates, tx_abd.sj_pairs.len());
-
-                // remove fsm offsets from msjc_map
-                for fsm in fsm_msjc_offsets.iter() {
-                    per_abd_partial_msjc_map.remove(&fsm.offset);
-                }
-
-                if cli.verbose {
-                    info!(
-                        "Transcript {}: found {} FSM misoforms and {} MSJC misoforms",
-                        tx_idx,
-                        fsm_msjc_offsets.len(),
-                        per_abd_partial_msjc_map.len()
-                    );
-                }
-
-                // process fsm misoforms
                 for fsm in fsm_msjc_offsets.into_iter() {
                     let fsm_msjc_rec = ptir_archive_cache.load_from_disk(&fsm);
-
-                    tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli);
-                    overall_fsm_ptrs.insert(fsm.offset);
-                }
-
-                // process partial msjc misoforms
-
-                for (offset, msjc_ptr) in per_abd_partial_msjc_map.into_iter() {
-                    // skip the fsm ptrs that are already processed
-                    if overall_fsm_ptrs.contains(&offset) {
-                        continue;
+                    if !fsm_msjc_rec.is_mono_exonic()
+                        && full_junction_chain_matches(
+                            &fsm_msjc_rec.splice_junctions_vec,
+                            &tx_abd.sj_pairs,
+                            cli.flank,
+                        )
+                    {
+                        let exact = fsm_msjc_rec.splice_junctions_vec == tx_abd.sj_pairs;
+                        tx_abd.update_fsm_evidence_count(&fsm_msjc_rec, cli, exact);
+                        overall_fsm_ptrs.insert(fsm.offset);
                     }
+                }
+            }
+        }
 
-                    let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
-                        msjc_idx
-                    } else {
-                        let msjc = MSJC::new(
-                            // offset,
-                            dbinfo.get_size(),
-                            &ptir_archive_cache.load_from_disk(&msjc_ptr),
-                        );
-                        self.msjcs.push(msjc);
-                        let grouped_tx_msjc_idx = self.msjcs.len() - 1;
-                        msjc_map_global.insert(offset, grouped_tx_msjc_idx);
-                        grouped_tx_msjc_idx
-                    };
-
-                    let msjc = &mut self.msjcs[msjc_idx];
-                    let (is_all_matched, first_match_pos, matched_count) =
-                        msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
-
-                    // consider adjust the match logic here and compare the correlations with ground truth
-                    if is_all_matched {
-                        if msjc.splice_junctions_vec.len() >= 1 {
-                            if matched_count >= 1 {
-                                let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
-                                tx_abd.add_msjc(
-                                    msjc_map_global[&offset],
-                                    tx_local_id_in_this_msjc,
-                                    first_match_pos as usize,
-                                    matched_count,
-                                );
-                            }
+        // One mono-exon transcript can occur in several search partitions.
+        let mut seen_mono_fsm = HashSet::new();
+        for mono_result in all_res_mono_exonic {
+            for ptr in &mono_result.ptrs {
+                let rec = ptir_archive_cache.load_from_disk(ptr);
+                if !rec.is_mono_exonic() {
+                    continue;
+                }
+                let msjc = MSJC::new(dbinfo.get_size(), &rec);
+                for &tx_idx in &mono_result.mono_exon_tx_indices {
+                    if msjc.check_mono_exon_fsm(&self.tx_abundances[tx_idx], cli) {
+                        overall_fsm_ptrs.insert(ptr.offset);
+                        if seen_mono_fsm.insert((tx_idx, ptr.offset)) {
+                            // A mono-exon PTIR has identical read and stored interval ends.
+                            let tx_abd = &mut self.tx_abundances[tx_idx];
+                            let exact =
+                                rec.splice_junctions_vec[0] == (tx_abd.orig_start, tx_abd.orig_end);
+                            tx_abd.update_fsm_evidence_count(&rec, cli, exact);
                         }
                     }
+                }
+            }
+        }
+
+        for tx_abd in self
+            .tx_abundances
+            .iter_mut()
+            .filter(|tx| !tx.is_mono_exonic)
+        {
+            let mut per_abd_partial_msjc_map: HashMap<u64, &PTIROffsetPtr> = HashMap::default();
+            for sj_pair in &tx_abd.sj_pairs {
+                let start_idx = self.sj_pooled_position_to_tx_abundance_map[&sj_pair.0];
+                let end_idx = self.sj_pooled_position_to_tx_abundance_map[&sj_pair.1];
+                find_partial_msjc_excluding_terminal_sites(
+                    &all_res[start_idx],
+                    &all_res[end_idx],
+                    &mut per_abd_partial_msjc_map,
+                );
+            }
+            for (offset, msjc_ptr) in per_abd_partial_msjc_map.into_iter() {
+                if overall_fsm_ptrs.contains(&offset) {
+                    continue;
+                }
+
+                let msjc_idx = if let Some(&msjc_idx) = msjc_map_global.get(&offset) {
+                    msjc_idx
+                } else {
+                    let rec = ptir_archive_cache.load_from_disk(msjc_ptr);
+                    if rec.is_mono_exonic()
+                        || rec.splice_junctions_vec.is_empty()
+                        || rec.splice_junctions_vec.len() >= tx_abd.sj_pairs.len()
+                    {
+                        continue;
+                    }
+                    let msjc = MSJC::new(dbinfo.get_size(), &rec);
+                    let (matched, _, count) =
+                        msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+                    if !matched || count != msjc.splice_junctions_vec.len() {
+                        continue;
+                    }
+                    self.msjcs.push(msjc);
+                    let grouped_tx_msjc_idx = self.msjcs.len() - 1;
+                    msjc_map_global.insert(offset, grouped_tx_msjc_idx);
+                    grouped_tx_msjc_idx
+                };
+
+                let msjc = &mut self.msjcs[msjc_idx];
+                if msjc.splice_junctions_vec.is_empty()
+                    || msjc.splice_junctions_vec.len() >= tx_abd.sj_pairs.len()
+                {
+                    continue;
+                }
+                let (is_all_matched, first_match_pos, matched_count) =
+                    msjc.splice_junctions_aligned_to_tx(&tx_abd.sj_pairs, cli.flank);
+
+                if is_all_matched && matched_count == msjc.splice_junctions_vec.len() {
+                    let tx_local_id_in_this_msjc = msjc.add_txabundance(tx_abd);
+                    tx_abd.add_msjc(
+                        msjc_map_global[&offset],
+                        tx_local_id_in_this_msjc,
+                        first_match_pos as usize,
+                        matched_count,
+                    );
                 }
             }
         }
@@ -445,6 +464,7 @@ impl GroupedTx {
         }
 
         let mut cnt = 0;
+        let mut seen_mono_em = HashSet::new();
         // process mono exonic transcripts results
         for mono_exon_result in all_res_mono_exonic.iter() {
             cnt += 1;
@@ -471,6 +491,9 @@ impl GroupedTx {
             ];
 
             for ptr in &mono_exon_result.ptrs {
+                if overall_fsm_ptrs.contains(&ptr.offset) {
+                    continue;
+                }
                 let misoform = ptir_archive_cache.load_from_disk(&ptr);
 
                 let msjc = MSJC::new(
@@ -487,13 +510,10 @@ impl GroupedTx {
                     {
                         let tx_abd = &self.tx_abundances[*tx_idx];
 
-                        if msjc.check_mono_exon_fsm(&tx_abd, cli) {
-                            self.tx_abundances[*tx_idx].update_fsm_evidence_count(&misoform, cli);
-                        } else {
-                            if msjc.msjc_belongs_to_tx(&tx_abd, cli) {
-                                // add to the merged msjc for this transcript
-                                mrgd_msjc_vec[mrgd_msjc_vec_idx].add_mono_exon_msjc(&msjc);
-                            }
+                        if msjc.msjc_belongs_to_tx(&tx_abd, cli)
+                            && seen_mono_em.insert((*tx_idx, ptr.offset))
+                        {
+                            mrgd_msjc_vec[mrgd_msjc_vec_idx].add_mono_exon_msjc(&msjc);
                         }
                     }
                 }
@@ -656,6 +676,59 @@ pub fn find_fsm(vecs: Vec<&Vec<PTIROffsetPtr>>, sj_pairs_n: usize) -> Vec<PTIROf
     result
 }
 
+fn full_junction_chain_matches(read: &[(u64, u64)], tx: &[(u64, u64)], flank: u64) -> bool {
+    read.len() == tx.len()
+        && read
+            .iter()
+            .zip(tx)
+            .all(|(a, b)| a.0.abs_diff(b.0) <= flank && a.1.abs_diff(b.1) <= flank)
+}
+
+pub(crate) fn calc_isoform_ranking_score(counts: &[u64], totals: &[u32]) -> f64 {
+    if counts.is_empty() || counts.len() != totals.len() {
+        return 0.0;
+    }
+    let total: f64 = counts.iter().map(|&x| x as f64).sum();
+    if total == 0.0 {
+        return 0.0;
+    }
+
+    let mut sorted = counts.to_vec();
+    sorted.sort_unstable();
+    let weighted_sum: f64 = sorted
+        .iter()
+        .enumerate()
+        .map(|(i, &count)| (i + 1) as f64 * count as f64)
+        .sum();
+    let n = counts.len() as f64;
+    let gini = 2.0 * weighted_sum / (n * total) - (n + 1.0) / n;
+
+    let log_cpms: Vec<f64> = counts
+        .iter()
+        .zip(totals)
+        .filter_map(|(&count, &denom)| {
+            if count > 0 && denom > 0 {
+                Some((count as f64 / denom as f64 * 1_000_000.0).ln())
+            } else {
+                None
+            }
+        })
+        .collect();
+    if log_cpms.is_empty() {
+        return 0.0;
+    }
+    let positive_fraction = log_cpms.len() as f64 / n;
+    positive_fraction * (log_cpms.iter().sum::<f64>() / log_cpms.len() as f64).exp() * (1.0 - gini)
+}
+
+fn isoform_cpm(count: f64, total_evidence: u32) -> f64 {
+    if total_evidence == 0 {
+        0.0
+    } else {
+        count / total_evidence as f64 * 1_000_000.0
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TxAbundance {
     pub id: usize, // idx in the grouped_tx
@@ -670,7 +743,11 @@ pub struct TxAbundance {
     pub orig_attrs: String,
     pub orig_is_plus_strand: bool,
     pub sj_pairs: Vec<(u64, u64)>, // splice junction positions
-    pub fsm_abundance: Vec<f32>,
+    pub rc_fsm_jc: Vec<u64>,
+    pub rc_fsm_jc_tss: Vec<u64>,
+    pub rc_fsm_jc_tes: Vec<u64>,
+    pub rc_fsm_jc_tss_tes: Vec<u64>,
+    pub rc_fsm_jc_exact: Vec<u64>,
     pub abundance_cur: Vec<f32>, // sample size length
     pub abundance_prev: Vec<f32>,
     pub is_mono_exonic: bool,
@@ -684,6 +761,27 @@ pub struct TxAbundance {
 }
 
 impl TxAbundance {
+    fn terminal_wob_bounds(
+        orig_start: u64,
+        orig_end: u64,
+        is_plus_strand: bool,
+        tss_wob: u64,
+        tes_wob: u64,
+    ) -> (u64, u64, u64, u64) {
+        let (start_wob, end_wob) = if is_plus_strand {
+            (tss_wob, tes_wob)
+        } else {
+            (tes_wob, tss_wob)
+        };
+
+        (
+            orig_start.saturating_sub(start_wob),
+            orig_start.saturating_add(start_wob),
+            orig_end.saturating_sub(end_wob),
+            orig_end.saturating_add(end_wob),
+        )
+    }
+
     pub fn new(txid: usize, sample_size: usize, tx: &Transcript, cli: &AnnIsoCli) -> TxAbundance {
         // calclulate pt
         let nsj = tx.splice_junc.len() + cli.em_effective_len_coef; // J + 1
@@ -704,7 +802,11 @@ impl TxAbundance {
             orig_attrs: tx.get_attributes(),
             orig_is_plus_strand: is_plus_strand,
             sj_pairs: tx.get_splice_junction_pairs(),
-            fsm_abundance: vec![0.0; sample_size],
+            rc_fsm_jc: vec![0; sample_size],
+            rc_fsm_jc_tss: vec![0; sample_size],
+            rc_fsm_jc_tes: vec![0; sample_size],
+            rc_fsm_jc_tss_tes: vec![0; sample_size],
+            rc_fsm_jc_exact: vec![0; sample_size],
             abundance_cur: vec![0.1; sample_size],
             abundance_prev: vec![0.1; sample_size],
             sample_size,
@@ -717,58 +819,40 @@ impl TxAbundance {
         }
     }
 
-    /// Add the evidence count from a FSM misoform to the fsm_abundance of this transcript
-    /// Further check if each read is compatible with transcript start and end, if not,
-    /// then the evidence count from this misoform will not be added to the fsm_abundance
-    pub fn update_fsm_evidence_count(&mut self, misoform: &PTIR, cli: &AnnIsoCli) {
-        // if mono exonic, then no need to check start and end compatibility, directly add the evidence count
-        if self.is_mono_exonic || cli.no_check_tss_tes {
-            for sid in 0..self.sample_size {
-                self.fsm_abundance[sid] += misoform.sample_evidence_arr[sid] as f32;
-            }
-            return;
-        } else {
-            // for multisplice junction transcripts, check the compatibility of each read with transcript start and end
+    /// Count every full-chain read once, then test its terminal support independently.
+    pub fn update_fsm_evidence_count(&mut self, misoform: &PTIR, cli: &AnnIsoCli, exact: bool) {
+        let (start_left, start_right, end_left, end_right) = Self::terminal_wob_bounds(
+            self.orig_start,
+            self.orig_end,
+            self.orig_is_plus_strand,
+            cli.tss_wob,
+            cli.tes_wob,
+        );
 
-            let (start_left, start_right, end_left, end_right) = if self.orig_is_plus_strand {
-                (
-                    self.orig_start.saturating_sub(cli.terminal_tolerance_bp),
-                    self.orig_start + cli.tss_degrad_bp,
-                    self.orig_end.saturating_sub(cli.tes_degrad_bp),
-                    self.orig_end + cli.terminal_tolerance_bp,
-                )
-            } else {
-                (
-                    self.orig_start.saturating_sub(cli.terminal_tolerance_bp),
-                    self.orig_start + cli.tes_degrad_bp,
-                    self.orig_end.saturating_sub(cli.tss_degrad_bp),
-                    self.orig_end + cli.terminal_tolerance_bp,
-                )
-            };
-
-            for sample_idx in 0..self.sample_size {
-                let offset = misoform.sample_offset_arr[sample_idx];
-                let evidence = misoform.sample_evidence_arr[sample_idx];
-
-                if evidence == 0 {
-                    continue;
+        for sid in 0..self.sample_size {
+            let start = misoform.sample_offset_arr[sid] as usize;
+            let end = start + misoform.sample_evidence_arr[sid] as usize;
+            for read in &misoform.isoform_reads_slim_vec[start..end] {
+                self.rc_fsm_jc[sid] += 1;
+                if exact {
+                    self.rc_fsm_jc_exact[sid] += 1;
                 }
-
-                let mut count = 0.0;
-
-                for ridx in offset..(offset + evidence) {
-                    let rdiff = &misoform.isoform_reads_slim_vec[ridx as usize];
-
-                    if start_left <= rdiff.left
-                        && rdiff.left <= start_right
-                        && end_left <= rdiff.right
-                        && rdiff.right <= end_right
-                    {
-                        count += 1.0;
-                    }
+                let start_hit = start_left <= read.left && read.left <= start_right;
+                let end_hit = end_left <= read.right && read.right <= end_right;
+                let (tss_hit, tes_hit) = if self.orig_is_plus_strand {
+                    (start_hit, end_hit)
+                } else {
+                    (end_hit, start_hit)
+                };
+                if tss_hit {
+                    self.rc_fsm_jc_tss[sid] += 1;
                 }
-
-                self.fsm_abundance[sample_idx] += count;
+                if tes_hit {
+                    self.rc_fsm_jc_tes[sid] += 1;
+                }
+                if tss_hit && tes_hit {
+                    self.rc_fsm_jc_tss_tes[sid] += 1;
+                }
             }
         }
     }
@@ -868,7 +952,7 @@ impl TxAbundance {
             }
         }
 
-        // initialize abundance_cur based on fsm_abundance for alive samples
+        // Initialize EM abundance only for samples with compatible MSJC evidence.
         for sid in 0..self.sample_size {
             let byte_idx = sid / 8;
             let bit_idx = sid % 8;
@@ -987,7 +1071,7 @@ impl TxAbundance {
                 if cli.verbose {
                     info!(
                         "TxAbundance id {}, tx_id {:?}, sample {} fsm {} em prev {:.6} em cur {:.6},diff {:.6} rel_diff {:.6}",
-                        self.id, self.orig_tx_id, sid, self.fsm_abundance[sid], prev, cur, diff, rel_diff
+                        self.id, self.orig_tx_id, sid, self.rc_fsm_jc[sid], prev, cur, diff, rel_diff
                     );
                 }
                 if rel_diff > tol {
@@ -1014,7 +1098,11 @@ pub struct TxAbundanceView {
     orig_start: u64,
     orig_end: u64,
     orig_attrs: Vec<u8>,
-    pub fsm_abundance: Vec<f32>,
+    pub rc_fsm_jc: Vec<u64>,
+    pub rc_fsm_jc_tss: Vec<u64>,
+    pub rc_fsm_jc_tes: Vec<u64>,
+    pub rc_fsm_jc_tss_tes: Vec<u64>,
+    pub rc_fsm_jc_exact: Vec<u64>,
     pub em_abundance: Vec<f32>,
 }
 
@@ -1038,13 +1126,20 @@ impl TxAbundanceView {
         buf.extend_from_slice(&(txabd.orig_attrs.len() as u32).to_le_bytes());
         buf.extend_from_slice(txabd.orig_attrs.as_bytes());
 
-        // fsm_abundance,em_abundance
-
-        buf.extend_from_slice(&(txabd.fsm_abundance.len() as u32).to_le_bytes());
-        for &v in &txabd.fsm_abundance {
-            buf.extend_from_slice(&v.to_le_bytes());
+        for counts in [
+            &txabd.rc_fsm_jc,
+            &txabd.rc_fsm_jc_tss,
+            &txabd.rc_fsm_jc_tes,
+            &txabd.rc_fsm_jc_tss_tes,
+            &txabd.rc_fsm_jc_exact,
+        ] {
+            buf.extend_from_slice(&(counts.len() as u32).to_le_bytes());
+            for &v in counts {
+                buf.extend_from_slice(&v.to_le_bytes());
+            }
         }
 
+        // EM abundance remains the output of the existing EM iteration.
         buf.extend_from_slice(&(txabd.abundance_cur.len() as u32).to_le_bytes());
         for &v in &txabd.abundance_cur {
             buf.extend_from_slice(&v.to_le_bytes());
@@ -1087,20 +1182,25 @@ impl TxAbundanceView {
 
         pos += len as usize;
 
-        // fsm em abundance
-        let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
-        pos += 4;
-
-        let mut fsm_abundance = Vec::new();
-        let mut em_abundance = Vec::new();
-
-        for _ in 0..len {
-            fsm_abundance.push(f32::from_le_bytes(data[pos..pos + 4].try_into()?));
-            pos += 4;
+        fn read_counts(data: &[u8], pos: &mut usize) -> Result<Vec<u64>> {
+            let len = u32::from_le_bytes(data[*pos..*pos + 4].try_into()?) as usize;
+            *pos += 4;
+            let mut counts = Vec::with_capacity(len);
+            for _ in 0..len {
+                counts.push(u64::from_le_bytes(data[*pos..*pos + 8].try_into()?));
+                *pos += 8;
+            }
+            Ok(counts)
         }
+        let rc_fsm_jc = read_counts(data, &mut pos)?;
+        let rc_fsm_jc_tss = read_counts(data, &mut pos)?;
+        let rc_fsm_jc_tes = read_counts(data, &mut pos)?;
+        let rc_fsm_jc_tss_tes = read_counts(data, &mut pos)?;
+        let rc_fsm_jc_exact = read_counts(data, &mut pos)?;
 
         let len = u32::from_le_bytes(data[pos..pos + 4].try_into()?);
         pos += 4;
+        let mut em_abundance = Vec::with_capacity(len as usize);
         for _ in 0..len {
             em_abundance.push(f32::from_le_bytes(data[pos..pos + 4].try_into()?));
             pos += 4;
@@ -1116,42 +1216,29 @@ impl TxAbundanceView {
             orig_start,
             orig_end,
             orig_attrs: orig_attrs.to_vec(),
-            fsm_abundance,
+            rc_fsm_jc,
+            rc_fsm_jc_tss,
+            rc_fsm_jc_tes,
+            rc_fsm_jc_tss_tes,
+            rc_fsm_jc_exact,
             em_abundance,
         })
     }
 
-    /// count number of samples with (fsm_abundance + em_abundance) >= min_read
-    /// this is the overall threadshold for both em and fsm
-    pub fn get_positive_samples_fsm_em(&self, min_read: f32) -> usize {
-        let mut count = 0;
-        for (abd1, abd2) in self.em_abundance.iter().zip(&self.fsm_abundance) {
-            let total = abd1 + abd2;
-            if total >= min_read {
-                count += 1;
-            }
+    pub fn effective_em_abundance(&self, sample_idx: usize, min_em_abundance: f32) -> f32 {
+        let em = self.em_abundance[sample_idx];
+        if em >= min_em_abundance {
+            em
+        } else {
+            0.0
         }
-        count
     }
 
-    pub fn get_positive_samples_fsm_only(&self, min_read: f32) -> usize {
-        let mut count = 0;
-        for abd in &self.fsm_abundance {
-            if *abd >= min_read {
-                count += 1;
-            }
-        }
-        count
-    }
-
-    pub fn get_positive_samples_em_only(&self, min_read: f32) -> usize {
-        let mut count = 0;
-        for abd in &self.em_abundance {
-            if *abd >= min_read {
-                count += 1;
-            }
-        }
-        count
+    pub fn get_positive_samples(&self, min_read: u32) -> usize {
+        self.rc_fsm_jc
+            .iter()
+            .filter(|&&count| count >= min_read as u64)
+            .count()
     }
 
     pub fn write_line_directly(
@@ -1175,42 +1262,16 @@ impl TxAbundanceView {
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(&self.orig_gene_id)?;
         tableout.write_bytes(b"\t")?;
-        // confidence scores
-        let u32_arr = self
-            .fsm_abundance
-            .iter()
-            .zip(&self.em_abundance)
-            .map(|(&fsm, em)| fsm + em)
-            .collect::<Vec<f32>>();
-
-        let ranking_score = utils::calc_ranking_score_f32(
-            &u32_arr,
-            dbinfo.get_size(),
-            &global_stats.fsm_em_tx_abd_total,
-        );
+        let ranking_score =
+            calc_isoform_ranking_score(&self.rc_fsm_jc, &dbinfo.sample_total_evidence_vec);
 
         tableout.write_bytes(ranking_score.to_string().as_bytes())?;
         tableout.write_bytes(b"\t")?;
 
         global_stats.update_sample_level_stats(&self, cli);
 
-        let positive_samples_all = self.get_positive_samples_fsm_em(cli.min_read as f32);
-        let positive_samples_fsm = self.get_positive_samples_fsm_only(cli.min_read as f32);
-        let positive_samples_em = self.get_positive_samples_em_only(cli.min_read as f32);
-
-        if positive_samples_all != 0 {
-            tableout.write_bytes(b"yes")?;
-        } else {
-            tableout.write_bytes(b"no")?;
-        }
-        tableout.write_bytes(b":")?;
-        if positive_samples_fsm != 0 {
-            tableout.write_bytes(b"yes")?;
-        } else {
-            tableout.write_bytes(b"no")?;
-        }
-        tableout.write_bytes(b":")?;
-        if positive_samples_em != 0 {
+        let positive_samples = self.get_positive_samples(cli.min_read);
+        if positive_samples != 0 {
             tableout.write_bytes(b"yes")?;
         } else {
             tableout.write_bytes(b"no")?;
@@ -1218,48 +1279,39 @@ impl TxAbundanceView {
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(cli.min_read.to_string().as_bytes())?;
         tableout.write_bytes(b"\t")?;
-        tableout.write_bytes(
-            format!(
-                "{}:{}:{}/{}",
-                positive_samples_all,
-                positive_samples_fsm,
-                positive_samples_em,
-                dbinfo.get_size()
-            )
-            .as_bytes(),
-        )?;
+        tableout.write_bytes(format!("{}/{}", positive_samples, dbinfo.get_size()).as_bytes())?;
         tableout.write_bytes(b"\t")?;
         tableout.write_bytes(&self.orig_attrs)?;
         tableout.write_bytes(b"\t")?;
-        // let format_str = tableout.format_str.clone();
-        // tableout.write_bytes(format_str.as_bytes())?;
         tableout.write_format_str()?;
         for sid in 0..dbinfo.get_size() {
-            let fsm = self.fsm_abundance[sid];
-            let em = match self.em_abundance[sid] >= cli.min_em_abundance {
-                true => self.em_abundance[sid],
-                false => 0.0,
+            let fsm = self.rc_fsm_jc[sid];
+            let em = self.effective_em_abundance(sid, cli.min_em_abundance) as f64;
+            let total_evidence = dbinfo.sample_total_evidence_vec[sid];
+            let fraction = |count: u64| {
+                if fsm == 0 {
+                    0.0
+                } else {
+                    count as f64 / fsm as f64
+                }
             };
-
-            let total_abd = fsm + em;
-            let total_cov = global_stats.fsm_em_tx_abd_total[sid];
-
-            let fsm_cpm = utils::calc_cpm_f32(&fsm, &total_cov);
-            let em_cpm = utils::calc_cpm_f32(&em, &total_cov);
-            let total_cpm = utils::calc_cpm_f32(&total_abd, &total_cov);
-
-            tableout.write_bytes(b"\t")?;
-            tableout.write_bytes(total_cpm.to_string().as_bytes())?;
-            tableout.write_bytes(b":")?;
-            tableout.write_bytes(total_abd.to_string().as_bytes())?;
-            tableout.write_bytes(b":")?;
-            tableout.write_bytes(fsm_cpm.to_string().as_bytes())?;
-            tableout.write_bytes(b":")?;
-            tableout.write_bytes(fsm.to_string().as_bytes())?;
-            tableout.write_bytes(b":")?;
-            tableout.write_bytes(em_cpm.to_string().as_bytes())?;
-            tableout.write_bytes(b":")?;
-            tableout.write_bytes(em.to_string().as_bytes())?;
+            let sample = format!(
+                "\t{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+                fsm,
+                self.rc_fsm_jc_tss[sid],
+                self.rc_fsm_jc_tes[sid],
+                self.rc_fsm_jc_tss_tes[sid],
+                self.rc_fsm_jc_exact[sid],
+                fsm - self.rc_fsm_jc_exact[sid],
+                em,
+                isoform_cpm(fsm as f64, total_evidence),
+                isoform_cpm(self.rc_fsm_jc_tss_tes[sid] as f64, total_evidence),
+                isoform_cpm(fsm as f64 + em, total_evidence),
+                fraction(self.rc_fsm_jc_tss[sid]),
+                fraction(self.rc_fsm_jc_tes[sid]),
+                fraction(self.rc_fsm_jc_tss_tes[sid]),
+            );
+            tableout.write_bytes(sample.as_bytes())?;
         }
         tableout.write_bytes(b"\n")?;
         Ok(())
@@ -1299,7 +1351,6 @@ pub struct MSJC {
     is_mono_exon_merged: bool,
     mono_exon_total_length: u64,
     mono_exon_merged_cnt: u64,
-
     // // 用于 mono-exon merge 加速: sid -> index in nonzero_sample_indices
     // 长度为 sample_size, 值为 u32::MAX 表示不存在
     // sid_to_pos: Vec<u32>,
@@ -1351,7 +1402,6 @@ impl MSJC {
     }
 
     pub fn add_mono_exon_msjc(&mut self, msjc: &MSJC) {
-
         for (i, &sid) in msjc.nonzero_sample_indices.iter().enumerate() {
             match self.nonzero_sample_indices.binary_search(&sid) {
                 Ok(pos) => {
@@ -1428,7 +1478,7 @@ impl MSJC {
             .unwrap()
             .0
             .abs_diff(txabd.orig_start)
-            > cli.flank as u64
+            > cli.mono_exon_wobble
         {
             return false;
         }
@@ -1439,7 +1489,7 @@ impl MSJC {
             .unwrap()
             .1
             .abs_diff(txabd.orig_end)
-            > cli.flank as u64
+            > cli.mono_exon_wobble
         {
             return false;
         }
@@ -1933,7 +1983,12 @@ impl PartialOrd for HeapEntry {
 impl GetMemSize for TxAbundance {
     fn get_mem_size(&self) -> usize {
         let size = std::mem::size_of_val(&self.id)
-            + std::mem::size_of_val(&0f32) * self.fsm_abundance.len()
+            + std::mem::size_of_val(&0u64)
+                * (self.rc_fsm_jc.len()
+                    + self.rc_fsm_jc_tss.len()
+                    + self.rc_fsm_jc_tes.len()
+                    + self.rc_fsm_jc_tss_tes.len()
+                    + self.rc_fsm_jc_exact.len())
             + std::mem::size_of_val(&0f32) * self.abundance_cur.len()
             + std::mem::size_of_val(&0f32) * self.abundance_prev.len()
             + std::mem::size_of_val(&self.sample_size)
@@ -1981,5 +2036,583 @@ impl GetMemSize for ChromGroupedTxManager {
         }
         // + std::mem::size_of_val(&self._position_to_group_idx);
         size
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cmd::isoform::ISOFORM_FORMAT;
+    use crate::meta::Meta;
+    use crate::myio::{DBInfos, Header};
+    use crate::ptir::{ReadDiffSlim, RecordType};
+    use crate::strand::Strand as ReadStrand;
+    use clap::Parser;
+
+    fn test_cli() -> AnnIsoCli {
+        AnnIsoCli::parse_from([
+            "isopedia isoform",
+            "--idxdir",
+            "index",
+            "--gtf",
+            "query.gtf",
+            "--output",
+            "result.tsv",
+        ])
+    }
+
+    #[test]
+    fn multi_exon_flank_defaults_to_ten_and_can_be_disabled() {
+        assert_eq!(test_cli().flank, 10);
+        assert_eq!(
+            AnnIsoCli::parse_from([
+                "isopedia isoform",
+                "-i",
+                "index",
+                "-g",
+                "query.gtf",
+                "-o",
+                "out.tsv",
+                "-f",
+                "0"
+            ])
+            .flank,
+            0
+        );
+    }
+
+    fn test_tx(is_plus: bool) -> Transcript {
+        Transcript {
+            origin_idx: 0,
+            chrom: "1".to_string(),
+            start: 100,
+            end: 500,
+            splice_junc: vec![(150, 300)],
+            exons: vec![(100, 150), (300, 500)],
+            is_mono_exonic: false,
+            gene_id: "gene".to_string(),
+            tx_id: "tx".to_string(),
+            records: Vec::new(),
+            strand: if is_plus {
+                Strand::Forward
+            } else {
+                Strand::Reverse
+            },
+        }
+    }
+
+    fn test_ptir(ends: &[(u64, u64)]) -> PTIR {
+        PTIR {
+            signature: 0,
+            total_evidence: ends.len() as u32,
+            sample_size: 1,
+            sample_evidence_arr: vec![ends.len() as u32],
+            sample_offset_arr: vec![0],
+            chrom: "1".to_string(),
+            chrom_id: 0,
+            rec_type: RecordType::UnK,
+            splice_junctions_vec: vec![(150, 300)],
+            isoform_reads_slim_vec: ends
+                .iter()
+                .map(|&(left, right)| ReadDiffSlim {
+                    left,
+                    right,
+                    strand: ReadStrand::Plus,
+                    supp_seg_vec_offset: 0,
+                    supp_seg_vec_length: 0,
+                    info: Vec::new(),
+                })
+                .collect(),
+            supp_segs_vec: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn full_chain_checks_ordered_pairs_and_flank_boundary() {
+        assert!(full_junction_chain_matches(&[(101, 201)], &[(100, 200)], 1));
+        assert!(!full_junction_chain_matches(
+            &[(102, 201)],
+            &[(100, 200)],
+            1
+        ));
+        assert!(!full_junction_chain_matches(
+            &[(100, 300), (200, 400)],
+            &[(100, 200), (300, 400)],
+            0
+        ));
+        assert!(!full_junction_chain_matches(
+            &[(100, 200)],
+            &[(100, 200), (300, 400)],
+            0
+        ));
+    }
+
+    #[test]
+    fn exact_and_wobble_are_classified_per_transcript() {
+        let cli = test_cli();
+        let mut exact_tx = test_tx(true);
+        exact_tx.tx_id = "exact".to_string();
+        let mut wobble_tx = test_tx(true);
+        wobble_tx.tx_id = "wobble".to_string();
+        wobble_tx.splice_junc = vec![(160, 310)];
+        let mut outside_tx = test_tx(true);
+        outside_tx.tx_id = "outside".to_string();
+        outside_tx.splice_junc = vec![(161, 311)];
+
+        let rec = test_ptir(&[(100, 500), (100, 500)]);
+        let mut bytes = Vec::new();
+        let len = rec.gz_encode(&mut bytes);
+        let mut archive = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut archive, &bytes).unwrap();
+        let ptr = PTIROffsetPtr::new(0, len, 2);
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+
+        for txs in [
+            vec![&exact_tx, &wobble_tx, &outside_tx],
+            vec![&outside_tx, &wobble_tx, &exact_tx],
+        ] {
+            let mut group = GroupedTx::from_grouped_txs(1, &txs, 0, &cli);
+            let all_res = group
+                .sj_pooled_positions_multi_exonic
+                .iter()
+                .map(|_| vec![ptr.clone()])
+                .collect();
+            let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+            group.update_results(&all_res, &vec![], &mut cache, &dbinfo, &cli);
+            for tx in &group.tx_abundances {
+                let (total, exact) = match tx.orig_tx_id.as_str() {
+                    "exact" => (2, 2),
+                    "wobble" => (2, 0),
+                    "outside" => (0, 0),
+                    _ => unreachable!(),
+                };
+                assert_eq!(tx.rc_fsm_jc, vec![total]);
+                assert_eq!(tx.rc_fsm_jc_exact, vec![exact]);
+            }
+        }
+
+        let mut strict_cli = cli.clone();
+        strict_cli.flank = 0;
+        let mut group = GroupedTx::from_grouped_txs(
+            1,
+            &vec![&exact_tx, &wobble_tx, &outside_tx],
+            0,
+            &strict_cli,
+        );
+        let all_res = group
+            .sj_pooled_positions_multi_exonic
+            .iter()
+            .map(|_| vec![ptr.clone()])
+            .collect();
+        let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+        group.update_results(&all_res, &vec![], &mut cache, &dbinfo, &strict_cli);
+        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![2]);
+        assert_eq!(group.tx_abundances[0].rc_fsm_jc_exact, vec![2]);
+        assert_eq!(group.tx_abundances[1].rc_fsm_jc, vec![0]);
+        assert_eq!(group.tx_abundances[2].rc_fsm_jc, vec![0]);
+    }
+
+    #[test]
+    fn mono_exon_exact_and_wobble_use_endpoints_not_flank() {
+        let mut cli = test_cli();
+        cli.flank = 0;
+        let mut tx = test_tx(true);
+        tx.is_mono_exonic = true;
+        tx.exons = vec![(100, 500)];
+        tx.splice_junc = vec![(100, 500)];
+
+        let mut bytes = Vec::new();
+        let exact_rec = {
+            let mut rec = test_ptir(&[(100, 500)]);
+            rec.splice_junctions_vec = vec![(100, 500)];
+            rec
+        };
+        let exact_len = exact_rec.gz_encode(&mut bytes);
+        let wobble_offset = bytes.len() as u64;
+        let wobble_rec = {
+            let mut rec = test_ptir(&[(150, 450)]);
+            rec.splice_junctions_vec = vec![(150, 450)];
+            rec
+        };
+        let wobble_len = wobble_rec.gz_encode(&mut bytes);
+        let mut archive = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut archive, &bytes).unwrap();
+        let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+        let mut group = GroupedTx::from_grouped_txs(1, &vec![&tx], 0, &cli);
+        let partitions = vec![SegmentedMonoExonSearchResult {
+            start: 100,
+            end: 500,
+            ptrs: vec![
+                PTIROffsetPtr::new(0, exact_len, 0),
+                PTIROffsetPtr::new(wobble_offset, wobble_len, 0),
+            ],
+            mono_exon_tx_indices: vec![0],
+        }];
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+        group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
+        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![2]);
+        assert_eq!(group.tx_abundances[0].rc_fsm_jc_exact, vec![1]);
+    }
+
+    #[test]
+    fn direct_counts_keep_all_full_chain_reads_and_intersect_terminals() {
+        let mut cli = test_cli();
+        cli.tss_wob = 20;
+        cli.tes_wob = 80;
+        let mut plus = TxAbundance::new(0, 1, &test_tx(true), &cli);
+        plus.update_fsm_evidence_count(
+            &test_ptir(&[(100, 700), (60, 500), (100, 500), (60, 700)]),
+            &cli,
+            true,
+        );
+        assert_eq!(plus.rc_fsm_jc, vec![4]);
+        assert_eq!(plus.rc_fsm_jc_tss, vec![2]);
+        assert_eq!(plus.rc_fsm_jc_tes, vec![2]);
+        assert_eq!(plus.rc_fsm_jc_tss_tes, vec![1]);
+
+        cli.no_check_tss_tes = true;
+        let mut minus = TxAbundance::new(0, 1, &test_tx(false), &cli);
+        minus.update_fsm_evidence_count(
+            &test_ptir(&[(0, 500), (100, 600), (100, 500), (0, 600)]),
+            &cli,
+            false,
+        );
+        assert_eq!(minus.rc_fsm_jc, vec![4]);
+        assert_eq!(minus.rc_fsm_jc_tss, vec![2]);
+        assert_eq!(minus.rc_fsm_jc_tes, vec![2]);
+        assert_eq!(minus.rc_fsm_jc_tss_tes, vec![1]);
+        assert_eq!(plus.rc_fsm_jc_exact, vec![4]);
+        assert_eq!(minus.rc_fsm_jc_exact, vec![0]);
+    }
+
+    #[test]
+    fn direct_counts_survive_temporary_encoding() {
+        let cli = test_cli();
+        let mut tx = TxAbundance::new(0, 1, &test_tx(true), &cli);
+        tx.rc_fsm_jc = vec![4];
+        tx.rc_fsm_jc_tss = vec![2];
+        tx.rc_fsm_jc_tes = vec![3];
+        tx.rc_fsm_jc_tss_tes = vec![1];
+        tx.rc_fsm_jc_exact = vec![3];
+        tx.abundance_cur = vec![1.25];
+        let view = TxAbundanceView::from_bytes(&TxAbundanceView::encode(&tx)).unwrap();
+        assert_eq!(view.rc_fsm_jc, vec![4]);
+        assert_eq!(view.rc_fsm_jc_tss, vec![2]);
+        assert_eq!(view.rc_fsm_jc_tes, vec![3]);
+        assert_eq!(view.rc_fsm_jc_tss_tes, vec![1]);
+        assert_eq!(view.rc_fsm_jc_exact, vec![3]);
+        assert_eq!(view.em_abundance, vec![1.25]);
+    }
+
+    #[test]
+    fn sample_output_groups_rc_cpm_and_frac_in_format_order() {
+        let cli = test_cli();
+        let mut tx = TxAbundance::new(0, 1, &test_tx(true), &cli);
+        tx.rc_fsm_jc[0] = 5;
+        tx.rc_fsm_jc_tss[0] = 3;
+        tx.rc_fsm_jc_tes[0] = 4;
+        tx.rc_fsm_jc_tss_tes[0] = 2;
+        tx.rc_fsm_jc_exact[0] = 1;
+        tx.abundance_cur[0] = 1.5;
+        let view = TxAbundanceView::from_bytes(&tx.to_bytes()).unwrap();
+
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+        dbinfo.sample_total_evidence_vec.push(100);
+        let mut db_infos = DBInfos::new();
+        db_infos.add_sample_evidence("s", 100);
+        let mut header = Header::new();
+        for column in [
+            "chrom",
+            "start",
+            "end",
+            "length",
+            "exon_count",
+            "trans_id",
+            "gene_id",
+            "ranking_score",
+            "detected",
+            "min_read",
+            "n_pos_samples/sample_size",
+            "attributes",
+        ] {
+            header.add_column(column).unwrap();
+        }
+        header.add_sample_name("s").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("isoform.tsv.gz");
+        let mut output = TableOutput::new(
+            &path,
+            header,
+            db_infos,
+            Meta::new_empty(vec!["s".to_string()]),
+            ISOFORM_FORMAT.to_string(),
+        );
+        view.write_line_directly(&mut GlobalStats::new(1), &dbinfo, &cli, &mut output)
+            .unwrap();
+        output.finish().unwrap();
+        drop(output);
+
+        let mut text = String::new();
+        let mut reader = flate2::read::GzDecoder::new(File::open(path).unwrap());
+        reader.read_to_string(&mut text).unwrap();
+        let row = text.lines().find(|line| !line.starts_with('#')).unwrap();
+        let fields: Vec<_> = row.split('\t').collect();
+        assert_eq!(fields[12], ISOFORM_FORMAT);
+        assert_eq!(fields[12].split(':').count(), 13);
+        assert_eq!(
+            fields[13].split(':').collect::<Vec<_>>(),
+            [
+                "5", "3", "4", "2", "1", "4", "1.5", "50000", "20000", "65000", "0.6", "0.8",
+                "0.4",
+            ]
+        );
+    }
+
+    #[test]
+    fn exact_counts_survive_multiple_temporary_shards() {
+        let mut cli = test_cli();
+        cli.output_tmp_shard_counts = 1;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut manager = TmpOutputManager::new(&temp_dir.path().join("isoform.tmp"), &cli);
+        for (orig_idx, total, exact) in [(2, 5, 3), (1, 4, 4)] {
+            let mut tx = test_tx(true);
+            tx.origin_idx = orig_idx;
+            let mut group = GroupedTx::from_grouped_txs(2, &vec![&tx], 0, &cli);
+            group.tx_abundances[0].rc_fsm_jc[0] = total;
+            group.tx_abundances[0].rc_fsm_jc_exact[0] = exact;
+            manager.dump_grouped_tx(&mut group);
+        }
+        manager.finish();
+        let views: Vec<_> = manager.by_ref().collect();
+        assert_eq!(views.len(), 2);
+        assert_eq!(views[0]._orig_idx, 1);
+        assert_eq!(views[0].rc_fsm_jc, vec![4, 0]);
+        assert_eq!(views[0].rc_fsm_jc_exact, vec![4, 0]);
+        assert_eq!(views[1]._orig_idx, 2);
+        assert_eq!(views[1].rc_fsm_jc, vec![5, 0]);
+        assert_eq!(views[1].rc_fsm_jc_exact, vec![3, 0]);
+        manager.clean_up().unwrap();
+    }
+
+    #[test]
+    fn mono_fsm_is_counted_once_across_search_partitions() {
+        let cli = test_cli();
+        let mut tx = test_tx(true);
+        tx.is_mono_exonic = true;
+        tx.exons = vec![(100, 500)];
+        tx.splice_junc = vec![(100, 500)];
+        let mut group = GroupedTx::from_grouped_txs(1, &vec![&tx], 0, &cli);
+
+        let mut rec = test_ptir(&[(100, 500)]);
+        rec.splice_junctions_vec = vec![(100, 500)];
+        let mut bytes = Vec::new();
+        let len = rec.gz_encode(&mut bytes);
+        let mut archive = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut archive, &bytes).unwrap();
+        let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+        let ptr = PTIROffsetPtr::new(0, len, 2);
+        let partitions = vec![
+            SegmentedMonoExonSearchResult {
+                start: 100,
+                end: 300,
+                ptrs: vec![ptr.clone()],
+                mono_exon_tx_indices: vec![0],
+            },
+            SegmentedMonoExonSearchResult {
+                start: 300,
+                end: 500,
+                ptrs: vec![ptr],
+                mono_exon_tx_indices: vec![0],
+            },
+        ];
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+        group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
+        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![1]);
+        assert!(group.msjcs.is_empty());
+    }
+
+    #[test]
+    fn internal_mono_read_remains_em_candidate() {
+        let cli = test_cli();
+        let mut tx = test_tx(true);
+        tx.is_mono_exonic = true;
+        tx.exons = vec![(100, 500)];
+        tx.splice_junc = vec![(100, 500)];
+        let mut group = GroupedTx::from_grouped_txs(1, &vec![&tx], 0, &cli);
+
+        let mut rec = test_ptir(&[(200, 400)]);
+        rec.splice_junctions_vec = vec![(200, 400)];
+        let mut bytes = Vec::new();
+        let len = rec.gz_encode(&mut bytes);
+        let mut archive = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut archive, &bytes).unwrap();
+        let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+        let partitions = vec![SegmentedMonoExonSearchResult {
+            start: 100,
+            end: 500,
+            ptrs: vec![PTIROffsetPtr::new(0, len, 2)],
+            mono_exon_tx_indices: vec![0],
+        }];
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+        group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
+        assert_eq!(group.tx_abundances[0].rc_fsm_jc, vec![0]);
+        assert_eq!(group.msjcs.len(), 1);
+        assert_eq!(group.tx_abundances[0].msjc_ids.len(), 1);
+    }
+
+    #[test]
+    fn full_chain_is_never_assigned_to_em_regardless_of_transcript_order() {
+        let cli = test_cli();
+        let mut short = test_tx(true);
+        short.tx_id = "short".to_string();
+        let mut long = test_tx(true);
+        long.tx_id = "long".to_string();
+        long.splice_junc = vec![(150, 300), (350, 400)];
+        long.exons = vec![(100, 150), (300, 350), (400, 500)];
+
+        let rec = test_ptir(&[(100, 500)]);
+        let mut bytes = Vec::new();
+        let len = rec.gz_encode(&mut bytes);
+        let mut archive = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut archive, &bytes).unwrap();
+        let ptr = PTIROffsetPtr::new(0, len, 2);
+        let all_res = vec![vec![ptr.clone()], vec![ptr], vec![], vec![]];
+        let mut dbinfo = DatasetInfo::new();
+        dbinfo.add_sample("s".to_string(), None);
+
+        for txs in [vec![&long, &short], vec![&short, &long]] {
+            let mut group = GroupedTx::from_grouped_txs(1, &txs, 0, &cli);
+            let mut cache = PTIRArchiveCache::new(archive.path(), 1024, 1);
+            group.update_results(&all_res, &vec![], &mut cache, &dbinfo, &cli);
+            let short_abd = group
+                .tx_abundances
+                .iter()
+                .find(|tx| tx.orig_tx_id == "short")
+                .unwrap();
+            let long_abd = group
+                .tx_abundances
+                .iter()
+                .find(|tx| tx.orig_tx_id == "long")
+                .unwrap();
+            assert_eq!(short_abd.rc_fsm_jc, vec![1]);
+            assert_eq!(long_abd.rc_fsm_jc, vec![0]);
+            assert!(group.msjcs.is_empty());
+        }
+    }
+
+    #[test]
+    fn mono_exon_wobble_controls_fsm_matching() {
+        let mut cli = AnnIsoCli::parse_from([
+            "isopedia isoform",
+            "--idxdir",
+            "index",
+            "--gtf",
+            "query.gtf",
+            "--output",
+            "result.tsv",
+            "--mono-exon-wobble",
+            "50",
+        ]);
+        let tx = Transcript {
+            origin_idx: 0,
+            chrom: "1".to_string(),
+            start: 100,
+            end: 200,
+            splice_junc: vec![(100, 200)],
+            exons: vec![(100, 200)],
+            is_mono_exonic: true,
+            gene_id: "gene".to_string(),
+            tx_id: "tx".to_string(),
+            records: Vec::new(),
+            strand: Strand::Forward,
+        };
+        let txabd = TxAbundance::new(0, 1, &tx, &cli);
+        let mut msjc = MSJC::new_mono_exon_merged(1);
+
+        msjc.splice_junctions_vec = vec![(150, 250)];
+        assert!(msjc.check_mono_exon_fsm(&txabd, &cli));
+        msjc.splice_junctions_vec = vec![(151, 250)];
+        assert!(!msjc.check_mono_exon_fsm(&txabd, &cli));
+        msjc.splice_junctions_vec = vec![(150, 251)];
+        assert!(!msjc.check_mono_exon_fsm(&txabd, &cli));
+
+        cli.mono_exon_wobble = 0;
+        cli.flank = 1000;
+        msjc.splice_junctions_vec = vec![(100, 200)];
+        assert!(msjc.check_mono_exon_fsm(&txabd, &cli));
+        msjc.splice_junctions_vec = vec![(101, 200)];
+        assert!(!msjc.check_mono_exon_fsm(&txabd, &cli));
+    }
+
+    #[test]
+    fn terminal_wob_bounds_follow_transcript_strand() {
+        assert_eq!(
+            TxAbundance::terminal_wob_bounds(100, 500, true, 20, 80),
+            (80, 120, 420, 580)
+        );
+        assert_eq!(
+            TxAbundance::terminal_wob_bounds(100, 500, false, 20, 80),
+            (20, 180, 480, 520)
+        );
+    }
+
+    #[test]
+    fn terminal_wob_bounds_saturate_at_coordinate_limits() {
+        assert_eq!(
+            TxAbundance::terminal_wob_bounds(10, u64::MAX - 10, true, 20, 20),
+            (0, 30, u64::MAX - 30, u64::MAX)
+        );
+    }
+
+    fn tx_view(rc_fsm_jc: Vec<u64>, em_abundance: Vec<f32>) -> TxAbundanceView {
+        let zeros = vec![0; rc_fsm_jc.len()];
+        TxAbundanceView {
+            _orig_idx: 0,
+            orig_tx_id: Vec::new(),
+            orig_gene_id: Vec::new(),
+            orig_tx_len: 0,
+            orig_n_exon: 0,
+            orig_chrom: Vec::new(),
+            orig_start: 0,
+            orig_end: 0,
+            orig_attrs: Vec::new(),
+            rc_fsm_jc,
+            rc_fsm_jc_tss: zeros.clone(),
+            rc_fsm_jc_tes: zeros.clone(),
+            rc_fsm_jc_tss_tes: zeros,
+            rc_fsm_jc_exact: vec![0; em_abundance.len()],
+            em_abundance,
+        }
+    }
+
+    #[test]
+    fn positive_samples_ignore_em_only_support() {
+        let txview = tx_view(vec![1, 2, 0], vec![1.0, 0.0, 2.0]);
+        assert_eq!(txview.get_positive_samples(2), 1);
+        let mut stats = GlobalStats::new(3);
+        let mut cli = test_cli();
+        cli.min_read = 2;
+        stats.update_sample_level_stats(&txview, &cli);
+        assert_eq!(stats.sample_posi_tx_count_fsm, vec![0, 1, 0]);
+    }
+
+    #[test]
+    fn em_abundance_uses_reporting_threshold() {
+        let txview = tx_view(vec![0, 0], vec![1.5, 2.0]);
+        assert_eq!(txview.effective_em_abundance(0, 2.0), 0.0);
+        assert_eq!(txview.effective_em_abundance(1, 2.0), 2.0);
+        assert_eq!(txview.get_positive_samples(1), 0);
+    }
+
+    #[test]
+    fn ranking_and_cpm_handle_zero_evidence() {
+        assert_eq!(calc_isoform_ranking_score(&[0, 0], &[0, 0]), 0.0);
+        assert!((calc_isoform_ranking_score(&[1], &[100]) - 10_000.0).abs() < 1e-8);
+        assert_eq!(isoform_cpm(1.0, 0), 0.0);
     }
 }

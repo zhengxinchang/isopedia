@@ -301,12 +301,13 @@ Core options:
 - `-i, --idxdir <IDXDIR>`
 - `-g, --gtf <GTF>`
 - `-o, --output <OUTPUT>`
-- `-f, --flank <FLANK>` (default: `10`)
+- `-f, --flank <FLANK>` (default: `0`; multi-exon junction matching tolerance)
+- `-F, --mono-exon-wobble <MONO_EXON_WOBBLE>` (default: `50`; expands the mono-exon candidate search interval by this many bp on each side, and requires both read ends to be within this distance of the annotated ends for FSM)
 - `-m, --min-read <MIN_READ>` (default: `1`)
 - `--info`
 - `-n, --num-threads <NUM_THREADS>` (default: `4`)
 - EM options: `--em-max-iter`, `--em-conv-min-diff`, `--em-chunk-size`, `--em-effective-len-coef`, `--em-damping-factor`, `--min-em-abundance`
-- TSS/TES options: `--no-check-tss-tes`, `--tss-degrad-bp`, `--tes-degrad-bp`, `--terminal-tolerance-bp`
+- TSS/TES options: `--no-check-tss-tes`, `--tss-wob`, `--tes-wob`. The wobble values are maximum absolute deviations in bp and apply in both directions around the annotated TSS and TES.
 - Cache options: `-c, --cached-nodes`, `--cached-chunk-num`, `--cached-chunk-size-mb`
 - `--output-tmp-shard-counts`
 - `--verbose`

@@ -23,6 +23,8 @@ use serde::Serialize;
 use rayon::ThreadPoolBuilder;
 use sysinfo::{Pid, ProcessRefreshKind, System};
 
+pub(crate) const ISOFORM_FORMAT: &str = "RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES";
+
 #[derive(Parser, Debug, Serialize, Clone)]
 #[command(name = "isopedia isoform")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
@@ -34,6 +36,12 @@ use sysinfo::{Pid, ProcessRefreshKind, System};
 # Isopedia isoform needs the input gtf file to be sorted. use the following command to sort the gtf file:
 gffread -T -o- input.gtf  | sort -k1,1 -k4,4n | gffread - -o sorted.gtf
 
+Each sample field is:
+RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES
+All CPM fields use the sample's total indexed evidence as the denominator.
+Direct detection uses RC_FSM_JC only; EM-assigned reads contribute to abundance estimates, not detection.
+For multi-exon transcripts, --flank controls candidate search and full-junction-chain matching; exact means every junction coordinate equals the annotation. For mono-exon transcripts, --mono-exon-wobble controls both candidate search and two-end FSM matching; exact/wobble-only describe equality/tolerance of both ends, not a junction chain. --tss-wob and --tes-wob independently score terminal support in either direction.
+
 ")]
 pub struct AnnIsoCli {
     /// Path to the index directory
@@ -44,9 +52,13 @@ pub struct AnnIsoCli {
     #[arg(short, long)]
     pub gtf: PathBuf,
 
-    /// Flanking size (in bases) before and after the position
+    /// Maximum deviation (bp) for multi-exon junction candidate search and full-chain matching; 0 requires exact coordinates
     #[arg(short, long, default_value_t = 10)]
     pub flank: u64,
+
+    /// Expand mono-exon searches by this many bp on each side; FSM requires both read ends within this distance of the annotated ends
+    #[arg(short = 'F', long, default_value_t = 50)]
+    pub mono_exon_wobble: u64,
 
     /// Minimum number of reads required to define a positive sample
     #[arg(short, long, default_value_t = 1)]
@@ -88,24 +100,25 @@ pub struct AnnIsoCli {
     #[arg(long, default_value_t = 0.0001)]
     pub min_em_abundance: f32,
 
-    /// No check TSS and TES
-    #[arg(long, default_value_t = false, hide = true)]
+    /// Deprecated compatibility flag; TSS/TES support is always counted
+    #[arg(long, default_value_t = false)]
     pub no_check_tss_tes: bool,
 
-    /// Maximum allowed degradation bp for TSS
-    #[arg(long, default_value_t = 2000, hide = true)]
-    pub tss_degrad_bp: u64,
-
-    /// Maximum allowed degradation bp for TES
-    #[arg(long, default_value_t = 8000, hide = true)]
-    pub tes_degrad_bp: u64,
-
+    /// Maximum absolute deviation between read and annotated TSS positions
     #[arg(
         long,
-        default_value_t = 10,
-        help = "Maximum allowed deviation (bp) beyond annotated TSS and TES.\nIsoforms whose TSS and TES fall outside the annotation but within this tolerance are still classified as FSM."
+        default_value_t = 50,
+        help = "Maximum allowed absolute deviation (bp) between read and annotated TSS positions. The tolerance applies in both directions."
     )]
-    pub terminal_tolerance_bp: u64,
+    pub tss_wob: u64,
+
+    /// Maximum absolute deviation between read and annotated TES positions
+    #[arg(
+        long,
+        default_value_t = 50,
+        help = "Maximum allowed absolute deviation (bp) between read and annotated TES positions. The tolerance applies in both directions."
+    )]
+    pub tes_wob: u64,
 
     /// Maximum number of cached tree nodes in memory
     #[arg(short = 'c', long = "cached-nodes", default_value_t = 10)]
@@ -162,6 +175,11 @@ impl AnnIsoCli {
             is_ok = false;
         }
 
+        if self.min_read == 0 {
+            error!("--min-read must be at least 1");
+            is_ok = false;
+        }
+
         if is_ok != true {
             std::process::exit(1);
         }
@@ -171,6 +189,9 @@ impl AnnIsoCli {
 pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     greetings2(&cli);
     cli.validate();
+    if cli.no_check_tss_tes {
+        warn!("--no-check-tss-tes is obsolete: TSS/TES support is always counted for the isoform output");
+    }
 
     ThreadPoolBuilder::new()
         .num_threads(cli.num_threads)
@@ -236,9 +257,9 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     out_header.add_column("trans_id")?;
     out_header.add_column("gene_id")?;
     out_header.add_column("ranking_score")?;
-    out_header.add_column("detected(total:fsm:em)")?;
+    out_header.add_column("detected")?;
     out_header.add_column("min_read")?;
-    out_header.add_column("n_pos_samples(total:fsm:em/sample_size)")?;
+    out_header.add_column("n_pos_samples/sample_size")?;
     out_header.add_column("attributes")?;
     let mut db_infos = DBInfos::new();
     for (name, evidence) in index_info.get_sample_evidence_pair_vec() {
@@ -251,7 +272,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
         out_header.clone(),
         db_infos.clone(),
         meta.clone(),
-        "CPM:COUNT:FSM_CPM:FSM_COUNT:EM_CPM:EM_COUNT:INFO".to_string(),
+        ISOFORM_FORMAT.to_string(),
     );
 
     info!("Initializing transcript groups");
@@ -287,7 +308,6 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
             &mut archive_cache,
             &index_info,
             &mut tmp_tx_manger,
-            &mut global_stats,
         );
 
         forest.clear_all_caches();
@@ -334,9 +354,8 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
 
     tableout.finish()?;
 
-    // output global stats each sample is a row, columns are  sample name, fsm_total(pct), em_total(pct), fsm_em_total(pct)
     info!("> Stats summary:");
-    info!("> Sample\tFSM(CPT)\tEM(CPT)\tFSM+EM(CPT)");
+    info!("> Sample\tDirect-supported transcripts (pct)");
     for sample_name in index_info.get_sample_names() {
         let sample_idx = index_info
             .get_sample_idx_by_name(&sample_name)
@@ -345,17 +364,14 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
             .unwrap();
 
         let fsm_count = global_stats.get_fsm_tx_by_sample_idx(sample_idx);
-        let em_count = global_stats.get_em_tx_by_sample_idx(sample_idx);
-        let fsm_em_count = global_stats.get_fsm_em_tx_by_sample_idx(sample_idx);
         let total_tx = gtf.trans_count as f32;
-        let fsm_pct = (fsm_count as f32 / total_tx) * 100.0;
-        let em_pct = (em_count as f32 / total_tx) * 100.0;
-        let fsm_em_pct = (fsm_em_count as f32 / total_tx) * 100.0;
+        let fsm_pct = if total_tx > 0.0 {
+            (fsm_count as f32 / total_tx) * 100.0
+        } else {
+            0.0
+        };
 
-        info!(
-            "> {}\t{}({:.2}%)\t{}({:.2}%)\t{}({:.2}%)",
-            sample_name, fsm_count, fsm_pct, em_count, em_pct, fsm_em_count, fsm_em_pct
-        );
+        info!("> {}\t{}({:.2}%)", sample_name, fsm_count, fsm_pct);
     }
     info!("Save output to file {:?}", tableout.get_out_path().unwrap());
 
