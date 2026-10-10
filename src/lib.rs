@@ -22,3 +22,4 @@ pub mod utils;
 // pub mod writer;
 pub mod grouped_tx;
 pub mod strand;
+pub mod error;

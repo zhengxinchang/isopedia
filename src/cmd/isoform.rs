@@ -390,6 +390,16 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
 
         info!("> {}\t{}({:.2}%)", sample_name, fsm_count, fsm_pct);
     }
+    let detected_count = global_stats.any_sample_posi_tx_count_fsm;
+    let detected_pct = if gtf.trans_count > 0 {
+        detected_count as f64 / gtf.trans_count as f64 * 100.0
+    } else {
+        0.0
+    };
+    info!(
+        "> All samples (any detected)\t{}({:.2}%)",
+        detected_count, detected_pct
+    );
     info!("Save output to file {:?}", tableout.get_out_path().unwrap());
 
     info!("Finished!");

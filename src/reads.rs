@@ -1,59 +1,10 @@
 use crate::constants::BUF_SIZE_4M;
-use crate::utils::{self, hash_vec};
+use crate::utils::{self, xxh3_hash_vec};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-// #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-// pub enum Strand {
-//     Plus,
-//     Minus,
-// }
-
-// impl Display for Strand {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Strand::Plus => write!(f, "+"),
-//             Strand::Minus => write!(f, "-"),
-//         }
-//     }
-// }
-
-// impl PartialEq for Strand {
-//     fn ne(&self, other: &Self) -> bool {
-//         match self {
-//             Strand::Plus => match other {
-//                 Strand::Plus => false,
-//                 Strand::Minus => true,
-//             },
-//             Strand::Minus => match other {
-//                 Strand::Plus => true,
-//                 Strand::Minus => false,
-//             },
-//         }
-//     }
-
-//     fn eq(&self, other: &Self) -> bool {
-//         core::mem::discriminant(self) == core::mem::discriminant(other)
-//     }
-// }
-
-// impl Strand {
-//     pub fn from_string(s: &str) -> Self {
-//         match s {
-//             "+" => Strand::Plus,
-//             "-" => Strand::Minus,
-//             other => panic!("Invalid strand {:?}", other),
-//         }
-//     }
-//     pub fn to_string(&self) -> String {
-//         match self {
-//             Strand::Plus => "+".to_string(),
-//             Strand::Minus => "-".to_string(),
-//         }
-//     }
-// }
 use crate::strand::Strand;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,7 +205,7 @@ impl SingleRead {
         for (l, r) in self.get_pri_splice_junction() {
             s.push_str(&format!("{},{}", l, r));
         }
-        self.signature = hash_vec(&s);
+        self.signature = xxh3_hash_vec(&s);
         self.sort_segments();
     }
 }

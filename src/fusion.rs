@@ -6,7 +6,7 @@ use crate::{
     myio::{Line, SampleChip},
     reads::Segment,
     results::TableOutput,
-    utils::{hash_vec, is_overlap},
+    utils::{is_overlap, xxh3_hash_vec},
 };
 // Used only for in-memory aggregation state; not part of persisted output formats.
 use ahash::HashSet;
@@ -47,7 +47,7 @@ impl<'a> FusionSingleRead<'a> {
         pos_vec.sort();
 
         FusionSingleRead {
-            fusion_hash: hash_vec(&pos_vec),
+            fusion_hash: xxh3_hash_vec(&pos_vec),
             chr1,
             chr2,
             sample_id,

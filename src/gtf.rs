@@ -1,6 +1,5 @@
-use crate::{reads::SingleRead, utils::trim_chr_prefix_to_upper};
+use crate::utils::trim_chr_prefix_to_upper;
 // use bio_types::strand::ReqStrand;
-use crate::strand::Strand as MyStrand;
 use core::panic;
 use flate2::read::MultiGzDecoder;
 use noodles_gtf::{self as GTF, io::Reader as gtfReader, record::Strand};
@@ -155,42 +154,12 @@ impl Transcript {
         self.exons.len()
     }
 
-    pub fn get_transcript_coord_length(&self) -> u64 {
-        self.end - self.start
-    }
-
     pub fn get_transcript_seq_length(&self) -> u32 {
         let mut total_len: u64 = 0;
         for exon in &self.exons {
             total_len += exon.1 - exon.0;
         }
         total_len as u32
-    }
-
-    /// Convert Transcript to SingleRead
-    /// Used in indexing GTF files instead of parsing reads from BAM files
-    pub fn to_single_read(&self) -> SingleRead {
-        let strand = match self.strand {
-            Strand::Forward => MyStrand::Plus,
-            Strand::Reverse => MyStrand::Minus,
-        };
-
-        let mut sr = SingleRead::new(
-            self.chrom.clone(),
-            60,
-            1,
-            self.get_transcript_coord_length(),
-            self.start,
-            strand,
-        );
-
-        for exon in &self.exons {
-            sr.add_segment(self.chrom.clone(), exon.0, exon.1, &strand, false);
-        }
-        sr.update_right(self.end);
-        sr.process();
-
-        sr
     }
 
     pub fn get_splice_junction_pairs(&self) -> Vec<(u64, u64)> {

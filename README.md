@@ -340,11 +340,11 @@ Core options:
 
 Core options:
 
-- Input selectors: `-i, --bam` or `-g, --gtf`
+- Required input: `-i, --bam` (BAM/CRAM)
 - `-r, --reference <REFERENCE>` for CRAM
 - `-o, --output <OUTPUT>`
 - `--mapq <MAPQ>` (default: `5`)
-- `--use-secondary`, `--rname`, `--tid`, `--gid`, `--verbose`
+- `--use-secondary`, `--rname`, `--verbose`
 
 ### `isopedia merge`
 

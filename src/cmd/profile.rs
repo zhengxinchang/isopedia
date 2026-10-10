@@ -1,7 +1,7 @@
 use clap::Parser;
 use core::panic;
 use indexmap::IndexSet;
-use log::{error, info, warn};
+use log::{error, info};
 use rust_htslib::bam::{
     self,
     record::{Aux, Cigar},
@@ -13,7 +13,6 @@ use std::path::PathBuf;
 
 use crate::strand::Strand;
 use crate::{
-    gtf::{open_gtf_reader, TranscriptChunker},
     myio::MyGzWriter,
     reads::{AggrRead, SingleRead},
     utils::{greetings2, log_wall_time, start_wall_timer},
@@ -26,7 +25,7 @@ use serde::Serialize;
 #[command(name = "isopedia profile")]
 #[command(author = "Xinchang Zheng <zhengxc93@gmail.com>")]
 #[command(about = "
-[build index, step1] Profile raw isoform signals from each single BAM/CRAM or GTF file.
+[build index, step1] Profile raw isoform signals from each single BAM/CRAM file.
 ", long_about = None)]
 #[clap(after_long_help = "
 
@@ -38,11 +37,7 @@ Note that if you are using CRAM file, you must provide the reference fasta file 
 pub struct ProfileCli {
     /// Input file in BAM/CRAM format
     #[arg(short = 'i', long = "bam")]
-    pub bam: Option<PathBuf>,
-
-    /// Input file in GTF format
-    #[arg(short = 'g', long = "gtf", hide = true)]
-    pub gtf: Option<PathBuf>,
+    pub bam: PathBuf,
 
     /// Reference file for CRAMs. Must provide for CRAM format input
     #[arg(short, long)]
@@ -60,17 +55,9 @@ pub struct ProfileCli {
     #[arg(long = "use-secondary", default_value_t = false)]
     pub use_secondary: bool,
 
-    /// Include read names in the output, only for BAM/CRAM input
+    /// Include read names in the output
     #[arg(long = "rname", default_value_t = false)]
     pub rname: bool,
-
-    /// Include transcript IDs in the output, only for GTF input
-    #[arg(long = "tid", default_value_t = false, hide = true)]
-    pub tid: bool,
-
-    /// Include gene IDs in the output, only for GTF input
-    #[arg(long = "gid", default_value_t = false, hide = true)]
-    pub gid: bool,
 
     /// Output alignment stats with the name of output.stats.txt
     #[arg(long = "stats", default_value_t = false)]
@@ -146,8 +133,8 @@ impl ProfileStats {
 impl ProfileCli {
     fn is_cram_input(&self) -> bool {
         self.bam
-            .as_ref()
-            .and_then(|path| path.extension().and_then(|ext| ext.to_str()))
+            .extension()
+            .and_then(|ext| ext.to_str())
             .map(|ext| ext.eq_ignore_ascii_case("cram"))
             .unwrap_or(false)
     }
@@ -155,61 +142,21 @@ impl ProfileCli {
     pub fn validate(&self) {
         let mut is_ok = true;
 
-        if self.gtf.is_none() && self.bam.is_none() {
-            error!("Either --gtf or --bam must be provided as input.");
+        if !self.bam.exists() {
+            error!("--bam: input file {} does not exist", self.bam.display());
             is_ok = false;
         }
 
-        if self.gtf.is_some() && self.bam.is_some() {
-            error!("Only one of --gtf or --bam should be provided as input.");
+        if self.is_cram_input() && self.reference.is_none() {
+            error!(
+                "--reference must be provided for CRAM input: {}",
+                self.bam.display()
+            );
             is_ok = false;
         }
 
-        if self.gtf.is_some() {
-            let gtf_path = self.gtf.as_ref().unwrap();
-            if !gtf_path.exists() {
-                error!("--gtf: input file {} does not exist", gtf_path.display());
-                is_ok = false;
-            }
-
-            if self.rname {
-                warn!("--rname can only be used with BAM/CRAM input.");
-            }
-
-            if self.tid {
-                info!("--tid option is set, transcript IDs will be included in the output.");
-            }
-            if self.gid {
-                info!("--gid option is set, gene IDs will be included in the output.");
-            }
-        }
-
-        if self.bam.is_some() {
-            let bam_path = self.bam.as_ref().unwrap();
-            if !bam_path.exists() {
-                error!("--bam: input file {} does not exist", bam_path.display());
-                is_ok = false;
-            }
-
-            if self.is_cram_input() && self.reference.is_none() {
-                error!(
-                    "--reference must be provided for CRAM input: {}",
-                    bam_path.display()
-                );
-                is_ok = false;
-            }
-
-            if self.tid {
-                warn!("--tid can only be used with GTF input.");
-            }
-
-            if self.gid {
-                warn!("--gid can only be used with GTF input.");
-            }
-
-            if self.rname {
-                info!("--rname option is set, read names will be included in the output.");
-            }
+        if self.rname {
+            info!("--rname option is set, read names will be included in the output.");
         }
 
         // check output is not a directory
@@ -229,10 +176,6 @@ impl ProfileCli {
 
 pub fn run_profile(cli: &ProfileCli) -> Result<()> {
     let started = start_wall_timer();
-    // env::set_var("RUST_LOG", "info");
-    // env_logger::init();
-
-    // let cli = ExtrCli::parse();
 
     greetings2(&cli);
     cli.validate();
@@ -254,9 +197,9 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
         &cli.output.display()
     ));
 
-    if cli.gtf.is_none() && cli.bam.is_some() {
+    {
         info!("Using BAM/CRAM file for isoform profiling.");
-        let bam_path = &cli.bam.as_ref().unwrap();
+        let bam_path = &cli.bam;
         let mut bam_reader = bam::Reader::from_path(bam_path).expect("Failed to open BAM file");
 
         if cli.is_cram_input() {
@@ -443,53 +386,6 @@ pub fn run_profile(cli: &ProfileCli) -> Result<()> {
                 }
                 None => {
                     let agg_isoform = AggrRead::new(single_read);
-                    agg_isoform_map.insert(agg_isoform.signature, agg_isoform);
-                }
-            }
-        }
-    } else if cli.gtf.is_some() && cli.bam.is_none() {
-        info!("Using GTF file for isoform profiling.");
-
-        let gtf_path = cli.gtf.as_ref().unwrap();
-
-        info!("Loading GTF file...");
-        // let gtfreader: noodles_gtf::Reader<BufReader<std::fs::File>> = noodles_gtf::io::Reader::new(
-        //     BufReader::new(std::fs::File::open(gtf_path).expect("can not read gtf")),
-        // );
-
-        let gtfreader = open_gtf_reader(gtf_path.to_str().unwrap())?;
-
-        let mut gtf = TranscriptChunker::new(gtfreader);
-        let gtf_vec = gtf.get_all_transcripts_vec();
-        info!("Processing transcripts from GTF...");
-
-        for rec in gtf_vec.iter() {
-            chrom_set.insert(rec.chrom.clone());
-
-            total_count += 1;
-            n_record += 1;
-            if total_count % batch_size == 0 {
-                info!(
-                    "Processing {} records",
-                    total_count.to_formatted_string(&Locale::en)
-                );
-            }
-
-            let mut isoform = rec.to_single_read();
-
-            if cli.tid {
-                isoform.add_info("TID".to_string(), rec.tx_id.clone());
-            }
-            if cli.gid {
-                isoform.add_info("GID".to_string(), rec.gene_id.clone());
-            }
-
-            match agg_isoform_map.get_mut(&isoform.signature) {
-                Some(agg_isoform) => {
-                    agg_isoform.add_read(isoform);
-                }
-                None => {
-                    let agg_isoform = AggrRead::new(isoform);
                     agg_isoform_map.insert(agg_isoform.signature, agg_isoform);
                 }
             }

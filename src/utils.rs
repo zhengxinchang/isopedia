@@ -62,14 +62,9 @@ pub fn pad_chrom_prefix(chrom: &str) -> String {
 
 static HASHER: LazyLock<Xxh3Builder> = LazyLock::new(|| Xxh3Builder::new().with_seed(9336));
 
-pub fn hash_vec<T: Hash>(value: &T) -> u64 {
+pub fn xxh3_hash_vec<T: Hash>(value: &T) -> u64 {
     HASHER.hash_one(value)
 }
-
-// pub fn hash_vec<T: Hash>(value: &T) -> u64 {
-//     let hasher_builder = RandomState::with_seeds(9336, 5920, 6784, 4496);
-//     hasher_builder.hash_one(value)
-// }
 
 pub fn is_overlap(a: &Vec<f64>, b: &Vec<f64>) -> bool {
     if a.is_empty() || b.is_empty() {

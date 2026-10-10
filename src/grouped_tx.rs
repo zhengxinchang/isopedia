@@ -2956,6 +2956,18 @@ mod tests {
         cli.min_read = 2;
         stats.update_sample_level_stats(&txview, &cli);
         assert_eq!(stats.sample_posi_tx_count_fsm, vec![0, 1, 0]);
+        assert_eq!(stats.any_sample_posi_tx_count_fsm, 1);
+
+        // Multiple positive samples still contribute only one transcript.
+        stats.update_sample_level_stats(&tx_view(vec![2, 3, 0], vec![0.0; 3]), &cli);
+        assert_eq!(stats.sample_posi_tx_count_fsm, vec![1, 2, 0]);
+        assert_eq!(stats.any_sample_posi_tx_count_fsm, 2);
+
+        // Subthreshold reads and EM-only support do not count as detection.
+        stats.update_sample_level_stats(&tx_view(vec![1, 1, 0], vec![5.0; 3]), &cli);
+        stats.update_sample_level_stats(&tx_view(vec![0; 3], vec![5.0; 3]), &cli);
+        assert_eq!(stats.sample_posi_tx_count_fsm, vec![1, 2, 0]);
+        assert_eq!(stats.any_sample_posi_tx_count_fsm, 2);
     }
 
     #[test]
