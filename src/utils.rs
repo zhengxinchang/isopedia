@@ -46,9 +46,12 @@ pub fn u64to2u32(combined: u64) -> (u32, u32) {
 }
 
 pub fn trim_chr_prefix_to_upper(chrom: &str) -> String {
-    chrom
-        .to_ascii_uppercase()
-        .trim_start_matches("CHR")
+    let upper = chrom.to_ascii_uppercase();
+    let normalized = upper.trim_start_matches("CHR");
+    crate::config::CHROMOSOME_ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == normalized)
+        .map_or(normalized, |(_, canonical)| *canonical)
         .to_string()
 }
 
@@ -519,5 +522,29 @@ mod interval_tests {
         // (5, 6, [1])
         // (6, 7, [1, 2])
         // (7, 10, [2])
+    }
+}
+
+#[cfg(test)]
+mod chromosome_name_tests {
+    use super::trim_chr_prefix_to_upper;
+
+    #[test]
+    fn normalizes_builtin_aliases() {
+        for (input, expected) in [
+            ("M", "MT"),
+            ("MT", "MT"),
+            ("chrM", "MT"),
+            ("ChrMT", "MT"),
+            ("chrm", "MT"),
+            ("mt", "MT"),
+            ("Chr1", "1"),
+            ("GL000220.1", "GL000220.1"),
+            ("NC_000001.10", "NC_000001.10"),
+            ("NC_000001.11", "NC_000001.11"),
+        ] {
+            assert_eq!(trim_chr_prefix_to_upper(input), expected);
+            assert_eq!(trim_chr_prefix_to_upper(expected), expected);
+        }
     }
 }

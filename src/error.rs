@@ -1,6 +1,4 @@
 use thiserror::Error;
-use std::io::Error as ioError;
-
 
 #[derive(Debug, Error)]
 pub enum ProfileError {
@@ -22,8 +20,5 @@ pub enum ProfileError {
     },
 
     #[error("invalid record {read_name:?}: {reason}")]
-    InvalidRecord {
-        read_name: String,
-        reason: String,
-    },
+    InvalidRecord { read_name: String, reason: String },
 }
