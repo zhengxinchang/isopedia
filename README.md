@@ -89,7 +89,7 @@ Typical workflow:
 
 Isopedia provides pre-built indexes from public long-read RNA-seq datasets.
 
-**Compatibility:** The currently published pre-built indexes support Isopedia **v1.7.3 and earlier only**. They are not compatible with v1.8.0 or later; rebuild the index with the newer version before querying.
+**Compatibility:** The currently published pre-built indexes support Isopedia **v1.7.3 and earlier only**. They are not compatible with v1.8.0 or later.
 
 | Name | Organism | Reference | Link | Sample Size | Index Size (Compressed) | Minimum Memory for Query | Description |
 |---|---|---|---|---:|---|---|---|
