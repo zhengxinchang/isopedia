@@ -63,9 +63,16 @@ impl DatasetInfo {
     }
 
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<DatasetInfo> {
-        let bytes: Vec<u8> = fs::read(path.as_ref())?;
-        let decoded: DatasetInfo = bincode::deserialize(&bytes).unwrap();
-        Ok(decoded)
+        let path = path.as_ref();
+        let bytes = fs::read(path).map_err(|err| {
+            std::io::Error::new(err.kind(), format!("read {}: {err}", path.display()))
+        })?;
+        bincode::deserialize(&bytes).map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("decode dataset info {}: {err}", path.display()),
+            )
+        })
     }
 
     pub fn add_sample(&mut self, name: String, file_path: Option<PathBuf>) -> u32 {
@@ -117,3 +124,7 @@ impl DatasetInfo {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/dataset_info.rs"]
+mod tests;

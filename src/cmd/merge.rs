@@ -141,13 +141,13 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
     greetings2(&cli);
     cli.validate();
-    let archive_version_path = cli.outdir.join(ARCHIVE_VERSION_FILE);
-    match std::fs::remove_file(&archive_version_path) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(e.into()),
+    for name in [ARCHIVE_INFO_FILE, "archive.version"] {
+        match std::fs::remove_file(cli.outdir.join(name)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
     }
-
 
     let mut dataset_info = DatasetInfo::parse_manifest(&cli.input)?;
 
@@ -457,10 +457,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
     dataset_info.save_to_file(&cli.outdir.join(DATASET_INFO_FILE_NAME))?;
 
-    std::fs::write(
-        archive_version_path,
-        format!("{}\n", crate::config::ARCHIVE_SCHEMA_VERSION),
-    )?;
+    crate::ptir_archive::write_archive_info(&cli.outdir.join(MERGED_FILE_NAME))?;
     info!("Finished");
     log_wall_time("merge", started);
     Ok(())

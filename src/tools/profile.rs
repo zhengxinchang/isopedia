@@ -65,7 +65,8 @@ pub fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
         }
     }
 
-    let mut merged_map: std::collections::HashMap<u128, AggrRead> = std::collections::HashMap::new();
+    let mut merged_map: std::collections::HashMap<u128, AggrRead> =
+        std::collections::HashMap::new();
     for (i, file) in files.iter().enumerate() {
         let mut reader = SingleSampleReader::new(file)?;
         for chrom in &reader.chroms {

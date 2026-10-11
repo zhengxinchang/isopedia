@@ -19,4 +19,4 @@ pub const MAGIC: u64 = 9236;
 pub const FORMAT_STR_NAME: &str = "FORMAT";
 pub const RMT_MANIFEST_URL1: &str = "https://isopedia.stix.dev/index/manifest.toml";
 
-pub const ARCHIVE_VERSION_FILE: &str = "archive.version";
+pub const ARCHIVE_INFO_FILE: &str = "archive_info.json";

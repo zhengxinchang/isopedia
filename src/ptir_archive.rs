@@ -12,15 +12,45 @@ use lru::LruCache;
 
 use crate::{ptir::PTIR, tmpidx::PTIROffsetPtr};
 
-/// Validate before interpreting the bincode record layout or reconstructing signatures.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ArchiveInfo {
+    archive_schema_version: u32,
+    profile_schema_version: u32,
+    program_version: String,
+}
+
+pub(crate) fn write_archive_info(file: &Path) -> Result<()> {
+    let path = file.with_file_name(crate::constants::ARCHIVE_INFO_FILE);
+    let temporary = path.with_extension("json.tmp");
+    let info = ArchiveInfo {
+        archive_schema_version: crate::config::ARCHIVE_SCHEMA_VERSION,
+        profile_schema_version: crate::config::PROFILE_SCHEMA_VERSION,
+        program_version: env!("CARGO_PKG_VERSION").to_owned(),
+    };
+    std::fs::write(&temporary, serde_json::to_vec_pretty(&info)?)?;
+    std::fs::rename(&temporary, &path)?;
+    Ok(())
+}
+
+/// Validate the archive layout; profile/program versions only describe its origin.
 pub fn check_archive_version(file: &Path) -> Result<()> {
-    let marker = file.with_file_name(crate::constants::ARCHIVE_VERSION_FILE);
-    let version = std::fs::read_to_string(&marker)
-        .with_context(|| format!("read {}; rebuild with profile → merge → index", marker.display()))?;
+    let path = file.with_file_name(crate::constants::ARCHIVE_INFO_FILE);
+    let info: ArchiveInfo = (|| -> Result<_> {
+        let bytes = std::fs::read(&path)?;
+        Ok(serde_json::from_slice(&bytes)?)
+    })()
+    .with_context(|| {
+        format!(
+            "read {}; rebuild with profile → merge → index",
+            path.display()
+        )
+    })?;
     ensure!(
-        version.trim() == crate::config::ARCHIVE_SCHEMA_VERSION.to_string(),
-        "unsupported archive version {:?} in {}; expected {}; rebuild with profile → merge → index",
-        version.trim(), marker.display(), crate::config::ARCHIVE_SCHEMA_VERSION
+        info.archive_schema_version == crate::config::ARCHIVE_SCHEMA_VERSION,
+        "unsupported archive version {} in {}; expected {}; rebuild with profile → merge → index",
+        info.archive_schema_version,
+        path.display(),
+        crate::config::ARCHIVE_SCHEMA_VERSION
     );
     Ok(())
 }
@@ -62,7 +92,11 @@ pub struct PTIRArchiveCache {
 }
 
 impl PTIRArchiveCache {
-    pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> Result<PTIRArchiveCache> {
+    pub fn new<P: AsRef<Path>>(
+        file: P,
+        chunk_size: u64,
+        max_chunks: usize,
+    ) -> Result<PTIRArchiveCache> {
         check_archive_version(file.as_ref())?;
         let f = File::open(&file)
             .with_context(|| format!("open archive {}", file.as_ref().display()))?;

@@ -7,8 +7,9 @@ use rust_htslib::bam::{
     Read, Record,
 };
 use rustc_hash::FxHashMap;
+use serde_json::{json, Value};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::error::ProfileError;
 use crate::strand::Strand;
@@ -58,75 +59,204 @@ pub struct ProfileCli {
     #[arg(long = "rname", default_value_t = false)]
     pub rname: bool,
 
-    /// Output alignment stats with the name of output.stats.txt
-    #[arg(long = "stats", default_value_t = false)]
-    pub stats: bool,
-
     /// Verbose mode
     #[arg(long, default_value_t = false)]
     pub verbose: bool,
 }
 
 pub struct ProfileStats {
-    mapq: [u32; 62],
+    total: u64,
+    skipped_unmapped: u64,
+    skipped_secondary: u64,
+    skipped_low_mapq: u64,
+    mapq: [u64; 256],
+    // Summary indices: 0 = all, 1 = mono exon, 2 = multiple exon.
+    alignment_count: [u64; 3],
+    length_observed: [u64; 3],
+    total_bases: [u64; 3],
+    length_min: [Option<u64>; 3],
+    length_max: [Option<u64>; 3],
+    group_count: [u64; 3],
+    group_observed: [u64; 3],
+    group_mean_sum: [f64; 3],
+    group_mean_min: [Option<f64>; 3],
+    group_mean_max: [Option<f64>; 3],
 }
 
 impl ProfileStats {
     pub fn new() -> Self {
-        ProfileStats { mapq: [0u32; 62] }
+        Self {
+            total: 0,
+            skipped_unmapped: 0,
+            skipped_secondary: 0,
+            skipped_low_mapq: 0,
+            mapq: [0; 256],
+            alignment_count: [0; 3],
+            length_observed: [0; 3],
+            total_bases: [0; 3],
+            length_min: [None; 3],
+            length_max: [None; 3],
+            group_count: [0; 3],
+            group_observed: [0; 3],
+            group_mean_sum: [0.0; 3],
+            group_mean_min: [None; 3],
+            group_mean_max: [None; 3],
+        }
     }
 
     pub fn add_mapq(&mut self, mapq: u8) {
-        let mapq_idx = usize::min(mapq as usize, 61);
-        self.mapq[mapq_idx] += 1;
+        self.mapq[mapq as usize] += 1;
     }
 
-    pub fn get_stats(&self) -> String {
-        let mut report = "MAPQ Hist:\n".to_string();
-        let total_count: u32 = self.mapq.iter().sum();
-
-        report.push_str(&format!(
-            "Total alignments counted: {}\n",
-            total_count.to_formatted_string(&Locale::en)
-        ));
-
-        if total_count == 0 {
-            report.push_str("No alignments available for MAPQ statistics.\n");
-            return report;
-        }
-
-        let max_count = *self.mapq.iter().max().unwrap_or(&0);
-        let max_bar_width = 50usize;
-
-        for (idx, count) in self.mapq.iter().enumerate() {
-            if *count == 0 {
-                continue;
+    fn add_alignment(&mut self, length: u64, mono: bool) {
+        for i in [0, if mono { 1 } else { 2 }] {
+            self.alignment_count[i] += 1;
+            if length > 0 {
+                self.length_observed[i] += 1;
+                self.total_bases[i] += length;
+                self.length_min[i] = Some(self.length_min[i].map_or(length, |v| v.min(length)));
+                self.length_max[i] = Some(self.length_max[i].map_or(length, |v| v.max(length)));
             }
-
-            let pct = (*count as f64) * 100.0 / (total_count as f64);
-            let bar_len = if max_count > 0 {
-                ((*count as f64) / (max_count as f64) * (max_bar_width as f64)).round() as usize
-            } else {
-                0
-            };
-            let bar = "*".repeat(bar_len.max(1));
-            let mapq_label = if idx == 61 {
-                ">60".to_string()
-            } else {
-                idx.to_string()
-            };
-
-            report.push_str(&format!(
-                "{:>4}: {:>12} ({:>6.2}%) {}\n",
-                mapq_label,
-                count.to_formatted_string(&Locale::en),
-                pct,
-                bar
-            ));
         }
-
-        report
     }
+
+    fn add_group(&mut self, observed: u64, total_bases: u64, mono: bool) {
+        for i in [0, if mono { 1 } else { 2 }] {
+            self.group_count[i] += 1;
+            if observed > 0 {
+                let mean = total_bases as f64 / observed as f64;
+                self.group_observed[i] += 1;
+                self.group_mean_sum[i] += mean;
+                self.group_mean_min[i] = Some(self.group_mean_min[i].map_or(mean, |v| v.min(mean)));
+                self.group_mean_max[i] = Some(self.group_mean_max[i].map_or(mean, |v| v.max(mean)));
+            }
+        }
+    }
+
+    pub fn get_stats(&self) -> Value {
+        let ratio = |sum: f64, count: u64| (count > 0).then(|| sum / count as f64);
+        let mut alignments = json!({});
+        let mut groups = json!({});
+        for (i, name) in ["all", "mono_exon", "multiple_exon"].iter().enumerate() {
+            alignments[*name] = json!({
+                "count": self.alignment_count[i],
+                "length": {
+                    "observed": self.length_observed[i],
+                    "missing": self.alignment_count[i] - self.length_observed[i],
+                    "total_bases": self.total_bases[i],
+                    "min": self.length_min[i], "max": self.length_max[i],
+                    "mean": ratio(self.total_bases[i] as f64, self.length_observed[i]),
+                }
+            });
+            groups[*name] = json!({
+                "count": self.group_count[i],
+                "mean_alignment_length": {
+                    "observed": self.group_observed[i],
+                    "missing": self.group_count[i] - self.group_observed[i],
+                    "min": self.group_mean_min[i], "max": self.group_mean_max[i],
+                    "mean": ratio(self.group_mean_sum[i], self.group_observed[i]),
+                }
+            });
+            if i != 0 {
+                alignments[*name]["fraction"] = json!(ratio(
+                    self.alignment_count[i] as f64,
+                    self.alignment_count[0]
+                ));
+                groups[*name]["fraction"] =
+                    json!(ratio(self.group_count[i] as f64, self.group_count[0]));
+            }
+        }
+        let counted: u64 = self.mapq.iter().sum();
+        let bins: Vec<_> = self
+            .mapq
+            .iter()
+            .enumerate()
+            .map(|(i, &count)| {
+                json!({
+                    "label": i.to_string(),
+                    "count": count, "fraction": ratio(count as f64, counted),
+                })
+            })
+            .collect();
+        let compact_bins: Vec<_> = self
+            .mapq
+            .chunks(20)
+            .enumerate()
+            .map(|(i, bucket)| {
+                let count: u64 = bucket.iter().sum();
+                let start = i * 20;
+                json!({
+                    "label": format!("{}-{}", start, start + bucket.len() - 1),
+                    "count": count, "fraction": ratio(count as f64, counted),
+                })
+            })
+            .collect();
+        json!({
+            "program_version": env!("CARGO_PKG_VERSION"),
+            "alignment_filter_summary": {
+                "total": self.total,
+                "retained": self.alignment_count[0],
+                "skipped": self.skipped_unmapped + self.skipped_secondary + self.skipped_low_mapq,
+                "skipped_by_reason": {
+                    "unmapped": self.skipped_unmapped,
+                    "secondary": self.skipped_secondary,
+                    "low_mapq": self.skipped_low_mapq,
+                }
+            },
+            "mapq_compact": { "counted": counted, "bins": compact_bins },
+            "mapq": { "counted": counted, "bins": bins },
+            "profile_summary": {
+                "alignment_records": alignments,
+                "aggregated_isoform_records": groups,
+            }
+        })
+    }
+
+    fn format_stats(&self) -> serde_json::Result<Vec<u8>> {
+        let stats = self.get_stats();
+        let mut output = String::from("{\n");
+        for (i, key) in [
+            "program_version",
+            "alignment_filter_summary",
+            "profile_summary",
+            "mapq_compact",
+            "mapq",
+        ]
+        .iter()
+        .enumerate()
+        {
+            if i > 0 {
+                output.push_str(",\n");
+            }
+            output.push_str("  ");
+            output.push_str(&serde_json::to_string(key)?);
+            output.push_str(": ");
+            if *key == "mapq" {
+                output.push_str(&serde_json::to_string(&stats[*key])?);
+            } else {
+                let value = serde_json::to_string_pretty(&stats[*key])?;
+                output.push_str(&value.replace('\n', "\n  "));
+            }
+        }
+        output.push_str("\n}\n");
+        Ok(output.into_bytes())
+    }
+}
+
+fn write_profile_json(
+    path: &Path,
+    contents: serde_json::Result<Vec<u8>>,
+) -> Result<(), ProfileError> {
+    let temporary = path.with_extension("json.tmp");
+    let result = (|| -> std::io::Result<()> {
+        let bytes = contents.map_err(std::io::Error::other)?;
+        fs::write(&temporary, bytes)?;
+        fs::rename(&temporary, path)
+    })();
+    result.map_err(|source| ProfileError::Io {
+        context: format!("write profile JSON {}", path.display()),
+        source,
+    })
 }
 
 impl ProfileCli {
@@ -167,20 +297,31 @@ impl ProfileCli {
 pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
     let started = start_wall_timer();
 
-    greetings2(&cli);
     cli.validate()?;
+    let mut info_name = cli.output.as_os_str().to_owned();
+    info_name.push(".profile_info.json");
+    let info_path = PathBuf::from(info_name);
+    let mut params_name = cli.output.as_os_str().to_owned();
+    params_name.push(".profile_params.json");
+    let params_path = PathBuf::from(params_name);
+    match fs::remove_file(&info_path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(ProfileError::Io {
+                context: format!("remove previous statistics {}", info_path.display()),
+                source,
+            })
+        }
+    }
+    write_profile_json(&params_path, serde_json::to_vec_pretty(cli))?;
+    greetings2(&cli);
 
     let mut chrom_set: IndexSet<String> = IndexSet::new();
-    let mut agg_isoform_map: FxHashMap<u128, AggrRead> = FxHashMap::default();
+    let mut agg_isoform_map: FxHashMap<u128, (AggrRead, u64, u64, bool)> = FxHashMap::default();
     let mut profile_stats = ProfileStats::new();
 
-    let mut n_record = 0u32;
-    // let mut batches = 0;
-    let mut total_count = 0;
-    let batch_size = 1000000; // 1 million records per batch
-    let mut skipped_unmapped = 0;
-    let mut skipped_secondary = 0;
-    let mut skipped_low_mapq = 0;
+    let batch_size = 1_000_000;
 
     let mut mywriter = MyGzWriter::new(&cli.output).map_err(|source| ProfileError::Io {
         context: format!("create output {}", cli.output.display()),
@@ -216,43 +357,42 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
         let header = bam_reader.header().to_owned();
 
         while let Some(result) = bam_reader.read(&mut record) {
-            total_count += 1;
-
             result.map_err(|source| ProfileError::Hts {
-                context: format!("read record {} from {}", total_count, bam_path.display()),
+                context: format!(
+                    "read record {} from {}",
+                    profile_stats.total + 1,
+                    bam_path.display()
+                ),
                 source,
             })?;
 
-            if total_count % batch_size == 0 {
+            profile_stats.total += 1;
+
+            if profile_stats.total % batch_size == 0 {
                 info!(
                     "Processed {} records",
-                    total_count.to_formatted_string(&Locale::en)
+                    profile_stats.total.to_formatted_string(&Locale::en)
                 );
-                // batches += 1;
             }
 
             if record.is_unmapped() {
-                skipped_unmapped += 1;
+                profile_stats.skipped_unmapped += 1;
                 continue;
             }
 
             if record.is_secondary() {
                 if !cli.use_secondary {
-                    skipped_secondary += 1;
+                    profile_stats.skipped_secondary += 1;
                     continue;
                 }
             }
 
-            if cli.stats {
-                profile_stats.add_mapq(record.mapq());
-            }
+            profile_stats.add_mapq(record.mapq());
 
             if record.mapq() < cli.mapq {
-                skipped_low_mapq += 1;
+                profile_stats.skipped_low_mapq += 1;
                 continue;
             }
-
-            n_record += 1;
 
             let invalid_record = |reason: String| ProfileError::InvalidRecord {
                 read_name: String::from_utf8_lossy(record.qname()).into_owned(),
@@ -411,13 +551,19 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
 
             single_read.process();
 
-            match agg_isoform_map.get_mut(&single_read.signature) {
-                Some(agg_isoform) => {
+            let mono = single_read.pri_seg_size == 1;
+            let length = single_read.read_len;
+            let observed = u64::from(length > 0);
+            profile_stats.add_alignment(length, mono);
+            match agg_isoform_map.entry(single_read.signature) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    let (agg_isoform, length_count, total_bases, _) = entry.get_mut();
+                    *length_count += observed;
+                    *total_bases += length;
                     agg_isoform.add_read(single_read);
                 }
-                None => {
-                    let agg_isoform = AggrRead::new(single_read);
-                    agg_isoform_map.insert(agg_isoform.signature, agg_isoform);
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert((AggrRead::new(single_read), observed, length, mono));
                 }
             }
         }
@@ -439,11 +585,10 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
         info!("Number of aggr isoforms: {}", agg_isoform_map.len());
     }
 
-    let mut sorted_agg_isoform_map = agg_isoform_map
-        .into_iter()
-        .collect::<Vec<(u128, AggrRead)>>();
+    let mut sorted_agg_isoform_map = agg_isoform_map.into_iter().collect::<Vec<_>>();
     sorted_agg_isoform_map.sort_by_key(|x| x.0);
-    for (_, agg_isoform) in sorted_agg_isoform_map.iter() {
+    for (_, (agg_isoform, observed, total_bases, mono)) in &sorted_agg_isoform_map {
+        profile_stats.add_group(*observed, *total_bases, *mono);
         // writer.write(agg_isoform.to_record().as_bytes()).unwrap();
         mywriter
             .write_all_bytes(agg_isoform.to_record().as_bytes())
@@ -458,51 +603,29 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
     })?;
     info!(
         "Total records processed: {}",
-        total_count.to_formatted_string(&Locale::en)
+        profile_stats.total.to_formatted_string(&Locale::en)
     );
 
     info!(
         "Total valid records: {}",
-        n_record.to_formatted_string(&Locale::en)
+        profile_stats.alignment_count[0].to_formatted_string(&Locale::en)
     );
-    // info!("Total records : {}", n_record);
-    let skipped_records = skipped_unmapped + skipped_secondary + skipped_low_mapq;
+    let skipped_records = profile_stats.skipped_unmapped
+        + profile_stats.skipped_secondary
+        + profile_stats.skipped_low_mapq;
     info!(
         "Filtered records summary: unmapped={}, low_mapq(< {})={}, secondary(disabled by --use-secondary)={}",
-        skipped_unmapped.to_formatted_string(&Locale::en),
+        profile_stats.skipped_unmapped.to_formatted_string(&Locale::en),
         cli.mapq,
-        skipped_low_mapq.to_formatted_string(&Locale::en),
-        skipped_secondary.to_formatted_string(&Locale::en)
+        profile_stats.skipped_low_mapq.to_formatted_string(&Locale::en),
+        profile_stats.skipped_secondary.to_formatted_string(&Locale::en)
     );
     info!(
         "Total records filtered out: {}",
         skipped_records.to_formatted_string(&Locale::en)
     );
 
-    if cli.stats {
-        let stats_path = cli.output.with_file_name(format!(
-            "{}.stats.txt",
-            cli.output
-                .file_name()
-                .ok_or_else(|| ProfileError::InvalidArgument("output file name is missing".into()))?
-                .to_string_lossy()
-        ));
-        let mut stats_report = profile_stats.get_stats();
-        stats_report.push('\n');
-        stats_report.push_str(&format!(
-            "Filter summary:\nunmapped: {}\nlow_mapq(< {}): {}\nsecondary(disabled by --use-secondary): {}\ntotal_filtered: {}\n",
-            skipped_unmapped.to_formatted_string(&Locale::en),
-            cli.mapq,
-            skipped_low_mapq.to_formatted_string(&Locale::en),
-            skipped_secondary.to_formatted_string(&Locale::en),
-            skipped_records.to_formatted_string(&Locale::en)
-        ));
-        fs::write(&stats_path, stats_report).map_err(|source| ProfileError::Io {
-            context: format!("write statistics {}", stats_path.display()),
-            source,
-        })?;
-        info!("Alignment stats written to {}", stats_path.display());
-    }
+    write_profile_json(&info_path, profile_stats.format_stats())?;
 
     info!("Finished");
     log_wall_time("profile", started);
