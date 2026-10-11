@@ -6,11 +6,10 @@ use log::{error, info, warn};
 // use noodles_fasta::fai::read;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use crate::myio::MyGzWriter;
-use crate::reads::AggrRead;
+use crate::reads::{profile_header, AggrRead, SingleSampleReader};
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(after_long_help = "
@@ -66,76 +65,25 @@ pub fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
         }
     }
 
-    let base_file = files[0].clone();
-
-    //open gz
-    let mut buf = String::new();
-    let mut gzrdr = BufReader::new(flate2::read::GzDecoder::new(std::fs::File::open(
-        base_file,
-    )?));
-    // merge chroms
-    gzrdr.read_line(&mut buf)?;
-    let chroms = buf.trim().split('\t').collect::<Vec<&str>>();
-
-    for chrom in chroms {
-        chrom_set.insert(chrom.to_string());
-    }
-
-    // skip the second line(header line)
-    gzrdr.read_line(&mut buf)?;
-
-    // start to build the map of agg-read
-
-    let mut merged_map = std::collections::HashMap::new();
-
-    buf.clear();
-    while let Ok(n) = gzrdr.read_line(&mut buf) {
-        if n == 0 {
-            break;
-        }
-
-        total_count += 1;
-
-        let agg_read = AggrRead::from_string(&buf);
-        merged_map.insert(agg_read.signature.clone(), agg_read);
-        buf.clear();
-    }
-
-    // iteraterlly add agg_read from the rest of files
-
-    for file in &files[1..] {
-        let mut buf = String::new();
-        let mut gzrdr = BufReader::new(flate2::read::GzDecoder::new(std::fs::File::open(file)?));
-
-        // read first line for choromsome
-        gzrdr.read_line(&mut buf)?;
-        let chroms = buf.trim().split('\t').collect::<Vec<&str>>();
-        for chrom in chroms {
-            if !chrom_set.contains(chrom) {
-                warn!("Chromosome {} is not present in all input files, this might happen in non-main contigs, please be careful if you see this message for any main chromosomes.", chrom);
+    let mut merged_map: std::collections::HashMap<u128, AggrRead> = std::collections::HashMap::new();
+    for (i, file) in files.iter().enumerate() {
+        let mut reader = SingleSampleReader::new(file)?;
+        for chrom in &reader.chroms {
+            if i > 0 && !chrom_set.contains(chrom) {
+                warn!("Chromosome {} is not present in all input files", chrom);
             }
-            chrom_set.insert(chrom.to_string());
+            chrom_set.insert(chrom.clone());
         }
-
-        // skip the header
-        gzrdr.read_line(&mut buf)?;
-        buf.clear();
-        // start to build the map of agg-read
-        while let Ok(n) = gzrdr.read_line(&mut buf) {
-            if n == 0 {
-                break;
-            }
-
+        while let Some(agg_read) = reader.next_rec()? {
             total_count += 1;
-
-            let agg_read = AggrRead::from_string(&buf);
-
-            merged_map
-                .entry(agg_read.signature.clone())
-                .and_modify(|e| e.merge(agg_read.clone()))
-                .or_insert(agg_read);
-
-            buf.clear();
+            match merged_map.entry(agg_read.signature) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    entry.get_mut().merge(agg_read)
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(agg_read);
+                }
+            }
         }
     }
 
@@ -143,19 +91,9 @@ pub fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
 
     // write the chrom_set
     info!("Processing chromosomes");
-    let mut chrom_str = Vec::new();
-    chrom_set.into_iter().for_each(|x| {
-        chrom_str.extend_from_slice(x.as_bytes());
-        chrom_str.push(b'\t');
-    });
-    chrom_str.push(b'\n');
-
+    let chrom_str = profile_header(chrom_set.iter().map(String::as_str));
     info!("Write to output file");
-
-    let mut mywriter = MyGzWriter::new(output).expect(&format!(
-        "Can not create output file {} .",
-        output.display()
-    ));
+    let mut mywriter = MyGzWriter::new(output)?;
 
     info!(
         "Merged {} records into {} agg-reads from {} files",
@@ -164,20 +102,16 @@ pub fn merge_replicates(files: &Vec<PathBuf>, output: &PathBuf) -> Result<()> {
         files.len()
     );
 
-    chrom_str.extend_from_slice(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n");
-    mywriter
-        .write_all_bytes(&chrom_str)
-        .expect("can not write headers..");
+    mywriter.write_all_bytes(chrom_str.as_bytes())?;
 
-    let mut sorted_agg_isoform_map = merged_map.into_iter().collect::<Vec<(u64, AggrRead)>>();
+    let mut sorted_agg_isoform_map = merged_map.into_iter().collect::<Vec<(u128, AggrRead)>>();
     sorted_agg_isoform_map.sort_by_key(|x| x.0);
     for (_, agg_isoform) in sorted_agg_isoform_map.iter() {
         // writer.write(agg_isoform.to_record().as_bytes()).unwrap();
-        mywriter
-            .write_all_bytes(agg_isoform.to_record().as_bytes())
-            .expect("can not write record...");
+        mywriter.write_all_bytes(agg_isoform.to_record().as_bytes())?;
     }
 
+    mywriter.finish()?;
     info!("Finished");
 
     Ok(())

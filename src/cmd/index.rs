@@ -102,6 +102,7 @@ pub fn run_index(cli: &IndexCli) -> Result<()> {
 
     greetings2(&cli);
     cli.validate();
+    crate::ptir_archive::check_archive_version(&cli.idxdir.join(MERGED_FILE_NAME))?;
 
     let dataset_info = DatasetInfo::load_from_file(&cli.idxdir.join(DATASET_INFO_FILE_NAME))?;
 

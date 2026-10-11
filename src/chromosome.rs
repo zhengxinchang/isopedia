@@ -95,20 +95,8 @@ impl ChromMapping {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::ChromMapping;
-
-    #[test]
-    fn chrom_mapping_normalizes_on_insert_and_lookup() {
-        let mut mapping = ChromMapping::new();
-        let idx = mapping.add_chrom("Chr1".to_string());
-
-        assert_eq!(mapping.get_chrom_idx("Chr1"), Some(idx));
-        assert_eq!(mapping.get_chrom_idx("chr1"), Some(idx));
-        assert_eq!(mapping.get_chrom_idx("1"), Some(idx));
-        assert_eq!(mapping.get_chrom_name(idx), "1");
-    }
-}
+#[path = "tests/chromosome.rs"]
+mod tests;
 
 pub struct ChromMappingHelper {
     pub id2rec_count: IndexMap<u16, u64>,

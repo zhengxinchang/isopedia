@@ -18,3 +18,5 @@ pub const LRU_CACHE_SIZE: usize = 100_000_000;
 pub const MAGIC: u64 = 9236;
 pub const FORMAT_STR_NAME: &str = "FORMAT";
 pub const RMT_MANIFEST_URL1: &str = "https://isopedia.stix.dev/index/manifest.toml";
+
+pub const ARCHIVE_VERSION_FILE: &str = "archive.version";

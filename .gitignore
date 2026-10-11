@@ -38,3 +38,5 @@ ROADMAP*.md
 localnote
 AGENTS.md
 devnote*.md
+/src/tests/
+/src/tests/*.rs

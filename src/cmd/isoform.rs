@@ -191,6 +191,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     let started = start_wall_timer();
     greetings2(&cli);
     cli.validate();
+    crate::ptir_archive::check_archive_version(&cli.idxdir.join(MERGED_FILE_NAME))?;
     if cli.no_check_tss_tes {
         warn!("--no-check-tss-tes is obsolete: TSS/TES support is always counted for the isoform output");
     }
@@ -288,7 +289,8 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
                         cli.idxdir.join(MERGED_FILE_NAME),
                         cli.cached_chunk_size_mb * 1024 * 1024,
                         cli.cached_chunk_num,
-                    ),
+                    )
+                    .expect("open validated PTIR archive"),
                     System::new(),
                 )
             },

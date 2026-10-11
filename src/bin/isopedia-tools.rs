@@ -70,7 +70,7 @@ fn main() -> Result<()> {
             if view_args.type_f == "tmpidx" {
                 view_tmpidx(&view_args);
             } else if view_args.type_f == "archive" {
-                view_archive(&view_args);
+                view_archive(&view_args)?;
             } else if view_args.type_f == "dbinfo" {
                 view_dbinfo(&view_args);
             } else if view_args.type_f == "chroms" {

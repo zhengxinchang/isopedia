@@ -346,6 +346,46 @@ Core options:
 - `--mapq <MAPQ>` (default: `5`)
 - `--use-secondary`, `--rname`, `--verbose`
 
+Profile headers use `##` metadata lines and a single `#` column header:
+
+```text
+##ISOPEDIA <VERSION> version="1.7.3"; program="isopedia"; schema="6";
+##ISOPEDIA <CHROM> ID="1";
+##ISOPEDIA <CHROM> ID="MT";
+#signature	evidence	chrom	splice_junctions	isoform_diffs
+```
+
+The writer uses the build's program version and `PROFILE_SCHEMA_VERSION` from
+`src/config.rs`. Chromosome declarations are unique and sorted, and cover the
+main chromosome column of output records. Empty profiles have no CHROM lines.
+
+String fields (chromosome names and info keys/values, including read names) encode
+backslash, double quote, tab, CR, LF, `|`, `:`, `,`, `%`, `;`, and `=` as `\xHH`
+byte escapes. For example, `instrument:run` becomes `instrument\x3Arun` and a
+literal double quote becomes `\x22`. Readers split the structure before decoding
+each string field exactly once. Numeric fields and record layout are unchanged.
+
+Both merge commands require this annotated header and a schema matching the
+configured version. Legacy unmarked profiles and `#isopedia-profile-v2` files
+are not supported and must be regenerated. Duplicate or missing required header
+fields, undeclared main chromosomes, and malformed escapes produce errors.
+The signature column is exactly 32 lowercase hexadecimal characters, zero-padded
+without a `0x` prefix (for example, `0000000000000000000000000000002a` represents
+42). Readers accept either hex letter case but require exactly 32 characters.
+Schema 6 uses XXH3-128 with seed 9336 on the UTF-8 bytes of
+`chrom:junction_count:left,right;...`, using the normalized chromosome and true
+primary junction count. Mono-exon coordinates store exon bounds with count zero.
+
+Signatures are retained in profiles and merge keys, but are not stored in PTIR
+records. PTIR can recompute a signature on demand through the shared helper;
+archive text exports retain their decimal signature column. Query pointers keep
+their existing layout, and archive export deduplicates records by offset.
+
+The new PTIR layout requires `archive.version` (currently `1`) in the index
+directory. Archive readers reject missing or incompatible versions. Older
+profiles and indexes must be rebuilt with profile → merge → index; changing a
+version marker alone does not migrate data. Keep the marker when copying an index.
+
 ### `isopedia merge`
 
 Core options:

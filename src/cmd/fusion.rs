@@ -628,7 +628,7 @@ pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // 512MB chunk size
         cli.cached_chunk_number,                // max 4 chunks in cache ~2GB
-    );
+    )?;
 
     if cli.pos.is_some() || cli.pos_bed.is_some() {
         const FUSION_BRKPT_FORMAT_STR: &str = "COUNT";

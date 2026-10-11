@@ -138,7 +138,7 @@ pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
         cli.idxdir.clone().join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb * 1024 * 1024, // chunk size
         cli.cached_chunk_number,                // number of chunks
-    );
+    )?;
 
     const SPLICE_FORMAT: &str = "COUNT:CPM:START|END|STRAND";
 

@@ -31,12 +31,5 @@ impl GlobalStats {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tracks_only_direct_positive_transcripts() {
-        let stats = GlobalStats::new(3);
-        assert_eq!(stats.sample_posi_tx_count_fsm, vec![0, 0, 0]);
-    }
-}
+#[path = "tests/global_stats.rs"]
+mod tests;

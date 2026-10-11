@@ -43,6 +43,12 @@ t1:build
 	-i /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
 	-o flnc.isoform.out --stats
 
+t1-rname: build
+
+	target/release/isopedia profile \
+	-i /ssd1/stix-iso-devspace/stix-isoform-experiment/data/Kinnex-flrna-DATA-Revio-HG002-1/3-ClusterMap/mapped.bam  \
+	-o flnc.isoform.out --stats --rname
+
 
 t11:build
 	target/release/isopedia profile \

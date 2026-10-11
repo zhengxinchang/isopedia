@@ -100,7 +100,7 @@ impl MergeCli {
 #[derive(Debug)]
 struct HeapItem<T> {
     rec: T,
-    signature: u64,
+    signature: u128,
     file_idx: usize,
 }
 
@@ -141,6 +141,13 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
     greetings2(&cli);
     cli.validate();
+    let archive_version_path = cli.outdir.join(ARCHIVE_VERSION_FILE);
+    match std::fs::remove_file(&archive_version_path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+
 
     let mut dataset_info = DatasetInfo::parse_manifest(&cli.input)?;
 
@@ -150,17 +157,14 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     info!("Reading {} files...", file_list.len());
 
     // init the file reader for each sample
-    let mut file_readers: Vec<SingleSampleReader> = file_list
-        .iter()
-        .map(|sample| {
-            let mut file_reader = SingleSampleReader::new(sample.to_str().unwrap());
-            chroms.update_from_string(&file_reader.next_line_str().expect(
-                format!("Cannot read chromosomes from file: {}", sample.display()).as_str(),
-            ));
-            file_reader.skip_lines(1); // skip the header
-            file_reader
-        })
-        .collect();
+    let mut file_readers = Vec::with_capacity(file_list.len());
+    for sample in &file_list {
+        let reader = SingleSampleReader::new(sample)?;
+        for chrom in &reader.chroms {
+            chroms.add_chrom(chrom.clone());
+        }
+        file_readers.push(reader);
+    }
 
     let mut chrom_helper = ChromMappingHelper::new();
 
@@ -170,7 +174,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     let mut heap: BinaryHeap<Reverse<HeapItem<AggrRead>>> = BinaryHeap::new();
 
     // init the merge buffer
-    let mut merged_map: FxHashMap<u64, PTIR> = FxHashMap::default();
+    let mut merged_map: FxHashMap<u128, PTIR> = FxHashMap::default();
 
     let mut tmpidx = TmpIndex::create(&cli.outdir.join(TMPIDX_FILE_NAME), cli.chunk_size);
 
@@ -178,7 +182,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
     // init the heap
     for (idx, reader) in file_readers.iter_mut().enumerate() {
-        if let Some(rec) = reader.next_rec() {
+        if let Some(rec) = reader.next_rec()? {
             let sig = rec.signature;
             // add the evidence of the first record in each sample.
             dataset_info.add_sample_evidence(idx, rec.evidence);
@@ -213,7 +217,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             merged_map.insert(signature, new_merged_isoform);
         }
 
-        if let Some(rec) = file_readers[file_idx].next_rec() {
+        if let Some(rec) = file_readers[file_idx].next_rec()? {
             // add the evidence of the new record in each sample.
             dataset_info.add_sample_evidence(file_idx, rec.evidence);
             let _sig = rec.signature;
@@ -236,7 +240,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
             // First pass: identify records to process and to remove
             for (key, merged_isoform_rec) in &merged_map {
                 // Skip the current record which might not be final
-                if merged_isoform_rec.signature == signature {
+                if *key == signature {
                     continue;
                 }
 
@@ -247,7 +251,7 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
                 tmp_vec.push((
                     merged_isoform_rec.chrom_id,
                     merged_isoform_rec.get_start_pos(),
-                    merged_isoform_rec.signature,
+                    *key,
                 ));
 
                 // Mark for removal
@@ -343,13 +347,13 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         }
     }
 
-    for (_, merged_isoform_rec) in &merged_map {
+    for (key, merged_isoform_rec) in &merged_map {
         chrom_helper.add_record_to_chrom(merged_isoform_rec.chrom_id);
 
         tmp_vec.push((
             merged_isoform_rec.chrom_id,
             merged_isoform_rec.get_start_pos(),
-            merged_isoform_rec.signature,
+            *key,
         ));
     }
 
@@ -453,6 +457,10 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
 
     dataset_info.save_to_file(&cli.outdir.join(DATASET_INFO_FILE_NAME))?;
 
+    std::fs::write(
+        archive_version_path,
+        format!("{}\n", crate::config::ARCHIVE_SCHEMA_VERSION),
+    )?;
     info!("Finished");
     log_wall_time("merge", started);
     Ok(())

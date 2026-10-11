@@ -113,7 +113,7 @@ fn main() {
         }
         Commands::Merge(ref merge_cli) => {
             if let Err(e) = run_merge(merge_cli) {
-                eprintln!("Error running merge: {}", e);
+                eprintln!("Error running merge: {:#}", e);
                 std::process::exit(1);
             }
         }

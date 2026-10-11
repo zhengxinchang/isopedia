@@ -67,7 +67,6 @@ pub enum RecordType {
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PTIR {
-    pub signature: u64,
     pub total_evidence: u32,
     pub sample_size: u32,
     // Records the number of reads (evidence) from each sample that support the merged isoform.
@@ -83,27 +82,17 @@ pub struct PTIR {
     pub supp_segs_vec: Vec<Segment>,
 }
 
-impl PartialEq for PTIR {
-    fn eq(&self, other: &Self) -> bool {
-        self.signature == other.signature
-    }
-}
-
-impl Eq for PTIR {}
-
-impl PartialOrd for PTIR {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.signature.cmp(&other.signature))
-    }
-}
-
-impl Ord for PTIR {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.signature.cmp(&other.signature)
-    }
-}
-
 impl PTIR {
+    /// Recompute on demand; archive offsets are used for query-time identity.
+    pub fn signature(&self) -> u128 {
+        let junction_count = if self.is_mono_exonic() {
+            0
+        } else {
+            self.splice_junctions_vec.len() as u64
+        };
+        crate::utils::isoform_signature(&self.chrom, junction_count, &self.splice_junctions_vec)
+    }
+
     pub fn init(
         aggr_isofrom: &AggrRead,
         sample_size: usize,
@@ -111,7 +100,6 @@ impl PTIR {
         chrom_id: u16,
     ) -> PTIR {
         let mut aggr_record = PTIR {
-            signature: aggr_isofrom.signature,
             total_evidence: aggr_isofrom.evidence,
             sample_size: sample_size as u32, // the number of samples
             sample_evidence_arr: vec![0; sample_size],
@@ -214,7 +202,7 @@ impl PTIR {
     pub fn get_string(&self) -> String {
         let mut record = String::new();
 
-        record.push_str(&self.signature.to_string());
+        record.push_str(&self.signature().to_string());
         record.push('\t');
         record.push_str(&self.chrom);
         record.push('\t');
@@ -410,7 +398,6 @@ impl PTIR {
                             && (seg.start <= pos + flank && seg.end >= pos.saturating_sub(flank))
                         {
                             fusion_evidence_vec[idx] += 1;
-                            // dbg!(self.signature);
                             break;
                         }
                     }
@@ -834,23 +821,5 @@ impl FusionRecord {
 }
 
 #[cfg(test)]
-
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_ranking_score() {
-        let evidence_arr = vec![999, 0, 0, 0];
-        let mut dataset_info = DatasetInfo::new();
-        dataset_info.sample_size = evidence_arr.len();
-        dataset_info.sample_total_evidence_vec = vec![10000, 20000, 30000, 40000];
-
-        let ranking_score = PTIR::get_ranking_score(
-            &evidence_arr,
-            dataset_info.get_size(),
-            &dataset_info.sample_total_evidence_vec,
-        );
-
-        dbg!(ranking_score);
-    }
-}
+#[path = "tests/ptir.rs"]
+mod tests;

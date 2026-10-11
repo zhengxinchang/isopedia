@@ -14,7 +14,7 @@ use crate::error::ProfileError;
 use crate::strand::Strand;
 use crate::{
     myio::MyGzWriter,
-    reads::{AggrRead, SingleRead},
+    reads::{profile_header, AggrRead, SingleRead},
     utils::{greetings2, log_wall_time, start_wall_timer},
 };
 use num_format::{Locale, ToFormattedString};
@@ -171,7 +171,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
     cli.validate()?;
 
     let mut chrom_set: IndexSet<String> = IndexSet::new();
-    let mut agg_isoform_map: FxHashMap<u64, AggrRead> = FxHashMap::default();
+    let mut agg_isoform_map: FxHashMap<u128, AggrRead> = FxHashMap::default();
     let mut profile_stats = ProfileStats::new();
 
     let mut n_record = 0u32;
@@ -425,18 +425,10 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
 
     // write the chrom_set
     info!("Processing chromosomes");
-    let mut chrom_str = Vec::new();
-    chrom_set.into_iter().for_each(|x| {
-        chrom_str.extend_from_slice(x.as_bytes());
-        chrom_str.push(b'\t');
-    });
-    chrom_str.push(b'\n');
-
+    let chrom_str = profile_header(chrom_set.iter().map(String::as_str));
     info!("Write to output file: {}", cli.output.display());
-
-    chrom_str.extend_from_slice(b"signature\tevidence\tchrom\tsplice_junctions\tisoform_diffs\n");
     mywriter
-        .write_all_bytes(&chrom_str)
+        .write_all_bytes(chrom_str.as_bytes())
         .map_err(|source| ProfileError::Io {
             context: format!("write header to {}", cli.output.display()),
             source,
@@ -449,7 +441,7 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
 
     let mut sorted_agg_isoform_map = agg_isoform_map
         .into_iter()
-        .collect::<Vec<(u64, AggrRead)>>();
+        .collect::<Vec<(u128, AggrRead)>>();
     sorted_agg_isoform_map.sort_by_key(|x| x.0);
     for (_, agg_isoform) in sorted_agg_isoform_map.iter() {
         // writer.write(agg_isoform.to_record().as_bytes()).unwrap();
@@ -518,121 +510,5 @@ pub fn run_profile(cli: &ProfileCli) -> Result<(), ProfileError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{
-        cmd::profile::{run_profile, ProfileCli},
-        error::ProfileError,
-    };
-    use clap::Parser;
-    use flate2::read::GzDecoder;
-    use rust_htslib::bam::{self, Read};
-    use std::{fs, io::Read as _, path::Path};
-
-    #[test]
-    fn profile_errors_and_output() {
-        let dir = tempfile::tempdir().unwrap();
-        let sam = dir.path().join("input.sam");
-        let bam = dir.path().join("input.bam");
-        let output = dir.path().join("output.gz");
-        let mut cli = ProfileCli::parse_from([
-            "profile",
-            "-i",
-            bam.to_str().unwrap(),
-            "-o",
-            output.to_str().unwrap(),
-            "--rname",
-            "--stats",
-        ]);
-        assert!(matches!(
-            run_profile(&cli),
-            Err(ProfileError::InvalidArgument(_))
-        ));
-
-        let header = "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n";
-        let record = "read1\t0\tchr1\t1\t60\t10M20N10M\t*\t0\t0\tAAAAAAAAAAAAAAAAAAAA\t*";
-        let write_bam = |tag: &str| {
-            fs::write(&sam, format!("{header}{record}{tag}\n")).unwrap();
-            let mut reader = bam::Reader::from_path(&sam).unwrap();
-            let header = bam::Header::from_template(reader.header());
-            let mut writer = bam::Writer::from_path(&bam, &header, bam::Format::Bam).unwrap();
-            for record in reader.records() {
-                writer.write(&record.unwrap()).unwrap();
-            }
-        };
-        write_bam("");
-        run_profile(&cli).unwrap();
-        let mut text = String::new();
-        GzDecoder::new(fs::File::open(&output).unwrap())
-            .read_to_string(&mut text)
-            .unwrap();
-        assert!(text.contains("\t1\t1\t10-30\t0-40:+::RN=read1\n"));
-        assert!(dir.path().join("output.gz.stats.txt").is_file());
-
-        write_bam("\tSA:Z:chr1,101,+,5M10N5M,60,0;");
-        run_profile(&cli).unwrap();
-        text.clear();
-        GzDecoder::new(fs::File::open(&output).unwrap())
-            .read_to_string(&mut text)
-            .unwrap();
-        assert!(text.contains("1%100%105%+,1%115%120%+"));
-
-        for tag in [
-            "\tSA:i:1",
-            "\tSA:Z:chr1,101,+;",
-            "\tSA:Z:chr1,0,+,10M,60,0;",
-            "\tSA:Z:chr1,101,?,10M,60,0;",
-            "\tSA:Z:chr1,101,+,10M5,60,0;",
-            "\tSA:Z:chr1,101,+,0M,60,0;",
-            "\tSA:Z:chr1,101,+,10Q,60,0;",
-            "\tSA:Z:chr1,101,+,10M,bad,0;",
-            "\tSA:Z:chr1,101,+,10M,60,bad;",
-            "\tSA:Z:chr1,18446744073709551615,+,10M,60,0;",
-        ] {
-            write_bam(tag);
-            assert!(
-                matches!(run_profile(&cli), Err(ProfileError::InvalidRecord { read_name, .. }) if read_name == "read1"),
-                "{tag}"
-            );
-        }
-
-        write_bam("");
-        let bytes = fs::read(&bam).unwrap();
-        fs::write(&bam, &bytes[..bytes.len() - 40]).unwrap();
-        assert!(matches!(run_profile(&cli), Err(ProfileError::Hts { .. })));
-        fs::write(&bam, b"not a BAM").unwrap();
-        assert!(matches!(run_profile(&cli), Err(ProfileError::Hts { .. })));
-
-        write_bam("");
-        cli.output = dir.path().join("missing/output.gz");
-        assert!(matches!(run_profile(&cli), Err(ProfileError::Io { .. })));
-        cli.output = dir.path().to_owned();
-        assert!(matches!(
-            run_profile(&cli),
-            Err(ProfileError::InvalidArgument(_))
-        ));
-        cli.output = output.clone();
-        fs::remove_file(dir.path().join("output.gz.stats.txt")).unwrap();
-        fs::create_dir(dir.path().join("output.gz.stats.txt")).unwrap();
-        assert!(
-            matches!(run_profile(&cli), Err(ProfileError::Io { context, .. }) if context.contains("statistics"))
-        );
-
-        if Path::new("/dev/full").exists() {
-            cli.output = "/dev/full".into();
-            cli.stats = false;
-            assert!(matches!(run_profile(&cli), Err(ProfileError::Io { .. })));
-            write_bam("\tSA:i:1");
-            assert!(matches!(
-                run_profile(&cli),
-                Err(ProfileError::InvalidRecord { .. })
-            ));
-        }
-
-        cli.bam = dir.path().join("input.cram");
-        fs::write(&cli.bam, b"").unwrap();
-        assert!(matches!(
-            run_profile(&cli),
-            Err(ProfileError::InvalidArgument(_))
-        ));
-    }
-}
+#[path = "../tests/cmd_profile.rs"]
+mod tests;
