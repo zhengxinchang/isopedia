@@ -35,9 +35,9 @@ Isopedia has two binaries:
 - `isopedia-tools`: helper utilities
 
 ```bash
-# download the latest release from GitHub
-curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia-v1.6.6-linux-x86_64/isopedia
+# download v1.7.3 for compatibility with the current pre-built indexes
+curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia-v1.7.3-linux-x86_64/isopedia
 
 # clone the repo and enter toy example directory
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
@@ -88,6 +88,8 @@ Typical workflow:
 ## Download Pre-built Index
 
 Isopedia provides pre-built indexes from public long-read RNA-seq datasets.
+
+**Compatibility:** The currently published pre-built indexes support Isopedia **v1.7.3 and earlier only**. They are not compatible with v1.8.0 or later; rebuild the index with the newer version before querying.
 
 | Name | Organism | Reference | Link | Sample Size | Index Size (Compressed) | Minimum Memory for Query | Description |
 |---|---|---|---|---:|---|---|---|
@@ -416,13 +418,13 @@ Core options:
 
 We offer two ways to install isopedia:
 
-### 1. Download latest release (recommended)
+### 1. Download v1.7.3 (for current pre-built indexes)
 
-Download the pre-built binary from the [GitHub Releases page](https://github.com/zhengxinchang/isopedia/releases/latest):
+Download the pre-built binary from the [v1.7.3 release page](https://github.com/zhengxinchang/isopedia/releases/tag/v1.7.3):
 
 ```bash
-curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia-v1.6.6-linux-x86_64/isopedia
+curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia-v1.7.3-linux-x86_64/isopedia
 ```
 
 ### 2. Build from source (for users want to build from source)
