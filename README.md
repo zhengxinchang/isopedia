@@ -10,9 +10,9 @@ It provides two key capabilities:
 preprint: [https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full](https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full)
 
 **Stable release: [v1.7.3](https://github.com/zhengxinchang/isopedia/releases/tag/v1.7.3).**
-The `main` branch maintains stable 1.x releases, and [`dev`](https://github.com/zhengxinchang/isopedia/tree/dev) contains upcoming 1.x updates.
-The [`next`](https://github.com/zhengxinchang/isopedia/tree/next) branch contains the incompatible format changes introduced in v1.8.0 and is the starting point for 2.x development.
-Use v1.7.3 with the pre-built indexes below. Moving to the new format requires rebuilding profiles and indexes with `profile` → `merge` → `index` in a separate directory.
+
+Use this release with the pre-built indexes provided below.
+The `main` branch maintains the stable 1.x series.
 
 
 ## Table of Contents
@@ -27,9 +27,9 @@ Use v1.7.3 with the pre-built indexes below. Moving to the new format requires r
   - [Splice Query and Visualization](#splice-query-and-visualization)
 - [Command Parameters](#command-parameters)
 - [How to Install Isopedia](#how-to-install-isopedia)
+- [Next version (2.x)](#next-version-2x)
 <!-- - [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate) -->
 - [Computational Resource Usage](#computational-resource-usage)
-- [Contact](#contact)
 - [FAQ](#faq)
 
 ## Quick Start
@@ -41,11 +41,13 @@ Isopedia has two binaries:
 
 ```bash
 # download the stable release for the current pre-built indexes
-curl -fL https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia --version
+mkdir -p isopedia-bin
+curl -fL https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf - -C isopedia-bin
+./isopedia-bin/isopedia --version
+export PATH="$PWD/isopedia-bin:$PATH"
 
 # clone the repo and enter toy example directory
-git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
+git clone --branch main https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
 
 # query transcripts
 isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.profile.tsv.gz # 3364 records returned
@@ -54,13 +56,13 @@ isopedia isoform -i index/ -g gencode.v47.basic.chr22.gtf -o out.profile.tsv.gz 
 isopedia splice -i index/ -s 22:17744013,22:17750104 -o out.splice.tsv.gz # 13 records returned
 
 # visualize splice query output
-isopedia-splice-viz.py -i out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -o isopedia-splice-view
+python3 ../script/isopedia-splice-viz.py -i out.splice.tsv.gz -g gencode.v47.basic.chr22.gtf -t ../script/isopedia-splice-viz-temp.html -o isopedia-splice-view
 
 # query one fusion event (two breakpoints)
-isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz # 0 recored returned, as hg002 is a healthy individual
+isopedia fusion -i index/ -p chr1:181130,chr1:201853853 -o ./out.fusion.tsv.gz # no matching records in the toy index
 
 # query multiple fusion events
-isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz # 0 recored returned, as hg002 is a healthy individual
+isopedia fusion -i index/ -P fusion_query.tsv -o ./out.fusion.tsv.gz # no matching records in the toy index
 
 ```
 
@@ -146,7 +148,9 @@ Prerequisites:
 
 <!-- 1. Long-read alignments (`.bam`/`.cram`) or transcript annotations (`.gtf`). -->
 1. Long-read alignments (`.bam`/`.cram`)
-2. A manifest TSV with at least two columns: sample name and profile path.
+2. A manifest TSV with a header row and at least two columns: sample name and profile path. Use unique sample names; additional columns contain sample metadata. Relative paths are resolved from the working directory where you run Isopedia.
+
+For CRAM input, provide the matching reference FASTA with `profile --reference reference.fa`.
 
 Example manifest:
 
@@ -182,10 +186,12 @@ Purpose:
 
 - Annotate transcripts from an input GTF against the index.
 
+The GTF must contain a `transcript` record followed by its corresponding `exon` records, with `gene_id`, `transcript_id`, and strand information. Plain-text and gzip-compressed GTF files are supported. Sorting individual lines by genomic position alone can break transcript/exon grouping.
+
 Example:
 
 ```bash
-# input GTF must be sorted
+# normalize and regroup transcript/exon records (requires gffread)
 gffread -T -o- origin.gtf | sort -k1,1 -k4,4n | gffread -T - -o query.sorted.gtf
 
 isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
@@ -195,20 +201,20 @@ isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 
 | Column | Description |
 |---|---|
-| `chrom` | Chromosome |
-| `start` | Transcript start |
-| `end` | Transcript end |
-| `length` | Transcript length |
+| `chrom` | Chromosome, normalized to uppercase without the `chr` prefix |
+| `start` | Transcript start, 0-based |
+| `end` | Transcript end, exclusive |
+| `length` | Sum of exon lengths |
 | `exon_count` | Exon count |
 | `trans_id` | Transcript ID |
 | `gene_id` | Gene ID |
-| `ranking_score` | Ranking score across cohort |
+| `ranking_score` | Reserved field; always `NA` in v1.7.3 |
 | `detected` | Direct detection status based on full-splice-match read support (`RC_FSM_JC`) and `min_read`. EM estimates do not determine detection. |
 | `min_read` | Minimum read threshold used |
 | `n_pos_samples/sample_size` | Number of samples with direct detection support and total sample size |
-| `attributes` | Original GTF attributes |
+| `attributes` | Transcript GTF attributes serialized as `key:value;...` |
 | `FORMAT` | Per-sample field format: `RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES`. |
-| `sample_*` | Per-sample values |
+| Sample-name columns | Per-sample values; column names come from the index manifest |
 
 
 
@@ -228,32 +234,42 @@ Examples:
 
 ```bash
 # single breakpoint pair
-isopedia fusion -i index/ -p chr1:1000,chr2:2000 -o fusion.single.tsv.gz
+isopedia fusion -i index/ -p chr1:1000,chr2:2000 -o ./fusion.single.tsv.gz
 
-# batch breakpoint pairs from bed-like file
-isopedia fusion -i index/ -P fusion_breakpoints.bed -o fusion.batch.tsv.gz
+# batch breakpoint pairs from a five-column TSV
+isopedia fusion -i index/ -P fusion_breakpoints.tsv -o ./fusion.batch.tsv.gz
 
 # discover candidate fusions from gene GTF
-isopedia fusion -i index/ -G gene.gtf -o fusion.discovery.tsv.gz
+isopedia fusion -i index/ -G gene.gtf -o ./fusion.discovery.tsv.gz
 
 # detailed read-level output for two regions
-isopedia fusion -i index/ -r chr8:92017266-92017466,chr21:34859374-34859574 -o fusion.region.tsv.gz
+isopedia fusion -i index/ -r chr8:92017266-92017466,chr21:34859374-34859574 -o ./fusion.region.tsv.gz
 ```
+
+Choose one query mode per command. In v1.7.3, the output path must include an existing parent directory; use `./output.tsv.gz` for the current directory.
+
+`--pos-bed` reads five tab-separated columns, without a header: `chr1`, `pos1`, `chr2`, `pos2`, `id`. Despite the option name and CLI help, this is not a six-column BEDPE file.
+
+```tsv
+chr1	1000	chr2	2000	fusion_1
+```
+
+Positions use 0-based genomic boundaries. For `--gene-gtf`, provide an uncompressed GTF with gene records followed by their exons, including `gene_id`, `gene_name`, and `gene_type`; discovery matches protein-coding genes.
 
 Breakpoint-query output columns:
 
-- `chr1`, `pos1`, `chr2`, `pos2`, `id`, `min_read`, `positive/sample_size`, `left_isoforms`, `right_isoforms`, then per-sample counts.
+- `chr1`, `pos1`, `chr2`, `pos2`, `id`, `min_read`, `positive/sample_size`, `left_isoforms`, `right_isoforms`, `FORMAT` (`COUNT`), then per-sample counts.
 
-Gene-discovery output columns:
+Gene-discovery output limitation in v1.7.3:
 
-- `geneA_name`, `geneB_name`, `total_evidences`, `total_samples`, `is_two_strand`,
-  `AtoB_primary_start`, `AtoB_primary_end`, `AtoB_supp_start`, `AtoB_supp_end`,
-  `BtoA_primary_start`, `BtoA_primary_end`, `BtoA_supp_start`, `BtoA_supp_end`, then per-sample counts.
+- The header declares eight separate start/end columns after `is_two_strand`, but each data row writes four `chr:start-end` fields instead (A-to-B primary, A-to-B supplementary, B-to-A primary, B-to-A supplementary), followed by `FORMAT` and sample counts. The header and data therefore do not align; account for this before parsing this mode's output.
 
 Region-pair detailed output columns:
 
 - `chr1`, `start1`, `end1`, `chr2`, `start2`, `end2`, `main_exon_count1`,
   `supp_segment_count2`, `query_part`, `main_isoforms`, `supp_aln_regions`, `sample_name`.
+
+In v1.7.3, the region-pair header also appends an unused `FORMAT` column and an empty trailing field; data rows contain only the 12 columns listed above.
 
 ### Splice Query and Visualization
 
@@ -271,18 +287,20 @@ isopedia splice -i index/ -s chr22:41100500,chr22:41101500 -o splice.out.tsv.gz
 isopedia splice -i index/ -S splice_queries.bed -o splice.batch.tsv.gz
 
 # visualize
-python script/isopedia-splice-viz.py \
+python3 script/isopedia-splice-viz.py \
   -i splice.out.tsv.gz \
   -g gencode.v47.basic.annotation.gtf \
   -t script/isopedia-splice-viz-temp.html \
   -o isopedia-splice-view
 ```
 
+Run the visualization command above from the repository root; Python 3 is required. For `--splice-bed`, use the same five-column TSV layout as fusion breakpoint input, with both positions on the same chromosome and the left coordinate first. Splice positions are 0-based boundaries: for consecutive GTF exons, use the left exon's end and the right exon's start minus one.
+
 `splice` output columns:
 
 - `id`, `chr1`, `pos1`, `chr2`, `pos2`, `total_evidence`, `cpm`, `matched_sj_idx`,
   `dist_to_matched_sj`, `n_exons`, `start_pos_left`, `start_pos_right`,
-  `end_pos_left`, `end_pos_right`, `splice_junctions`, then per-sample values.
+  `end_pos_left`, `end_pos_right`, `splice_junctions`, `FORMAT`, then per-sample values.
 
 Additional explaination:
 ```
@@ -311,7 +329,7 @@ Core options:
 - `-f, --flank <FLANK>` (default: `10`; multi-exon junction matching tolerance)
 - `-F, --mono-exon-wobble <MONO_EXON_WOBBLE>` (default: `50`; expands the mono-exon candidate search interval by this many bp on each side, and requires both read ends to be within this distance of the annotated ends for FSM)
 - `-m, --min-read <MIN_READ>` (default: `1`)
-- `--info`
+- `--info` (accepted, but does not add output fields in v1.7.3)
 - `-n, --num-threads <NUM_THREADS>` (default: `4`)
 - EM options: `--em-max-iter`, `--em-conv-min-diff`, `--em-chunk-size`, `--em-effective-len-coef`, `--em-damping-factor`, `--min-em-abundance`
 - TSS/TES options: `--tss-wob`, `--tes-wob` (both default to `50`). The wobble values are maximum absolute deviations in bp and apply in both directions around the annotated TSS and TES. `--no-check-tss-tes` is deprecated; TSS/TES support is always counted.
@@ -327,7 +345,7 @@ Core options:
 - Query selectors: `-p, --pos`, `-P, --pos-bed`, `-r, --region`, `-G, --gene-gtf`
 - `-o, --output <OUTPUT>`
 - `-f, --flank <FLANK>` (default: `10`)
-- `-m, --min-read <MIN_READ>` (default: `1`)
+- `-m, --min-read <MIN_READ>` (default: `1`; used to count positive samples in breakpoint mode only)
 - Cache options: `-c, --cached_nodes`, `--cached-chunk-number`, `--cached-chunk-size-mb`
 - `--verbose`
 
@@ -338,8 +356,8 @@ Core options:
 - `-i, --idxdir <IDXDIR>`
 - Query selectors: `-s, --splice` or `-S, --splice-bed`
 - `-o, --output <OUTPUT>`
-- `-f, --flank <FLANK>` (default: `10`)
-- `-m, --min-read <MIN_READ>` (default: `1`)
+- `-f, --flank <FLANK>` (default: `10`; both junction boundary distances must be strictly less than this value in v1.7.3. Use `1` for exact matching; `0` returns no records.)
+- `-m, --min-read <MIN_READ>` (default: `1`; accepted but does not filter results in v1.7.3)
 - Cache options: `-c, --cached_nodes`, `--cached-chunk-number`, `--cached-chunk-size-mb`
 - `--verbose`
 
@@ -347,11 +365,13 @@ Core options:
 
 Core options:
 
-- Input selectors: `-i, --bam` or `-g, --gtf`
+- Input selectors: `-i, --bam` or `-g, --gtf` (GTF input is supported but hidden from CLI help)
 - `-r, --reference <REFERENCE>` for CRAM
 - `-o, --output <OUTPUT>`
 - `--mapq <MAPQ>` (default: `5`)
-- `--use-secondary`, `--rname`, `--tid`, `--gid`, `--verbose`
+- `--use-secondary`, `--rname`, `--verbose`
+- `--tid`, `--gid` (GTF input only; hidden from CLI help)
+- `--stats` (writes alignment statistics to `<output>.stats.txt`)
 
 ### `isopedia merge`
 
@@ -388,8 +408,10 @@ We offer two ways to install isopedia:
 Download the pre-built binary from the [v1.7.3 release page](https://github.com/zhengxinchang/isopedia/releases/tag/v1.7.3):
 
 ```bash
-curl -fL https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia --version
+mkdir -p isopedia-bin
+curl -fL https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf - -C isopedia-bin
+./isopedia-bin/isopedia --version
+export PATH="$PWD/isopedia-bin:$PATH"
 ```
 
 ### 2. Build from source (for users want to build from source)
@@ -400,6 +422,7 @@ Rust and Cargo are required.
 git clone --branch main https://github.com/zhengxinchang/isopedia.git
 cd isopedia
 cargo build --release --locked
+export PATH="$PWD/target/release:$PATH"
 ```
 
 <!-- ## Annotate ORF with ORFannotate
@@ -409,6 +432,22 @@ Isopedia interoperates with [ORFannotate](https://github.com/egustavsson/ORFanno
 ```text
 <placeholder>
 ``` -->
+
+## Next version (2.x)
+
+Isopedia 2.x is under development and introduces a new profile and index
+format that is incompatible with the existing 1.x data.
+
+- [`dev`](https://github.com/zhengxinchang/isopedia/tree/dev):
+  fixes and compatible updates for the current 1.x series.
+- [`next`](https://github.com/zhengxinchang/isopedia/tree/next):
+  development of the next major version, 2.x.
+
+For current pre-built indexes, continue using the stable 1.x release.
+
+To use the new format, regenerate profiles from the original inputs and
+run `profile` → `merge` → `index`, writing to a separate directory.
+Existing 1.x profiles and indexes cannot be reused directly.
 
 ## Computational Resource Usage
 
@@ -428,4 +467,4 @@ Isopedia 1.4.0 benchmark on 1,007 long-read transcriptome datasets from SRA and 
 
 **Q:** Can Isopedia be used in a "transcript discovery" mode — for example, to retrieve all transcripts indexed for a given gene or within a genomic region, without providing a GTF file in advance?
 
-**A:** Isopedia is designed as a genotyper rather than a caller. It always requires a GTF file as input, meaning users need to specify the transcript structures they want to query. Gene-level or coordinate-range discovery queries (e.g., "retrieve all transcripts for gene N" or "all transcripts between coordinates A–B") fall under the scope of a transcript caller, which is outside Isopedia's current functionality.
+**A:** `isopedia isoform` requires a GTF specifying the transcript structures to quantify; it does not assemble novel transcripts. `isopedia splice` and the breakpoint/region modes of `isopedia fusion` accept coordinates without a GTF and retrieve matching indexed evidence. Fusion gene-discovery mode (`fusion --gene-gtf`) requires gene annotations. These queries do not provide general transcript assembly or a command to enumerate every transcript for a gene or region.
