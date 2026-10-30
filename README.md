@@ -9,6 +9,11 @@ It provides two key capabilities:
 
 preprint: [https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full](https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full)
 
+**Stable release: [v1.7.3](https://github.com/zhengxinchang/isopedia/releases/tag/v1.7.3).**
+The `main` branch maintains stable 1.x releases, and [`dev`](https://github.com/zhengxinchang/isopedia/tree/dev) contains upcoming 1.x updates.
+The [`next`](https://github.com/zhengxinchang/isopedia/tree/next) branch contains the incompatible format changes introduced in v1.8.0 and is the starting point for 2.x development.
+Use v1.7.3 with the pre-built indexes below. Moving to the new format requires rebuilding profiles and indexes with `profile` → `merge` → `index` in a separate directory.
+
 
 ## Table of Contents
 
@@ -20,7 +25,7 @@ preprint: [https://www.biorxiv.org/content/10.64898/2026.03.23.713667v1.full](ht
   - [Isoform Query](#isoform-query)
   - [Fusion Query and Discovery](#fusion-query-and-discovery)
   - [Splice Query and Visualization](#splice-query-and-visualization)
-- [Command Parameters](#command-parameters-latest)
+- [Command Parameters](#command-parameters)
 - [How to Install Isopedia](#how-to-install-isopedia)
 <!-- - [Annotate ORF with ORFannotate](#annotate-orf-with-orfannotate) -->
 - [Computational Resource Usage](#computational-resource-usage)
@@ -35,9 +40,9 @@ Isopedia has two binaries:
 - `isopedia-tools`: helper utilities
 
 ```bash
-# download the latest release from GitHub
-curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia-v1.6.6-linux-x86_64/isopedia
+# download the stable release for the current pre-built indexes
+curl -fL https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia --version
 
 # clone the repo and enter toy example directory
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
@@ -88,6 +93,8 @@ Typical workflow:
 ## Download Pre-built Index
 
 Isopedia provides pre-built indexes from public long-read RNA-seq datasets.
+
+These indexes use the 1.x format and are supported by v1.7.3. They are not compatible with the new format on `next`.
 
 | Name | Organism | Reference | Link | Sample Size | Index Size (Compressed) | Minimum Memory for Query | Description |
 |---|---|---|---|---:|---|---|---|
@@ -184,7 +191,7 @@ gffread -T -o- origin.gtf | sort -k1,1 -k4,4n | gffread -T - -o query.sorted.gtf
 isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 ```
 
-#### Output columns (latest code)
+#### Output columns (v1.7.3)
 
 | Column | Description |
 |---|---|
@@ -196,16 +203,16 @@ isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 | `trans_id` | Transcript ID |
 | `gene_id` | Gene ID |
 | `ranking_score` | Ranking score across cohort |
-| `detected(total:fsm:em)` | Detection status for total/FSM/EM; The detected status column follows the format "Overall detected:FSM detected:EM detected". FSM detected indicates whether the sample has evidence from a full-splice match, and EM detected indicates whether the sample has evidence from EM estimation. Overall detected is set to "yes" if either FSM detected or EM detected is "yes". Entries with "no:no:no" can be excluded to quickly filter for transcripts with detection support.|
+| `detected` | Direct detection status based on full-splice-match read support (`RC_FSM_JC`) and `min_read`. EM estimates do not determine detection. |
 | `min_read` | Minimum read threshold used |
-| `n_pos_samples(total:fsm:em/sample_size)` | Positive sample counts and sample size |
+| `n_pos_samples/sample_size` | Number of samples with direct detection support and total sample size |
 | `attributes` | Original GTF attributes |
-| `FORMAT` | Per-sample field format. Current `FORMAT` string: `CPM:COUNT:FSM_CPM:FSM_COUNT:EM_CPM:EM_COUNT:INFO`. Per-sample values include abundance/count components for total, FSM, and EM estimates.|
+| `FORMAT` | Per-sample field format: `RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES`. |
 | `sample_*` | Per-sample values |
 
 
 
-**Please note that CPM values are calculated by normalizing across all input transcript queries, as Isopedia expects the input GTF to represent a complete transcriptome. If you query only a subset of transcripts, the CPM values will not be meaningful.**
+**CPM values use each sample's total indexed evidence as the denominator, so querying a subset of transcripts does not change that denominator.**
 
 
 
@@ -292,7 +299,7 @@ end_pos_right: the largest observed end position among all reads supporting this
 
 ## Command Parameters
 
-Parameter lists below are based on the current CLI in source.
+Parameter lists below describe the v1.7.3 CLI on the stable 1.x branch.
 
 ### `isopedia isoform`
 
@@ -301,13 +308,13 @@ Core options:
 - `-i, --idxdir <IDXDIR>`
 - `-g, --gtf <GTF>`
 - `-o, --output <OUTPUT>`
-- `-f, --flank <FLANK>` (default: `0`; multi-exon junction matching tolerance)
+- `-f, --flank <FLANK>` (default: `10`; multi-exon junction matching tolerance)
 - `-F, --mono-exon-wobble <MONO_EXON_WOBBLE>` (default: `50`; expands the mono-exon candidate search interval by this many bp on each side, and requires both read ends to be within this distance of the annotated ends for FSM)
 - `-m, --min-read <MIN_READ>` (default: `1`)
 - `--info`
 - `-n, --num-threads <NUM_THREADS>` (default: `4`)
 - EM options: `--em-max-iter`, `--em-conv-min-diff`, `--em-chunk-size`, `--em-effective-len-coef`, `--em-damping-factor`, `--min-em-abundance`
-- TSS/TES options: `--no-check-tss-tes`, `--tss-wob`, `--tes-wob`. The wobble values are maximum absolute deviations in bp and apply in both directions around the annotated TSS and TES.
+- TSS/TES options: `--tss-wob`, `--tes-wob` (both default to `50`). The wobble values are maximum absolute deviations in bp and apply in both directions around the annotated TSS and TES. `--no-check-tss-tes` is deprecated; TSS/TES support is always counted.
 - Cache options: `-c, --cached-nodes`, `--cached-chunk-num`, `--cached-chunk-size-mb`
 - `--output-tmp-shard-counts`
 - `--verbose`
@@ -376,13 +383,13 @@ Core options:
 
 We offer two ways to install isopedia:
 
-### 1. Download latest release (recommended)
+### 1. Download v1.7.3 (recommended for current pre-built indexes)
 
-Download the pre-built binary from the [GitHub Releases page](https://github.com/zhengxinchang/isopedia/releases/latest):
+Download the pre-built binary from the [v1.7.3 release page](https://github.com/zhengxinchang/isopedia/releases/tag/v1.7.3):
 
 ```bash
-curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia-v1.6.6-linux-x86_64/isopedia
+curl -fL https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia --version
 ```
 
 ### 2. Build from source (for users want to build from source)
@@ -390,9 +397,9 @@ curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isope
 Rust and Cargo are required.
 
 ```bash
-git clone https://github.com/zhengxinchang/isopedia.git
+git clone --branch main https://github.com/zhengxinchang/isopedia.git
 cd isopedia
-cargo build --release
+cargo build --release --locked
 ```
 
 <!-- ## Annotate ORF with ORFannotate
