@@ -188,13 +188,15 @@ Purpose:
 
 The GTF must contain a `transcript` record followed by its corresponding `exon` records, with `gene_id`, `transcript_id`, and strand information. Plain-text and gzip-compressed GTF files are supported. Sorting individual lines by genomic position alone can break transcript/exon grouping.
 
+Use `gffread` to regroup a valid GTF by transcript. Isopedia sorts transcripts and exons internally after parsing; no additional `sort` step is needed.
+
 Example:
 
 ```bash
 # normalize and regroup transcript/exon records (requires gffread)
-gffread -T -o- origin.gtf | sort -k1,1 -k4,4n | gffread -T - -o query.sorted.gtf
+gffread -T origin.gtf -o query.normalized.gtf
 
-isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
+isopedia isoform -i index/ -g query.normalized.gtf -o isoform.out.tsv.gz
 ```
 
 #### Output columns (v1.7.3)
