@@ -191,7 +191,6 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
     let started = start_wall_timer();
     greetings2(&cli);
     cli.validate();
-    crate::ptir_archive::check_archive_version(&cli.idxdir.join(MERGED_FILE_NAME))?;
     if cli.no_check_tss_tes {
         warn!("--no-check-tss-tes is obsolete: TSS/TES support is always counted for the isoform output");
     }
@@ -289,8 +288,7 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
                         cli.idxdir.join(MERGED_FILE_NAME),
                         cli.cached_chunk_size_mb * 1024 * 1024,
                         cli.cached_chunk_num,
-                    )
-                    .expect("open validated PTIR archive"),
+                    ),
                     System::new(),
                 )
             },
@@ -392,16 +390,6 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
 
         info!("> {}\t{}({:.2}%)", sample_name, fsm_count, fsm_pct);
     }
-    let detected_count = global_stats.any_sample_posi_tx_count_fsm;
-    let detected_pct = if gtf.trans_count > 0 {
-        detected_count as f64 / gtf.trans_count as f64 * 100.0
-    } else {
-        0.0
-    };
-    info!(
-        "> All samples (any detected)\t{}({:.2}%)",
-        detected_count, detected_pct
-    );
     info!("Save output to file {:?}", tableout.get_out_path().unwrap());
 
     info!("Finished!");

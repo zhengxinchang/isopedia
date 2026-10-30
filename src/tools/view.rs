@@ -100,18 +100,18 @@ pub fn view_tmpidx(cli: &ViewArgs) {
 }
 
 #[allow(dead_code, unused)]
-pub fn view_archive(cli: &ViewArgs) -> anyhow::Result<()> {
-    let mut processed_offsets = std::collections::HashSet::new();
+pub fn view_archive(cli: &ViewArgs) {
+    let mut processed_signautres = std::collections::HashSet::new();
     let chrom_bytes = std::fs::read(&cli.idx.join(CHROM_FILE_NAME)).unwrap();
     let chromamp = ChromMapping::decode(&chrom_bytes);
+    let writer = std::fs::File::create(&cli.output).unwrap();
+    let mut writer = std::io::BufWriter::new(writer);
+
     let mut archive = PTIRArchiveCache::new(
         &cli.idx.join(MERGED_FILE_NAME),
         cli.cached_chunk_size_mb,
         cli.cached_chunk_number,
-    )?;
-
-    let writer = std::fs::File::create(&cli.output).unwrap();
-    let mut writer = std::io::BufWriter::new(writer);
+    );
 
     let mut mygzwriter = MyGzWriter::new(&cli.output).expect("Failed to create MyGzWriter");
 
@@ -124,10 +124,11 @@ pub fn view_archive(cli: &ViewArgs) -> anyhow::Result<()> {
 
         for leaf in leafs {
             for ptr in &leaf.data.merge_isoform_offset_vec {
-                if !processed_offsets.insert(ptr.offset) {
+                let rec = archive.load_from_disk(ptr);
+                if processed_signautres.contains(&rec.signature) {
                     continue;
                 }
-                let rec = archive.load_from_disk(ptr);
+                processed_signautres.insert(rec.signature);
                 let mut s = rec.get_string();
                 s.push('\n');
                 mygzwriter
@@ -136,7 +137,6 @@ pub fn view_archive(cli: &ViewArgs) -> anyhow::Result<()> {
             }
         }
     }
-    Ok(())
 }
 
 pub fn view_dbinfo(view_args: &ViewArgs) {

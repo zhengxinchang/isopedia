@@ -20,7 +20,5 @@ pub mod tmpidx;
 pub mod tools;
 pub mod utils;
 // pub mod writer;
-pub mod config;
-pub mod error;
 pub mod grouped_tx;
 pub mod strand;

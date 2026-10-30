@@ -52,8 +52,10 @@ impl MyGzWriter {
 
     pub fn finish(&mut self) -> io::Result<()> {
         if let Some(writer) = self.inner.take() {
-            let mut buf_writer = writer.finish()?;
-            buf_writer.flush()?;
+            // take() 移出所有权
+            // let mut buf_writer =
+            writer.finish()?;
+            // buf_writer.flush()?;
         }
         Ok(())
     }
@@ -61,10 +63,7 @@ impl MyGzWriter {
 
 impl Drop for MyGzWriter {
     fn drop(&mut self) {
-        // Call finish explicitly to report errors; Drop must not mask an earlier error.
-        if let Err(error) = self.finish() {
-            log::error!("Failed to finish {}: {}", self.file_name, error);
-        }
+        self.finish().expect("Can not drop gz writer...");
     }
 }
 

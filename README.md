@@ -35,9 +35,9 @@ Isopedia has two binaries:
 - `isopedia-tools`: helper utilities
 
 ```bash
-# download v1.7.3 for compatibility with the current pre-built indexes
-curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia-v1.7.3-linux-x86_64/isopedia
+# download the latest release from GitHub
+curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia-v1.6.6-linux-x86_64/isopedia
 
 # clone the repo and enter toy example directory
 git clone https://github.com/zhengxinchang/isopedia && cd isopedia/toy_ex/
@@ -88,8 +88,6 @@ Typical workflow:
 ## Download Pre-built Index
 
 Isopedia provides pre-built indexes from public long-read RNA-seq datasets.
-
-**Compatibility:** The currently published pre-built indexes support Isopedia **v1.7.3 and earlier only**. They are not compatible with v1.8.0 or later.
 
 | Name | Organism | Reference | Link | Sample Size | Index Size (Compressed) | Minimum Memory for Query | Description |
 |---|---|---|---|---:|---|---|---|
@@ -342,51 +340,11 @@ Core options:
 
 Core options:
 
-- Required input: `-i, --bam` (BAM/CRAM)
+- Input selectors: `-i, --bam` or `-g, --gtf`
 - `-r, --reference <REFERENCE>` for CRAM
 - `-o, --output <OUTPUT>`
 - `--mapq <MAPQ>` (default: `5`)
-- `--use-secondary`, `--rname`, `--verbose`
-
-Profile headers use `##` metadata lines and a single `#` column header:
-
-```text
-##ISOPEDIA <VERSION> version="1.7.3"; program="isopedia"; schema="6";
-##ISOPEDIA <CHROM> ID="1";
-##ISOPEDIA <CHROM> ID="MT";
-#signature	evidence	chrom	splice_junctions	isoform_diffs
-```
-
-The writer uses the build's program version and `PROFILE_SCHEMA_VERSION` from
-`src/config.rs`. Chromosome declarations are unique and sorted, and cover the
-main chromosome column of output records. Empty profiles have no CHROM lines.
-
-String fields (chromosome names and info keys/values, including read names) encode
-backslash, double quote, tab, CR, LF, `|`, `:`, `,`, `%`, `;`, and `=` as `\xHH`
-byte escapes. For example, `instrument:run` becomes `instrument\x3Arun` and a
-literal double quote becomes `\x22`. Readers split the structure before decoding
-each string field exactly once. Numeric fields and record layout are unchanged.
-
-Both merge commands require this annotated header and a schema matching the
-configured version. Legacy unmarked profiles and `#isopedia-profile-v2` files
-are not supported and must be regenerated. Duplicate or missing required header
-fields, undeclared main chromosomes, and malformed escapes produce errors.
-The signature column is exactly 32 lowercase hexadecimal characters, zero-padded
-without a `0x` prefix (for example, `0000000000000000000000000000002a` represents
-42). Readers accept either hex letter case but require exactly 32 characters.
-Schema 6 uses XXH3-128 with seed 9336 on the UTF-8 bytes of
-`chrom:junction_count:left,right;...`, using the normalized chromosome and true
-primary junction count. Mono-exon coordinates store exon bounds with count zero.
-
-Signatures are retained in profiles and merge keys, but are not stored in PTIR
-records. PTIR can recompute a signature on demand through the shared helper;
-archive text exports retain their decimal signature column. Query pointers keep
-their existing layout, and archive export deduplicates records by offset.
-
-The new PTIR layout requires `archive.version` (currently `1`) in the index
-directory. Archive readers reject missing or incompatible versions. Older
-profiles and indexes must be rebuilt with profile → merge → index; changing a
-version marker alone does not migrate data. Keep the marker when copying an index.
+- `--use-secondary`, `--rname`, `--tid`, `--gid`, `--verbose`
 
 ### `isopedia merge`
 
@@ -418,13 +376,13 @@ Core options:
 
 We offer two ways to install isopedia:
 
-### 1. Download v1.7.3 (for current pre-built indexes)
+### 1. Download latest release (recommended)
 
-Download the pre-built binary from the [v1.7.3 release page](https://github.com/zhengxinchang/isopedia/releases/tag/v1.7.3):
+Download the pre-built binary from the [GitHub Releases page](https://github.com/zhengxinchang/isopedia/releases/latest):
 
 ```bash
-curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.7.3/isopedia-v1.7.3-linux-x86_64.tar.gz | tar -xzvf -
-./isopedia-v1.7.3-linux-x86_64/isopedia
+curl -L https://github.com/zhengxinchang/isopedia/releases/download/v1.6.6/isopedia-v1.6.6-linux-x86_64.tar.gz | tar -xzvf -
+./isopedia-v1.6.6-linux-x86_64/isopedia
 ```
 
 ### 2. Build from source (for users want to build from source)

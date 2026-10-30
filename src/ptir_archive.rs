@@ -7,53 +7,10 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{ensure, Context, Result};
+use anyhow::Result;
 use lru::LruCache;
 
 use crate::{ptir::PTIR, tmpidx::PTIROffsetPtr};
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct ArchiveInfo {
-    archive_schema_version: u32,
-    profile_schema_version: u32,
-    program_version: String,
-}
-
-pub(crate) fn write_archive_info(file: &Path) -> Result<()> {
-    let path = file.with_file_name(crate::constants::ARCHIVE_INFO_FILE);
-    let temporary = path.with_extension("json.tmp");
-    let info = ArchiveInfo {
-        archive_schema_version: crate::config::ARCHIVE_SCHEMA_VERSION,
-        profile_schema_version: crate::config::PROFILE_SCHEMA_VERSION,
-        program_version: env!("CARGO_PKG_VERSION").to_owned(),
-    };
-    std::fs::write(&temporary, serde_json::to_vec_pretty(&info)?)?;
-    std::fs::rename(&temporary, &path)?;
-    Ok(())
-}
-
-/// Validate the archive layout; profile/program versions only describe its origin.
-pub fn check_archive_version(file: &Path) -> Result<()> {
-    let path = file.with_file_name(crate::constants::ARCHIVE_INFO_FILE);
-    let info: ArchiveInfo = (|| -> Result<_> {
-        let bytes = std::fs::read(&path)?;
-        Ok(serde_json::from_slice(&bytes)?)
-    })()
-    .with_context(|| {
-        format!(
-            "read {}; rebuild with profile → merge → index",
-            path.display()
-        )
-    })?;
-    ensure!(
-        info.archive_schema_version == crate::config::ARCHIVE_SCHEMA_VERSION,
-        "unsupported archive version {} in {}; expected {}; rebuild with profile → merge → index",
-        info.archive_schema_version,
-        path.display(),
-        crate::config::ARCHIVE_SCHEMA_VERSION
-    );
-    Ok(())
-}
 
 pub struct PTIRArchiveWriter {
     writer: BufWriter<File>,
@@ -92,21 +49,18 @@ pub struct PTIRArchiveCache {
 }
 
 impl PTIRArchiveCache {
-    pub fn new<P: AsRef<Path>>(
-        file: P,
-        chunk_size: u64,
-        max_chunks: usize,
-    ) -> Result<PTIRArchiveCache> {
-        check_archive_version(file.as_ref())?;
-        let f = File::open(&file)
-            .with_context(|| format!("open archive {}", file.as_ref().display()))?;
-        Ok(PTIRArchiveCache {
+    pub fn new<P: AsRef<Path>>(file: P, chunk_size: u64, max_chunks: usize) -> PTIRArchiveCache {
+        let f = File::open(&file).expect(&format!(
+            "Failed to open file {:?}",
+            file.as_ref().display()
+        ));
+        PTIRArchiveCache {
             file: f,
             chunk_size,
             lru_order: Vec::new(),
             cache: LruCache::new(NonZeroUsize::new(max_chunks).unwrap()),
             buf: Vec::new(),
-        })
+        }
     }
 
     pub fn align_offset(&self, offset: u64) -> u64 {
@@ -201,7 +155,3 @@ impl PTIRArchiveCache {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "tests/ptir_archive.rs"]
-mod tests;

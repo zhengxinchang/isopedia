@@ -2,14 +2,13 @@
 use anyhow::Result;
 use log::{error, info};
 use serde::Serialize;
-use std::fmt::Write as _;
 use std::fs;
 use std::hash::BuildHasher;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::Instant;
 use std::{fs::File, hash::Hash, path::Path};
-use xxhash_rust::xxh3::{xxh3_128_with_seed, Xxh3Builder};
+use xxhash_rust::xxh3::Xxh3Builder;
 
 use crate::constants::*;
 
@@ -47,12 +46,9 @@ pub fn u64to2u32(combined: u64) -> (u32, u32) {
 }
 
 pub fn trim_chr_prefix_to_upper(chrom: &str) -> String {
-    let upper = chrom.to_ascii_uppercase();
-    let normalized = upper.trim_start_matches("CHR");
-    crate::config::CHROMOSOME_ALIASES
-        .iter()
-        .find(|(alias, _)| *alias == normalized)
-        .map_or(normalized, |(_, canonical)| *canonical)
+    chrom
+        .to_ascii_uppercase()
+        .trim_start_matches("CHR")
         .to_string()
 }
 
@@ -64,24 +60,16 @@ pub fn pad_chrom_prefix(chrom: &str) -> String {
     }
 }
 
-const HASH_SEED: u64 = 9336;
+static HASHER: LazyLock<Xxh3Builder> = LazyLock::new(|| Xxh3Builder::new().with_seed(9336));
 
-static HASHER: LazyLock<Xxh3Builder> = LazyLock::new(|| Xxh3Builder::new().with_seed(HASH_SEED));
-
-pub fn xxh3_hash_vec<T: Hash>(value: &T) -> u64 {
+pub fn hash_vec<T: Hash>(value: &T) -> u64 {
     HASHER.hash_one(value)
 }
 
-/// Hash normalized, unescaped chromosome and primary coordinates in profile schema 6.
-/// Mono-exon coordinates are exon bounds and must use junction_count = 0.
-pub fn isoform_signature(chrom: &str, junction_count: u64, coordinates: &[(u64, u64)]) -> u128 {
-    let mut input = chrom.to_owned();
-    let _ = write!(input, ":{junction_count}:");
-    for (left, right) in coordinates {
-        let _ = write!(input, "{left},{right};");
-    }
-    xxh3_128_with_seed(input.as_bytes(), HASH_SEED)
-}
+// pub fn hash_vec<T: Hash>(value: &T) -> u64 {
+//     let hasher_builder = RandomState::with_seeds(9336, 5920, 6784, 4496);
+//     hasher_builder.hash_one(value)
+// }
 
 pub fn is_overlap(a: &Vec<f64>, b: &Vec<f64>) -> bool {
     if a.is_empty() || b.is_empty() {
@@ -391,8 +379,31 @@ pub fn add_gz_suffix_if_needed<P: AsRef<Path>>(path: &P) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "tests/utils.rs"]
-mod tests;
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_gz_suffix_if_needed() {
+        let path1 = PathBuf::from("file.txt");
+        let path2 = PathBuf::from("file.txt.gz");
+        let path3 = PathBuf::from("file");
+        let path4 = PathBuf::from("file.");
+
+        let new_path1 = add_gz_suffix_if_needed(&path1);
+        let new_path2 = add_gz_suffix_if_needed(&path2);
+        let new_path3 = add_gz_suffix_if_needed(&path3);
+        let new_path4 = add_gz_suffix_if_needed(&path4);
+
+        dbg!(&new_path1);
+        dbg!(&new_path2);
+        dbg!(&new_path3);
+        dbg!(&new_path4);
+
+        // assert_eq!(new_path1, PathBuf::from("file.txt.gz"));
+        // assert_eq!(new_path2, PathBuf::from("file.txt.gz"));
+        // assert_eq!(new_path3, PathBuf::from("file.gz"));
+    }
+}
 
 pub fn log_mem_stats() {
     if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
@@ -497,13 +508,21 @@ pub fn greetings2<T: Serialize>(msg: &T) {
 }
 
 #[cfg(test)]
-#[path = "tests/utils_interval.rs"]
-mod interval_tests;
-
-#[cfg(test)]
-#[path = "tests/utils_chromosome_name.rs"]
-mod chromosome_name_tests;
-
-#[cfg(test)]
-#[path = "tests/utils_signature.rs"]
-mod signature_tests;
+mod interval_tests {
+    use super::*;
+    #[test]
+    fn test_partition_intervals() {
+        let intervals = vec![(1, 5), (3, 7), (1, 10)];
+        let mono_exon_tx_indices = vec![0, 1, 2];
+        let segments = partition_intervals(&intervals, &mono_exon_tx_indices);
+        for seg in segments {
+            println!("{:?}", seg);
+        }
+        // Expected output:
+        // (1, 3, [0])
+        // (3, 5, [0, 1])
+        // (5, 6, [1])
+        // (6, 7, [1, 2])
+        // (7, 10, [2])
+    }
+}
