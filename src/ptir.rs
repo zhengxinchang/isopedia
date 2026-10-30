@@ -616,7 +616,7 @@ impl PTIR {
 
         // index of the SJ in the isoform matched with query
         if let Some((idx, sj)) = self.splice_junctions_vec.iter().enumerate().find(|(_, x)| {
-            if (x.0.abs_diff(bpp.left_pos) < flank) && (x.1.abs_diff(bpp.right_pos) < flank) {
+            if (x.0.abs_diff(bpp.left_pos) <= flank) && (x.1.abs_diff(bpp.right_pos) <= flank) {
                 return true;
             } else {
                 return false;
