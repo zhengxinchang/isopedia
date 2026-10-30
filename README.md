@@ -195,17 +195,43 @@ isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz
 | `exon_count` | Exon count |
 | `trans_id` | Transcript ID |
 | `gene_id` | Gene ID |
-| `ranking_score` | Ranking score across cohort |
-| `detected(total:fsm:em)` | Detection status for total/FSM/EM; The detected status column follows the format "Overall detected:FSM detected:EM detected". FSM detected indicates whether the sample has evidence from a full-splice match, and EM detected indicates whether the sample has evidence from EM estimation. Overall detected is set to "yes" if either FSM detected or EM detected is "yes". Entries with "no:no:no" can be excluded to quickly filter for transcripts with detection support.|
+| `ranking_score` | Currently `NA` |
+| `detected` | `yes` if at least one sample has `RC_FSM_JC >= min_read`, otherwise `no`. EM estimates do not determine detection. |
 | `min_read` | Minimum read threshold used |
-| `n_pos_samples(total:fsm:em/sample_size)` | Positive sample counts and sample size |
+| `n_pos_samples/sample_size` | Number of samples with `RC_FSM_JC >= min_read`, followed by the total sample count |
 | `attributes` | Original GTF attributes |
-| `FORMAT` | Per-sample field format. Current `FORMAT` string: `CPM:COUNT:FSM_CPM:FSM_COUNT:EM_CPM:EM_COUNT:INFO`. Per-sample values include abundance/count components for total, FSM, and EM estimates.|
+| `FORMAT` | The 13 per-sample fields listed below; `--info` appends `:INFO`. |
 | `sample_*` | Per-sample values |
 
 
 
-**Please note that CPM values are calculated by normalizing across all input transcript queries, as Isopedia expects the input GTF to represent a complete transcriptome. If you query only a subset of transcripts, the CPM values will not be meaningful.**
+Per-sample `FORMAT`:
+
+```text
+RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES
+```
+
+`RC_FSM_JC` counts all full-chain matches within the matching tolerance, including exact and wobble-only matches. TSS/TES fields count the subsets supporting either or both annotated ends. `RC_EM_ISM` is the EM estimate for partial matches. All CPM fields use the sample's total indexed evidence as the denominator; `CPM_EST` uses `RC_FSM_JC + RC_EM_ISM`. The fraction fields divide the corresponding terminal-support count by `RC_FSM_JC` (zero when there are no FSM reads).
+
+Use `--info` to append read coordinates and strand for every read counted in `RC_FSM_JC`:
+
+```bash
+isopedia isoform -i index/ -g query.sorted.gtf -o isoform.out.tsv.gz -f 0 --info
+```
+
+Each INFO entry is `LEFT|RIGHT|STRAND`; multiple reads are comma-separated, for example `100|500|+,110|510|-`. Coordinates are the indexed primary alignment's 0-based, half-open interval `[LEFT, RIGHT)`. Strand is the read's own `+` or `-`; negative-strand reads still report the left coordinate first. No FSM reads is represented by `.` (including samples with only EM support).
+
+INFO includes all `RC_FSM_JC` reads regardless of TSS/TES support or `min_read`, and preserves separate reads with identical coordinates. A read supporting multiple query transcripts appears in each corresponding row. For multi-exon transcripts, `-f 0` requires every junction to match exactly, but does not require identical TSS/TES coordinates. Mono-exon matching uses `--mono-exon-wobble` independently. INFO does not require `profile --rname` and contains no read names, tags, or EM reads.
+
+For example, two exact FSM reads with both ends supported in a sample with 100 indexed reads produce this sample value with `--info`:
+
+```text
+2:2:2:2:2:0:0:20000:20000:20000:1:1:1:100|500|+,110|510|-
+```
+
+Without `--info`, the original 13 fields are unchanged. Enabling it increases memory use, temporary file size, and output size in proportion to the reported read entries.
+
+The existing `merge-output` command accepts only the 13-field isoform format; it does not currently merge tables containing INFO.
 
 
 
@@ -301,10 +327,10 @@ Core options:
 - `-i, --idxdir <IDXDIR>`
 - `-g, --gtf <GTF>`
 - `-o, --output <OUTPUT>`
-- `-f, --flank <FLANK>` (default: `0`; multi-exon junction matching tolerance)
+- `-f, --flank <FLANK>` (default: `10`; multi-exon junction matching tolerance; use `0` for exact junction coordinates)
 - `-F, --mono-exon-wobble <MONO_EXON_WOBBLE>` (default: `50`; expands the mono-exon candidate search interval by this many bp on each side, and requires both read ends to be within this distance of the annotated ends for FSM)
 - `-m, --min-read <MIN_READ>` (default: `1`)
-- `--info`
+- `--info` (append comma-separated `LEFT|RIGHT|STRAND` entries for all `RC_FSM_JC` reads to each sample; `.` if none)
 - `-n, --num-threads <NUM_THREADS>` (default: `4`)
 - EM options: `--em-max-iter`, `--em-conv-min-diff`, `--em-chunk-size`, `--em-effective-len-coef`, `--em-damping-factor`, `--min-em-abundance`
 - TSS/TES options: `--no-check-tss-tes`, `--tss-wob`, `--tes-wob`. The wobble values are maximum absolute deviations in bp and apply in both directions around the annotated TSS and TES.
