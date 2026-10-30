@@ -39,6 +39,7 @@ gffread -T -o- input.gtf  | sort -k1,1 -k4,4n | gffread - -o sorted.gtf
 
 Each sample field is:
 RC_FSM_JC:RC_FSM_JC_TSS:RC_FSM_JC_TES:RC_FSM_JC_TSS_TES:RC_FSM_JC_EXACT:RC_FSM_JC_WOBBLE_ONLY:RC_EM_ISM:CPM_FSM_JC:CPM_FSM_JC_TSS_TES:CPM_EST:FRAC_FSM_JC_TSS:FRAC_FSM_JC_TES:FRAC_FSM_JC_TSS_TES
+With --info, append :INFO containing comma-separated LEFT|RIGHT|STRAND entries for all RC_FSM_JC reads, or . if none. Coordinates are 0-based, half-open; strand is the read's strand. TSS/TES support does not filter INFO.
 All CPM fields use the sample's total indexed evidence as the denominator.
 Direct detection uses RC_FSM_JC only; EM-assigned reads contribute to abundance estimates, not detection.
 For multi-exon transcripts, --flank controls candidate search and full-junction-chain matching; exact means every junction coordinate equals the annotation. For mono-exon transcripts, --mono-exon-wobble controls both candidate search and two-end FSM matching; exact/wobble-only describe equality/tolerance of both ends, not a junction chain. --tss-wob and --tes-wob independently score terminal support in either direction.
@@ -69,7 +70,7 @@ pub struct AnnIsoCli {
     #[arg(short, long)]
     pub output: PathBuf,
 
-    /// Whether to include additional information in the output
+    /// Append LEFT|RIGHT|STRAND for each FSM read to each sample (comma-separated; . if none)
     #[arg(long, default_value_t = false)]
     pub info: bool,
 
@@ -340,7 +341,11 @@ pub fn run_isoform_annotation(cli: &AnnIsoCli) -> Result<()> {
         out_header,
         db_infos,
         meta,
-        ISOFORM_FORMAT.to_string(),
+        if cli.info {
+            format!("{ISOFORM_FORMAT}:INFO")
+        } else {
+            ISOFORM_FORMAT.to_string()
+        },
     );
 
     info!("Finalizing temporary output");

@@ -787,6 +787,9 @@ pub struct TxAbundance {
     pub orig_is_plus_strand: bool,
     pub sj_pairs: Vec<(u64, u64)>, // splice junction positions
     pub fsm_counts: Vec<(u32, FsmCounts)>,
+    // ponytail: INFO grows with read evidence until the existing transcript-count shard flush;
+    // add a byte-budget flush if large batches exhaust memory.
+    fsm_read_info: Vec<(u32, Vec<u8>)>,
     pub abundance_cur: Vec<f32>, // sample size length
     pub abundance_prev: Vec<f32>,
     pub is_mono_exonic: bool,
@@ -842,6 +845,7 @@ impl TxAbundance {
             orig_is_plus_strand: is_plus_strand,
             sj_pairs: tx.get_splice_junction_pairs(),
             fsm_counts: Vec::new(),
+            fsm_read_info: Vec::new(),
             abundance_cur: vec![0.1; sample_size],
             abundance_prev: vec![0.1; sample_size],
             sample_size,
@@ -915,8 +919,34 @@ impl TxAbundance {
                 delta.tss = if tss_hit { evidence } else { 0 };
                 delta.tes = if tes_hit { evidence } else { 0 };
                 delta.tss_tes = if tss_hit && tes_hit { evidence } else { 0 };
+            }
+            let mut info = if cli.info {
+                let sample_id = u32::try_from(sid).expect("sample index exceeds u32");
+                let idx = match self
+                    .fsm_read_info
+                    .binary_search_by_key(&sample_id, |(id, _)| *id)
+                {
+                    Ok(idx) => idx,
+                    Err(idx) => {
+                        self.fsm_read_info.insert(idx, (sample_id, Vec::new()));
+                        idx
+                    }
+                };
+                Some(&mut self.fsm_read_info[idx].1)
             } else {
+                None
+            };
+            if !self.is_mono_exonic || cli.info {
                 for read in &misoform.isoform_reads_slim_vec[start..end] {
+                    if let Some(buf) = info.as_mut() {
+                        if !buf.is_empty() {
+                            buf.push(b',');
+                        }
+                        write!(buf, "{}|{}|{}", read.left, read.right, read.strand).unwrap();
+                    }
+                    if self.is_mono_exonic {
+                        continue;
+                    }
                     let start_hit = start_left <= read.left && read.left <= start_right;
                     let end_hit = end_left <= read.right && read.right <= end_right;
                     let (tss_hit, tes_hit) = if self.orig_is_plus_strand {
@@ -1181,6 +1211,7 @@ pub struct TxAbundanceView {
     orig_end: u64,
     orig_attrs: Vec<u8>,
     pub fsm_counts: Vec<(u32, FsmCounts)>,
+    fsm_read_info: Vec<(u32, Vec<u8>)>,
     pub em_abundance: Vec<f32>,
 }
 
@@ -1223,6 +1254,27 @@ impl TxAbundanceView {
         buf.extend_from_slice(&(txabd.abundance_cur.len() as u32).to_le_bytes());
         for &v in &txabd.abundance_cur {
             buf.extend_from_slice(&v.to_le_bytes());
+        }
+        buf.reserve(
+            4 + txabd
+                .fsm_read_info
+                .iter()
+                .map(|(_, info)| 8 + info.len())
+                .sum::<usize>(),
+        );
+        buf.extend_from_slice(
+            &u32::try_from(txabd.fsm_read_info.len())
+                .unwrap()
+                .to_le_bytes(),
+        );
+        for (sid, info) in &txabd.fsm_read_info {
+            buf.extend_from_slice(&sid.to_le_bytes());
+            buf.extend_from_slice(
+                &u32::try_from(info.len())
+                    .expect("sample INFO exceeds u32 bytes")
+                    .to_le_bytes(),
+            );
+            buf.extend_from_slice(info);
         }
         buf
     }
@@ -1304,6 +1356,29 @@ impl TxAbundanceView {
             pos += 4;
         }
 
+        let mut info_data = &data[pos..];
+        let mut word = [0; 4];
+        info_data.read_exact(&mut word)?;
+        let nonzero = u32::from_le_bytes(word) as usize;
+        anyhow::ensure!(nonzero <= sample_size, "invalid sparse INFO count");
+        let mut fsm_read_info = Vec::new();
+        let mut prev_sid = None;
+        for _ in 0..nonzero {
+            info_data.read_exact(&mut word)?;
+            let sid = u32::from_le_bytes(word);
+            anyhow::ensure!(
+                (sid as usize) < sample_size && prev_sid.is_none_or(|prev| prev < sid),
+                "invalid sparse INFO sample id"
+            );
+            prev_sid = Some(sid);
+            info_data.read_exact(&mut word)?;
+            let len = u32::from_le_bytes(word) as usize;
+            anyhow::ensure!(len > 0 && len <= info_data.len(), "invalid INFO length");
+            fsm_read_info.push((sid, info_data[..len].to_vec()));
+            info_data = &info_data[len..];
+        }
+        anyhow::ensure!(info_data.is_empty(), "unexpected bytes after INFO");
+
         Ok(TxAbundanceView {
             _orig_idx: orig_idx,
             orig_tx_id: orig_tx_id.to_vec(),
@@ -1315,6 +1390,7 @@ impl TxAbundanceView {
             orig_end,
             orig_attrs: orig_attrs.to_vec(),
             fsm_counts,
+            fsm_read_info,
             em_abundance,
         })
     }
@@ -1374,6 +1450,7 @@ impl TxAbundanceView {
         line.push(b'\t');
         line.extend_from_slice(tableout.format_str.as_bytes());
         let mut fsm_cursor = self.fsm_counts.iter().peekable();
+        let mut info_cursor = self.fsm_read_info.iter().peekable();
         for sid in 0..dbinfo.get_size() {
             let counts = if fsm_cursor
                 .peek()
@@ -1388,6 +1465,9 @@ impl TxAbundanceView {
             // Only positive zero is textually identical to the full formatting path.
             if counts == FsmCounts::default() && em.to_bits() == 0 {
                 line.extend_from_slice(b"\t0:0:0:0:0:0:0:0:0:0:0:0:0");
+                if cli.info {
+                    line.extend_from_slice(b":.");
+                }
                 continue;
             }
             let total_evidence = dbinfo.sample_total_evidence_vec[sid];
@@ -1415,6 +1495,17 @@ impl TxAbundanceView {
                 fraction(counts.tes as u64),
                 fraction(counts.tss_tes as u64),
             )?;
+            if cli.info {
+                line.push(b':');
+                if info_cursor
+                    .peek()
+                    .is_some_and(|(id, _)| *id as usize == sid)
+                {
+                    line.extend_from_slice(&info_cursor.next().unwrap().1);
+                } else {
+                    line.push(b'.');
+                }
+            }
         }
         line.push(b'\n');
         tableout.write_bytes(line)
@@ -2086,6 +2177,9 @@ impl GetMemSize for TxAbundance {
     fn get_mem_size(&self) -> usize {
         let size = std::mem::size_of_val(&self.id)
             + std::mem::size_of::<(u32, FsmCounts)>() * self.fsm_counts.capacity()
+            + std::mem::size_of_val(&self.fsm_read_info)
+            + std::mem::size_of::<(u32, Vec<u8>)>() * self.fsm_read_info.capacity()
+            + self.fsm_read_info.iter().map(|(_, info)| info.capacity()).sum::<usize>()
             + std::mem::size_of_val(&0f32) * self.abundance_cur.len()
             + std::mem::size_of_val(&0f32) * self.abundance_prev.len()
             + std::mem::size_of_val(&self.sample_size)
@@ -2242,6 +2336,148 @@ mod tests {
                 .collect(),
             supp_segs_vec: Vec::new(),
         }
+    }
+
+    #[test]
+    fn info_reads_survive_shards_without_changing_counts() {
+        let mut cli = test_cli();
+        cli.info = true;
+        cli.output_tmp_shard_counts = 1;
+        let dir = tempfile::tempdir().unwrap();
+        let mut manager = TmpOutputManager::new(&dir.path().join("info.tmp"), &cli);
+        for (idx, mono) in [(1, false), (0, true)] {
+            let mut transcript = test_tx(true);
+            transcript.origin_idx = idx;
+            transcript.is_mono_exonic = mono;
+            let mut tx = TxAbundance::new(0, 4, &transcript, &cli);
+            let mut rec = test_ptir(&[(100, 500), (100, 500), (10, 900)]);
+            rec.sample_size = 4;
+            rec.sample_evidence_arr = vec![0, 2, 0, 1];
+            rec.sample_offset_arr = vec![0, 0, 2, 2];
+            rec.isoform_reads_slim_vec[2].strand = ReadStrand::Minus;
+            if mono {
+                rec.splice_junctions_vec = vec![(100, 500)];
+                rec.isoform_reads_slim_vec[2].left = 100;
+                rec.isoform_reads_slim_vec[2].right = 500;
+            }
+            let mut baseline = tx.clone();
+            let mut no_info = cli.clone();
+            no_info.info = false;
+            baseline.update_fsm_evidence_count(&rec, &no_info, true);
+            baseline.update_fsm_evidence_count(&rec, &no_info, false);
+            tx.update_fsm_evidence_count(&rec, &cli, true);
+            tx.update_fsm_evidence_count(&rec, &cli, false);
+            assert_eq!(tx.fsm_counts, baseline.fsm_counts);
+            assert_eq!(baseline.fsm_read_info.capacity(), 0);
+            assert!(TxAbundanceView::from_bytes(&baseline.to_bytes())
+                .unwrap()
+                .fsm_read_info
+                .is_empty());
+            tx.abundance_cur = vec![0.0, 0.0, 1.5, 0.0];
+            manager.dump_txs(vec![tx]);
+        }
+        manager.finish();
+
+        let mut dbinfo = DatasetInfo::new();
+        let mut db_infos = DBInfos::new();
+        let mut header = Header::new();
+        for sid in 0..4 {
+            let name = format!("s{sid}");
+            dbinfo.add_sample(name.clone(), None);
+            dbinfo.sample_total_evidence_vec.push(100);
+            db_infos.add_sample_evidence(&name, 100);
+            header.add_sample_name(&name).unwrap();
+        }
+        let mut output = TableOutput::new(
+            dir.path().join("info.tsv.gz"),
+            header,
+            db_infos,
+            Meta::new_empty(dbinfo.get_sample_names().clone()),
+            ISOFORM_FORMAT.to_string(),
+        );
+        let mut line = Vec::new();
+        for idx in 0..2 {
+            let view = manager.next().unwrap();
+            assert_eq!(view._orig_idx, idx);
+            let mut baseline = Vec::new();
+            for info in [false, true] {
+                cli.info = info;
+                output.format_str = if info {
+                    format!("{ISOFORM_FORMAT}:INFO")
+                } else {
+                    ISOFORM_FORMAT.to_string()
+                };
+                view.write_line_directly(
+                    &mut GlobalStats::new(4),
+                    &dbinfo,
+                    &cli,
+                    &mut line,
+                    &mut output,
+                )
+                .unwrap();
+                let fields: Vec<_> = std::str::from_utf8(&line)
+                    .unwrap()
+                    .trim_end()
+                    .split('\t')
+                    .collect();
+                if !info {
+                    baseline = fields.iter().map(|s| s.to_string()).collect();
+                    continue;
+                }
+                assert_eq!(fields[..12], baseline[..12]);
+                assert_eq!(fields[12], format!("{ISOFORM_FORMAT}:INFO"));
+                let minus_info = if idx == 0 {
+                    "100|500|-,100|500|-"
+                } else {
+                    "10|900|-,10|900|-"
+                };
+                let expected = [
+                    ".",
+                    "100|500|+,100|500|+,100|500|+,100|500|+",
+                    ".",
+                    minus_info,
+                ];
+                for sid in 0..4 {
+                    let (counts, reads) = fields[13 + sid].rsplit_once(':').unwrap();
+                    assert_eq!(counts, baseline[13 + sid]);
+                    assert_eq!(reads, expected[sid]);
+                    let count = counts.split(':').next().unwrap().parse::<usize>().unwrap();
+                    assert_eq!(
+                        if reads == "." {
+                            0
+                        } else {
+                            reads.split(',').count()
+                        },
+                        count
+                    );
+                }
+            }
+        }
+        assert!(manager.next().is_none());
+        output.finish().unwrap();
+        manager.clean_up().unwrap();
+    }
+
+    #[test]
+    fn info_decode_rejects_truncated_payload_and_invalid_samples() {
+        let mut cli = test_cli();
+        cli.info = true;
+        let mut tx = TxAbundance::new(0, 1, &test_tx(true), &cli);
+        tx.update_fsm_evidence_count(&test_ptir(&[(100, 500)]), &cli, true);
+        let bytes = tx.to_bytes();
+        let info_start = bytes.len() - 12 - b"100|500|+".len();
+        for len in info_start..bytes.len() {
+            assert!(TxAbundanceView::from_bytes(&bytes[..len]).is_err());
+        }
+        let mut invalid = bytes.clone();
+        invalid[info_start + 4..info_start + 8].copy_from_slice(&1u32.to_le_bytes());
+        assert!(TxAbundanceView::from_bytes(&invalid).is_err());
+        let mut invalid = bytes.clone();
+        invalid[info_start + 8..info_start + 12].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(TxAbundanceView::from_bytes(&invalid).is_err());
+        let mut invalid = bytes;
+        invalid.push(0);
+        assert!(TxAbundanceView::from_bytes(&invalid).is_err());
     }
 
     #[test]
@@ -2575,7 +2811,7 @@ mod tests {
             },
         );
         let mut bytes = tx.to_bytes();
-        let sparse_start = bytes.len() - (4 + 3 * 4) - (8 + 2 * 24);
+        let sparse_start = bytes.len() - 4 - (4 + 3 * 4) - (8 + 2 * 24);
         let second_sid = sparse_start + 8 + 24;
         bytes[second_sid..second_sid + 4].copy_from_slice(&0u32.to_le_bytes());
         assert!(TxAbundanceView::from_bytes(&bytes).is_err());
@@ -2748,7 +2984,8 @@ mod tests {
 
     #[test]
     fn mono_fsm_is_counted_once_across_search_partitions() {
-        let cli = test_cli();
+        let mut cli = test_cli();
+        cli.info = true;
         let mut tx = test_tx(true);
         tx.is_mono_exonic = true;
         tx.exons = vec![(100, 500)];
@@ -2781,6 +3018,10 @@ mod tests {
         dbinfo.add_sample("s".to_string(), None);
         group.update_results(&vec![], &partitions, &mut cache, &dbinfo, &cli);
         assert_eq!(group.tx_abundances[0].fsm_count(0).jc, 1);
+        assert_eq!(
+            group.tx_abundances[0].fsm_read_info,
+            vec![(0, b"100|500|+".to_vec())]
+        );
         assert!(group.msjcs.is_empty());
     }
 
@@ -2943,6 +3184,7 @@ mod tests {
             orig_end: 0,
             orig_attrs: Vec::new(),
             fsm_counts,
+            fsm_read_info: Vec::new(),
             em_abundance,
         }
     }
