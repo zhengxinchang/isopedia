@@ -821,35 +821,76 @@ impl BPTree {
         results
     }
 
-    pub fn search_start_end(&mut self, start: KeyType, end: KeyType) -> Vec<PTIROffsetPtr> {
+    /// Descend from the root to the first leaf whose max key is >= `start`; None if no such leaf.
+    fn find_leaf(&mut self, start: KeyType) -> Option<Arc<Node>> {
+        let cache = self.cache.as_mut().expect("Can not get cache");
+        let mut n = cache.get_root_node();
+        loop {
+            if n.is_leaf() {
+                return Some(n);
+            }
+
+            let slice = &n.header.keys[..n.header.num_keys as usize];
+            let idx = match slice.binary_search(&start) {
+                Ok(idx) => idx,
+                Err(idx) => idx,
+            };
+
+            // `start` beyond every key: idx == num_keys has no child (and is out of bounds in a full node).
+            let child_id = *n.header.childs[..n.header.num_keys as usize].get(idx)?;
+
+            if child_id == 0 || child_id > cache.header.total_nodes {
+                return None; // no such node
+            }
+
+            n = cache
+                .get_node_by_id(child_id)
+                .expect("Can not get next node");
+        }
+    }
+
+    /// Call `f(key, ptr)` for every pointer whose key is in [start, end], in ascending key order,
+    /// one leaf at a time without collecting; stops at the first error returned by `f`.
+    pub fn scan_range(
+        &mut self,
+        start: KeyType,
+        end: KeyType,
+        mut f: impl FnMut(KeyType, &PTIROffsetPtr) -> Result<()>,
+    ) -> Result<()> {
+        let Some(mut node) = self.find_leaf(start) else {
+            return Ok(());
+        };
         let cache = self.cache.as_mut().expect("Can not get cache");
 
-        let mut node = {
-            let mut n = cache.get_root_node();
-            loop {
-                if n.is_leaf() {
-                    break n;
+        loop {
+            let keys = &node.header.keys[..node.header.num_keys as usize];
+            for (nk, &k) in keys.iter().enumerate() {
+                if k < start {
+                    continue;
                 }
-
-                let slice = &n.header.keys[..n.header.num_keys as usize];
-                let idx = match slice.binary_search(&start) {
-                    Ok(idx) => idx,
-                    Err(idx) => idx,
-                };
-
-                let child_id = n.header.childs[idx];
-                // println!("searching node: {}, ", child_id);
-
-                if child_id == 0 || child_id > cache.header.total_nodes {
-                    // eprintln!("No such node: {}", child_id);
-                    return vec![]; // no such node
+                if k > end {
+                    return Ok(());
                 }
-
-                n = cache
-                    .get_node_by_id(child_id)
-                    .expect("Can not get next node");
+                for addr in node.get_addresses_by_children_value(&node.header.childs[nk]) {
+                    f(k, &addr)?;
+                }
             }
+
+            let next_node_id = node.header.node_id + 1;
+            if next_node_id > cache.header.leaf_nodes {
+                return Ok(());
+            }
+            node = cache
+                .get_node_by_id(next_node_id)
+                .expect("Can not get next leaf node");
+        }
+    }
+
+    pub fn search_start_end(&mut self, start: KeyType, end: KeyType) -> Vec<PTIROffsetPtr> {
+        let Some(mut node) = self.find_leaf(start) else {
+            return vec![];
         };
+        let cache = self.cache.as_mut().expect("Can not get cache");
 
         let mut results = Vec::new();
 

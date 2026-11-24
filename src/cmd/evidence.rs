@@ -1,4 +1,6 @@
 use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BinaryHeap},
     fs::File,
     io::{BufRead, BufReader, BufWriter, Read},
     path::PathBuf,
@@ -9,12 +11,16 @@ use std::io::Write;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use flate2::{bufread::GzDecoder, write::GzEncoder, Compression};
-use log::error;
+use log::{error, warn};
+use rustc_hash::FxHashSet;
 use serde::Serialize;
 
 use crate::{
-    constants::MERGED_FILE_NAME,
+    bptree::BPTree,
+    chromosome::ChromMapping,
+    constants::{CHROM_FILE_NAME, MERGED_FILE_NAME},
     ptir::PTIR,
+    ptir_archive::PTIRArchiveCache,
     tools::ToolCmdValidate,
     utils::{greetings2, log_wall_time, start_wall_timer},
 };
@@ -47,9 +53,16 @@ pub struct EvidenceCli {
     #[arg(short, long)]
     pub output: PathBuf,
 
-    /// Region to output
-    #[arg(short='R', long)]
-    pub region: String,
+    /// Only output PTIRs with a splice site or read end in this region: chr or chr:start-end (1-based, inclusive).
+    /// PTIRs spanning the whole region without such a position inside it are not reported.
+    /// Requires `isopedia index`; without --region the whole merged archive is scanned.
+    #[arg(short = 'R', long)]
+    pub region: Option<String>,
+
+    /// BED file of regions (chrom, start, end; 0-based, half-open), each queried like --region.
+    /// Overlapping regions are merged so every PTIR is reported once, ordered by chromosome and position.
+    #[arg(long, conflicts_with = "region")]
+    pub region_bed: Option<PathBuf>,
 }
 
 impl ToolCmdValidate for EvidenceCli {
@@ -87,8 +100,81 @@ impl ToolCmdValidate for EvidenceCli {
             is_ok = false;
         }
 
+        if let Some(region) = &self.region {
+            if let Err(e) = parse_region(region) {
+                error!("--region: {e}");
+                is_ok = false;
+            }
+        }
+
+        if let Some(bed) = &self.region_bed {
+            if !bed.exists() {
+                error!("--region-bed: {} does not exist", bed.display());
+                is_ok = false;
+            }
+        }
+
+        if self.region.is_some() || self.region_bed.is_some() {
+            for file in [CHROM_FILE_NAME, "bptree_0.idx"] {
+                if !self.idxdir.join(file).exists() {
+                    error!(
+                        "--region/--region-bed: {} does not exist in {}, please run `isopedia index` first",
+                        file,
+                        self.idxdir.display()
+                    );
+                    is_ok = false;
+                }
+            }
+        }
+
         is_ok
     }
+}
+
+/// Parse `chr` or `chr:start-end` (1-based, inclusive) into a chromosome and B+ tree key range.
+/// Keys are boundary coordinates (0-based starts, half-open ends), so [start, end] maps to [start - 1, end].
+fn parse_region(region: &str) -> Result<(&str, u64, u64)> {
+    let Some((chrom, range)) = region.rsplit_once(':') else {
+        if region.is_empty() {
+            bail!("empty region");
+        }
+        return Ok((region, 0, u64::MAX));
+    };
+    let (start, end) = range
+        .split_once('-')
+        .with_context(|| format!("{region}: expected chr:start-end"))?;
+    let (start, end): (u64, u64) = (start.parse()?, end.parse()?);
+    if chrom.is_empty() || start == 0 || start > end {
+        bail!("{region}: expected chr:start-end with 1 <= start <= end");
+    }
+    Ok((chrom, start - 1, end))
+}
+
+/// Parse BED lines (chrom, start, end; 0-based, half-open) into B+ tree key ranges [start, end].
+fn parse_bed(path: &PathBuf) -> Result<Vec<(String, u64, u64)>> {
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut regions = Vec::new();
+    for (i, line) in BufReader::new(file).lines().enumerate() {
+        let line = line?;
+        let mut fields = line.split_whitespace();
+        let Some(chrom) = fields.next() else {
+            continue;
+        };
+        if chrom.starts_with('#') || chrom == "track" || chrom == "browser" {
+            continue;
+        }
+        let (start, end) = (|| -> Result<(u64, u64)> {
+            let start: u64 = fields.next().context("missing start")?.parse()?;
+            let end: u64 = fields.next().context("missing end")?.parse()?;
+            if start >= end {
+                bail!("start must be less than end");
+            }
+            Ok((start, end))
+        })()
+        .with_context(|| format!("{}:{}: {line}", path.display(), i + 1))?;
+        regions.push((chrom.to_string(), start, end));
+    }
+    Ok(regions)
 }
 
 pub fn run_evidence(cli: &EvidenceCli) -> Result<()> {
@@ -98,20 +184,34 @@ pub fn run_evidence(cli: &EvidenceCli) -> Result<()> {
         bail!("invalid arguments, see errors above");
     }
 
-    let ptir_reader = SequentialArchiveReader::load_from_disk(&cli.idxdir.join(MERGED_FILE_NAME))?;
+    // Parse before creating the output so a bad region file leaves no empty result behind.
+    let regions = match (&cli.region, &cli.region_bed) {
+        (Some(region), _) => {
+            let (chrom, start, end) = parse_region(region)?;
+            Some(vec![(chrom.to_string(), start, end)])
+        }
+        (None, Some(bed)) => Some(parse_bed(bed)?),
+        (None, None) => None,
+    };
 
     let mut output_path = cli.output.as_os_str().to_os_string();
-    output_path.push(".evidence.gz");
+    output_path.push(".evidence.gtf.gz");
     let mut writer = GzEncoder::new(
         BufWriter::new(File::create(&output_path)?),
         Compression::default(),
     );
 
-    for ptir in ptir_reader {
-        let ptir = ptir?;
+    match regions {
+        Some(regions) => write_regions(cli, regions, &mut writer)?,
+        None => {
+            for ptir in SequentialArchiveReader::load_from_disk(&cli.idxdir.join(MERGED_FILE_NAME))?
+            {
+                let ptir = ptir?;
 
-        if filter_ptir(&ptir, cli.min_read, cli.min_sample) {
-            ptir_to_gtf_records(&ptir, &mut writer)?
+                if filter_ptir(&ptir, cli.min_read, cli.min_sample) {
+                    ptir_to_gtf_records(&ptir, &mut writer)?
+                }
+            }
         }
     }
 
@@ -119,6 +219,132 @@ pub fn run_evidence(cli: &EvidenceCli) -> Result<()> {
     log_wall_time("call", started);
 
     Ok(())
+}
+
+/// Stream the regions' index hits from the B+ tree, loading each PTIR once.
+/// Regions are grouped by chromosome (one tree load each) and merged, so keys stay ascending per chromosome.
+fn write_regions(
+    cli: &EvidenceCli,
+    regions: Vec<(String, u64, u64)>,
+    writer: &mut dyn Write,
+) -> Result<()> {
+    let chroms = ChromMapping::decode(&std::fs::read(cli.idxdir.join(CHROM_FILE_NAME))?);
+    let mut by_chrom: BTreeMap<u16, Vec<(u64, u64)>> = BTreeMap::new();
+    let mut missing = FxHashSet::default();
+    for (chrom, start, end) in regions {
+        match chroms.get_chrom_idx(&chrom) {
+            Some(id) => by_chrom.entry(id).or_default().push((start, end)),
+            None if missing.insert(chrom.clone()) => {
+                warn!("chromosome {chrom} is not in the index; skipping its regions")
+            }
+            None => {}
+        }
+    }
+
+    // Same cache defaults as `isopedia splice`: 1000 tree nodes, 4 x 128 MB archive chunks.
+    let mut archive = PTIRArchiveCache::new(cli.idxdir.join(MERGED_FILE_NAME), 128 << 20, 4);
+    for (chrom_id, ranges) in by_chrom {
+        let mut tree = BPTree::from_disk(&cli.idxdir, chrom_id, 1000);
+        let mut window = SeenWindow::default();
+        for (start, end) in merge_ranges(ranges) {
+            tree.scan_range(start, end, |pos, ptr| {
+                if window.contains(pos, ptr.offset) {
+                    return Ok(());
+                }
+                let ptir = archive.load_from_disk(ptr);
+                let right = ptir.isoform_reads_slim_vec.iter().map(|r| r.right).max();
+                window.insert(ptr.offset, right.unwrap_or(0));
+                if filter_ptir(&ptir, cli.min_read, cli.min_sample) {
+                    ptir_to_gtf_records(&ptir, writer)?;
+                }
+                Ok(())
+            })?;
+        }
+    }
+    Ok(())
+}
+
+/// Sort and merge key ranges sharing any key. SeenWindow needs ascending keys, and overlapping
+/// scans would revisit keys and report PTIRs twice.
+fn merge_ranges(mut ranges: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
+    ranges.sort_unstable();
+    let mut merged: Vec<(u64, u64)> = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
+        match merged.last_mut() {
+            Some(last) if start <= last.1 => last.1 = last.1.max(end),
+            _ => merged.push((start, end)),
+        }
+    }
+    merged
+}
+
+#[test]
+fn merge_ranges_joins_ranges_sharing_a_key() {
+    let ranges = vec![(20, 30), (0, 5), (5, 9), (10, 12), (25, 28), (11, 15)];
+    assert_eq!(merge_ranges(ranges), vec![(0, 9), (10, 15), (20, 30)]);
+}
+
+#[test]
+fn parse_bed_skips_headers_and_rejects_bad_lines() {
+    let dir = tempfile::tempdir().unwrap();
+    let bed = dir.path().join("r.bed");
+    std::fs::write(&bed, "track name=x\n#c\n\nchr1\t10\t20\tgeneA\n22 0 5\n").unwrap();
+    assert_eq!(
+        parse_bed(&bed).unwrap(),
+        vec![("chr1".to_string(), 10, 20), ("22".to_string(), 0, 5)]
+    );
+    for bad in ["chr1\t5\t5\n", "chr1\t5\n", "chr1\tx\t9\n"] {
+        std::fs::write(&bed, bad).unwrap();
+        assert!(parse_bed(&bed).is_err(), "{bad:?}");
+    }
+}
+
+/// Dedup for keys arriving in ascending order. Every index key of a PTIR (splice sites, read ends)
+/// is <= its rightmost read end, so it can be forgotten once the scan passes that position.
+/// ponytail: memory grows with the PTIRs overlapping one position (coverage depth), not region size.
+#[derive(Default)]
+struct SeenWindow {
+    offsets: FxHashSet<u64>,
+    rights: BinaryHeap<Reverse<(u64, u64)>>, // (right, offset), smallest right first
+}
+
+impl SeenWindow {
+    /// Forget PTIRs ending before `pos`, then report whether `offset` was already seen.
+    fn contains(&mut self, pos: u64, offset: u64) -> bool {
+        while let Some(&Reverse((right, old))) = self.rights.peek() {
+            if right >= pos {
+                break;
+            }
+            self.rights.pop();
+            self.offsets.remove(&old);
+        }
+        self.offsets.contains(&offset)
+    }
+
+    fn insert(&mut self, offset: u64, right: u64) {
+        self.offsets.insert(offset);
+        self.rights.push(Reverse((right, offset)));
+    }
+}
+
+#[test]
+fn seen_window_forgets_only_after_right_end() {
+    let mut window = SeenWindow::default();
+    assert!(!window.contains(10, 1));
+    window.insert(1, 20);
+    assert!(window.contains(15, 1));
+    assert!(window.contains(20, 1)); // a key equal to the right end may still arrive
+    assert!(!window.contains(21, 1));
+    assert!(window.offsets.is_empty() && window.rights.is_empty());
+}
+
+#[test]
+fn parse_region_maps_to_key_range() {
+    assert_eq!(parse_region("chr22").unwrap(), ("chr22", 0, u64::MAX));
+    assert_eq!(parse_region("chr22:101-200").unwrap(), ("chr22", 100, 200));
+    for bad in ["", "chr22:0-5", "chr22:9-5", "chr22:5", ":1-2", "chr22:a-5"] {
+        assert!(parse_region(bad).is_err(), "{bad}");
+    }
 }
 
 struct SequentialArchiveReader {
