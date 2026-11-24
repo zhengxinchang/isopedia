@@ -1,4 +1,5 @@
 pub mod download;
+pub mod evidence;
 pub mod fusion;
 pub mod index;
 pub mod isoform;

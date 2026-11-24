@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use isopedia::cmd::download::run_download;
 use isopedia::cmd::download::DownloadCli;
+use isopedia::cmd::evidence::run_evidence;
+use isopedia::cmd::evidence::EvidenceCli;
 use isopedia::cmd::fusion::run_fusion_annotation;
 use isopedia::cmd::fusion::AnnFusionCli;
 use isopedia::cmd::index::run_index;
@@ -69,6 +71,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Call(EvidenceCli),
     Isoform(AnnIsoCli),
     Splice(AnnSpliceCli),
     Fusion(AnnFusionCli),
@@ -87,6 +90,12 @@ fn main() {
     println!("Isopedia version: {}", env!("CARGO_PKG_VERSION"));
 
     match cli.command {
+        Commands::Call(ref evidence_cli) => {
+            if let Err(e) = run_evidence(evidence_cli) {
+                eprintln!("Error running call: {:#}", e);
+                std::process::exit(1);
+            }
+        }
         Commands::Isoform(ref anno_isoform_cli) => {
             if let Err(e) = run_isoform_annotation(anno_isoform_cli) {
                 eprintln!("Error running annotation isoform: {}", e);
