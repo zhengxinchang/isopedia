@@ -102,7 +102,7 @@ impl ToolCmdValidate for EvidenceCli {
 
         if self.idxdir.join(ARCHIVE_INFO_FILE).exists() {
             error!(
-                "--idxdir: {} was built by isopedia >= 1.8 and cannot be read by {}; use isopedia >= 1.8 or rebuild the index with this version",
+                "--idxdir: {} was built by isopedia >= 2.0 and cannot be read by {}; use isopedia >= 1.8 or rebuild the index with this version",
                 self.idxdir.display(),
                 env!("CARGO_PKG_VERSION")
             );

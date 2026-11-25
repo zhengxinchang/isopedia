@@ -694,9 +694,9 @@ pub fn find_partial_msjc_excluding_terminal_sites<'a>(
     while i < a.len() && j < b.len() {
         if a[i].offset == b[j].offset {
             // Partial chains must be shorter than the query; zero marks a read terminal.
+            // Keep j: a junction pointer with the same offset may follow in a.
             if a[i].n_splice_sites == 0 || a[i].n_splice_sites as usize >= max_splice_sites {
                 i += 1;
-                j += 1;
                 continue;
             }
 
@@ -2522,6 +2522,12 @@ mod tests {
         let empty = Vec::new();
         find_partial_msjc_excluding_terminal_sites(&a, &empty, 6, &mut candidates);
         assert!(candidates.is_empty());
+
+        // A read-terminal pointer sharing the offset must not consume b's junction pointer.
+        let a = vec![PTIROffsetPtr::new(7, 10, 0), PTIROffsetPtr::new(7, 10, 4)];
+        let b = vec![PTIROffsetPtr::new(7, 10, 4)];
+        find_partial_msjc_excluding_terminal_sites(&a, &b, 6, &mut candidates);
+        assert_eq!(candidates.keys().copied().collect::<Vec<_>>(), vec![7]);
     }
 
     #[test]
