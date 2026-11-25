@@ -8,6 +8,7 @@ use crate::utils::{greetings2, log_wall_time, start_wall_timer};
 use crate::{constants::*, meta, utils};
 use anyhow::Result;
 use clap::Parser;
+use itertools::Itertools;
 use log::{error, info, warn};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -228,7 +229,8 @@ pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
         if isoforms_ptr.is_empty() {
             warn!("No isoforms found for query: {}", query.id);
         } else {
-            for offset in &isoforms_ptr {
+            // A PTIR can match through both its splice-site and read-end pointers; report it once.
+            for offset in isoforms_ptr.iter().unique_by(|p| p.offset) {
                 let mut out_line = Line::with_capacity(dataset_info.get_size());
                 out_line.add_field(&query.id);
                 out_line.add_field(&query.left_chr);
@@ -266,4 +268,58 @@ pub fn run_splice_annotation(cli: &AnnSpliceCli) -> Result<()> {
 
     log_wall_time("splice", started);
     Ok(())
+}
+
+/// A mono-exon PTIR matching the query has a splice-site and a read-end pointer at both ends; report it once.
+#[test]
+fn splice_reports_mono_exon_ptir_once() {
+    use crate::cmd::{index::*, merge::*};
+    use std::fs::File;
+    use std::io::{Read, Write};
+    let dir = tempfile::tempdir().unwrap();
+    let profile = dir.path().join("s1.tsv.gz");
+    let mut gz = flate2::write::GzEncoder::new(File::create(&profile).unwrap(), Default::default());
+    gz.write_all(b"chr1\t\nheader\n1\t1\tchr1\t1000-2000\t1000-2000:+:\n")
+        .unwrap();
+    gz.finish().unwrap();
+    let manifest = dir.path().join("manifest.tsv");
+    std::fs::write(
+        &manifest,
+        format!("name\tpath\ns1\t{}\n", profile.display()),
+    )
+    .unwrap();
+    let idxdir = dir.path().join("idx");
+    run_merge(&MergeCli {
+        input: manifest.clone(),
+        chunk_size: 1_000_000,
+        outdir: idxdir.clone(),
+    })
+    .unwrap();
+    run_index(&IndexCli {
+        idxdir: idxdir.clone(),
+        manifest,
+        threads: 1,
+    })
+    .unwrap();
+
+    let output = dir.path().join("out.tsv.gz");
+    run_splice_annotation(&AnnSpliceCli {
+        idxdir,
+        splice: Some("chr1:1000,chr1:2000".to_string()),
+        splice_bed: None,
+        flank: 10,
+        min_read: 1,
+        output: output.clone(),
+        lru_size: 100,
+        cached_chunk_number: 1,
+        cached_chunk_size_mb: 1,
+        verbose: false,
+    })
+    .unwrap();
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(File::open(&output).unwrap())
+        .read_to_string(&mut text)
+        .unwrap();
+    let lines: Vec<&str> = text.lines().filter(|l| !l.starts_with('#')).collect();
+    assert_eq!(lines.len(), 1, "{lines:?}");
 }

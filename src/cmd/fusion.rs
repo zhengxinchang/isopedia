@@ -1,10 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs::File,
-    io::BufRead,
-    path::PathBuf,
-    vec,
-};
+use std::{collections::HashMap, fs::File, io::BufRead, path::PathBuf, vec};
 
 use crate::{
     bptree::BPForest,
@@ -21,6 +15,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
+use itertools::Itertools;
 
 use log::{error, info, warn};
 use noodles_gtf::io::Reader as gtfReader;
@@ -344,8 +339,8 @@ fn annotate_single_fusion(
 
     // process the left targets
     // check if the right portion is supported
-    let unique_left = left_target.into_iter().collect::<HashSet<_>>();
-    for target in unique_left {
+    // One PTIR can have several pointers (splice site and read end) in the window; count it once.
+    for target in left_target.into_iter().unique_by(|p| p.offset) {
         let merged_isoform = archive_cache.load_from_disk(&target);
         let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
             &breakpoints.right_chr,
@@ -367,8 +362,7 @@ fn annotate_single_fusion(
 
     // process the right targets
     // check if the left portion is supported
-    let unique_right = right_target.into_iter().collect::<HashSet<_>>();
-    for target in unique_right {
+    for target in right_target.into_iter().unique_by(|p| p.offset) {
         let merged_isoform: PTIR = archive_cache.load_from_disk(&target);
         let evidence_vec = merged_isoform.check_fusion_mate_breakpoint(
             &breakpoints.left_chr,
@@ -535,8 +529,7 @@ pub fn annotate_single_fusion_detailed(
 
     // process the left targets
     // check if the right portion is supported
-    let unique_left = left_target.into_iter().collect::<HashSet<_>>();
-    for target in unique_left {
+    for target in left_target.into_iter().unique_by(|p| p.offset) {
         let merged_isoform = archive_cache.load_from_disk(&target);
 
         let fusion_read_records = merged_isoform.cast_to_fusion_records(
@@ -550,7 +543,7 @@ pub fn annotate_single_fusion_detailed(
         total_fusion_records.extend(fusion_read_records);
     }
 
-    for target_right in right_target {
+    for target_right in right_target.into_iter().unique_by(|p| p.offset) {
         let merged_isoform: PTIR = archive_cache.load_from_disk(&target_right);
 
         let fusion_read_records = merged_isoform.cast_to_fusion_records(
@@ -775,7 +768,7 @@ pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
                     continue;
                 }
 
-                for rec_ptr in targets {
+                for rec_ptr in targets.into_iter().unique_by(|p| p.offset) {
                     let isoform: PTIR = archive_cache.load_from_disk(&rec_ptr);
 
                     let candidates = isoform.to_fusion_candidates();
@@ -827,4 +820,62 @@ pub fn run_fusion_annotation(cli: &AnnFusionCli) -> Result<()> {
     info!("Finished!");
     log_wall_time("fusion", started);
     Ok(())
+}
+
+/// A mono-exon PTIR has a splice-site and a read-end pointer at the same key; it must count once.
+#[test]
+fn breakpoint_counts_mono_exon_ptir_once() {
+    use crate::cmd::{index::*, merge::*};
+    use std::io::{Read, Write};
+    let dir = tempfile::tempdir().unwrap();
+    let profile = dir.path().join("s1.tsv.gz");
+    let mut gz = flate2::write::GzEncoder::new(File::create(&profile).unwrap(), Default::default());
+    // chr1 read 1000-2000 with a supplementary segment at chr2:5000-6000; a plain chr2 read keeps the right side non-empty.
+    gz.write_all(b"chr1\tchr2\t\nheader\n1\t1\tchr1\t1000-2000\t1000-2000:+:2%5000%6000%+\n2\t1\tchr2\t5000-6000\t5000-6000:+:\n")
+        .unwrap();
+    gz.finish().unwrap();
+    let manifest = dir.path().join("manifest.tsv");
+    std::fs::write(
+        &manifest,
+        format!("name\tpath\ns1\t{}\n", profile.display()),
+    )
+    .unwrap();
+    let idxdir = dir.path().join("idx");
+    run_merge(&MergeCli {
+        input: manifest.clone(),
+        chunk_size: 1_000_000,
+        outdir: idxdir.clone(),
+    })
+    .unwrap();
+    run_index(&IndexCli {
+        idxdir: idxdir.clone(),
+        manifest,
+        threads: 1,
+    })
+    .unwrap();
+
+    let output = dir.path().join("out.tsv.gz");
+    run_fusion_annotation(&AnnFusionCli {
+        idxdir,
+        pos: Some("chr1:2000,chr2:5000".to_string()),
+        pos_bed: None,
+        region: None,
+        gene_gtf: None,
+        flank: 10,
+        min_read: 1,
+        output: output.clone(),
+        lru_size: 100,
+        cached_chunk_number: 1,
+        cached_chunk_size_mb: 1,
+        verbose: false,
+    })
+    .unwrap();
+    let mut text = String::new();
+    flate2::read::GzDecoder::new(File::open(&output).unwrap())
+        .read_to_string(&mut text)
+        .unwrap();
+    let line = text.lines().find(|l| !l.starts_with('#')).unwrap();
+    let fields: Vec<&str> = line.split('\t').collect();
+    assert_eq!(fields[7], "1", "left_isoforms: {line}");
+    assert_eq!(*fields.last().unwrap(), "1", "sample COUNT: {line}");
 }

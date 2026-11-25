@@ -371,7 +371,8 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         let merged_isoform_rec = merged_map.get(signature).unwrap();
         let bytes_len = isoform_archive_writer.dump_to_disk(&merged_isoform_rec);
         let sjs = merged_isoform_rec.get_common_splice_sites();
-        sjs.iter().for_each(|sj| {
+        let mut seen_sj = FxHashSet::default();
+        sjs.iter().filter(|sj| seen_sj.insert(**sj)).for_each(|sj| {
             let interim_record = MergedIsoformOffsetPlusGenomeLoc {
                 chrom_id: merged_isoform_rec.chrom_id,
                 pos: *sj,
@@ -385,7 +386,9 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
         });
 
         // add the left and right position of a single read, this ensure the detection of fusion gene.
-        let read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+        let mut read_ref_spans = merged_isoform_rec.get_read_ref_span_vec();
+        let mut seen_span = FxHashSet::default();
+        read_ref_spans.retain(|p| seen_span.insert(*p));
         read_ref_spans.iter().for_each(|position| {
             let offset_plus_genomeloc: MergedIsoformOffsetPlusGenomeLoc =
                 MergedIsoformOffsetPlusGenomeLoc {
@@ -456,4 +459,39 @@ pub fn run_merge(cli: &MergeCli) -> Result<()> {
     info!("Finished");
     log_wall_time("merge", started);
     Ok(())
+}
+
+/// The final chunk must write each position of a PTIR once, like the earlier chunks.
+#[test]
+fn final_chunk_dedups_positions_within_ptir() {
+    use std::io::Write;
+    let dir = tempfile::tempdir().unwrap();
+    let profile = dir.path().join("s1.tsv.gz");
+    let file = std::fs::File::create(&profile).unwrap();
+    let mut gz = flate2::write::GzEncoder::new(file, Default::default());
+    // Three reads with identical ends: 2 splice sites + 2 unique read ends = 4 positions, not 8.
+    gz.write_all(
+        b"chr1\t\nheader\n1\t3\tchr1\t1000-2000\t1000-2000:+:|1000-2000:-:|1000-2000:+:\n",
+    )
+    .unwrap();
+    gz.finish().unwrap();
+    let manifest = dir.path().join("manifest.tsv");
+    std::fs::write(
+        &manifest,
+        format!("name\tpath\ns1\t{}\n", profile.display()),
+    )
+    .unwrap();
+    let outdir = dir.path().join("idx");
+    run_merge(&MergeCli {
+        input: manifest,
+        chunk_size: 1_000_000,
+        outdir: outdir.clone(),
+    })
+    .unwrap();
+    assert_eq!(
+        TmpIndex::load(&outdir.join(TMPIDX_FILE_NAME))
+            .meta
+            .data_size,
+        4
+    );
 }

@@ -155,17 +155,6 @@ impl TmpIndex {
             })
             .collect::<Vec<_>>();
 
-        let mut offset_managers: Vec<ChunkOffsetManager> = (0..self.chunks)
-            .map(|i| {
-                ChunkOffsetManager::new(
-                    i,
-                    self.file_name.clone(),
-                    8,  // 256 个桶
-                    32, // 每个 chunk 最多 32 个桶在内存
-                )
-            })
-            .collect();
-
         let merged_data_file_list = (0..self.chunks)
             .map(|i| merged_data_name_base.with_extension(format!("chunk{}", i)))
             .collect::<Vec<_>>();
@@ -182,6 +171,18 @@ impl TmpIndex {
                 mmap
             })
             .collect::<Vec<_>>();
+
+        let mut offset_managers: Vec<ChunkOffsetManager> = (0..self.chunks)
+            .map(|i| {
+                ChunkOffsetManager::new(
+                    i,
+                    self.file_name.clone(),
+                    8,  // 256 个桶
+                    32, // 每个 chunk 最多 32 个桶在内存
+                    data_mmaps[i].len() as u64,
+                )
+            })
+            .collect();
 
         let mut data_writer = BufWriter::with_capacity(
             BUF_SIZE_64M,
@@ -669,16 +670,26 @@ pub struct ChunkOffsetManager {
     chunk_idx: usize,
     base_path: PathBuf,
     bucket_bits: u32,
+    bucket_shift: u32,
     buckets: LruCache<u32, FxHashMap<u64, u64>>, // 直接用 LruCache
     max_buckets: usize,
 }
 
 impl ChunkOffsetManager {
-    pub fn new(chunk_idx: usize, base_path: PathBuf, bucket_bits: u32, max_buckets: usize) -> Self {
+    /// `data_len` is the chunk's record file size; every offset is below it.
+    pub fn new(
+        chunk_idx: usize,
+        base_path: PathBuf,
+        bucket_bits: u32,
+        max_buckets: usize,
+        data_len: u64,
+    ) -> Self {
         Self {
             chunk_idx,
             base_path,
             bucket_bits,
+            // Spread offsets in [0, data_len) over all 2^bucket_bits buckets.
+            bucket_shift: (64 - data_len.leading_zeros()).saturating_sub(bucket_bits),
             buckets: LruCache::new(
                 NonZeroUsize::new(max_buckets).expect("max_buckets must be > 0"),
             ),
@@ -688,7 +699,7 @@ impl ChunkOffsetManager {
 
     #[inline]
     fn bucket_index(&self, offset: u64) -> u32 {
-        (offset >> (64 - self.bucket_bits)) as u32
+        (offset >> self.bucket_shift) as u32
     }
 
     fn bucket_path(&self, bucket_idx: u32) -> PathBuf {
@@ -780,10 +791,8 @@ impl ChunkOffsetManager {
     }
 
     pub fn cleanup(&mut self) {
-        // 先保存所有内存中的 bucket
-        while let Some((idx, map)) = self.buckets.pop_lru() {
-            self.save_bucket(idx, &map);
-        }
+        // The mappings are no longer needed: drop them instead of writing them out first.
+        self.buckets.clear();
         // 删除所有磁盘文件
         for i in 0..(1 << self.bucket_bits) {
             std::fs::remove_file(self.bucket_path(i)).ok();
@@ -795,4 +804,27 @@ impl Drop for ChunkOffsetManager {
     fn drop(&mut self) {
         self.cleanup();
     }
+}
+
+#[test]
+fn chunk_offset_manager_spills_buckets_and_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let data_len = 1u64 << 20;
+    let offsets: Vec<u64> = (0..data_len).step_by(1000).collect();
+    {
+        let mut m = ChunkOffsetManager::new(0, dir.path().join("tmp.idx"), 8, 2, data_len);
+        for &o in &offsets {
+            m.insert(o, o + 7);
+        }
+        // Offsets span many buckets, so all but 2 must have been spilled to disk.
+        assert!(std::fs::read_dir(dir.path()).unwrap().count() > 0);
+        for &o in &offsets {
+            assert_eq!(m.get(o), Some(o + 7));
+        }
+    }
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        0,
+        "drop removes bucket files"
+    );
 }
